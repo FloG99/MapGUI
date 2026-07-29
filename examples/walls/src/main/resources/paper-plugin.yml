@@ -1,0 +1,13 @@
+name: MapGUI-Walls
+version: '${version}'
+main: de.flog99.mapgui.examples.walls.WallsPlugin
+api-version: '${apiVersion}'
+description: MapGUI example - interactive walls, shared and per player.
+author: FloG99
+
+dependencies:
+  server:
+    MapGUI:
+      load: BEFORE
+      required: true
+      join-classpath: true

@@ -1,0 +1,82 @@
+# Performance
+
+**Bandwidth is the budget, not compute.** Nothing here is compute-bound and it probably never will be.
+
+A map is 128x128 = 16,384 bytes, which is the entire render target. A full repaint is a tree walk over a few
+dozen nodes plus a memoized palette lookup per pixel - well under a millisecond. The packet is the expensive
+part:
+
+```
+16,384 B x 20 fps = 328 KB/s ~ 2.6 Mbit/s     per map, per viewer
+```
+
+A 4x4 video wall is 16 maps, so roughly 21 Mbit/s per viewer at 10 fps. Ten people watching is ~210 Mbit/s,
+which is where a rented box gives up.
+
+Sharing one map id between viewers saves the decode, the quantize and the packet construction, but **not the
+bytes** - every player has their own connection, so egress multiplies by viewer count and nothing avoids
+that.
+
+## The three levers
+
+| | |
+|---|---|
+| **Frame rate** | `animations.fps`, `animations.loop-fps`, `walls.fps`. Halving the rate halves the bytes |
+| **Area** | the cost is the rectangle that *changed*, so a small animation is cheap and a full-bleed one is not |
+| **Audience** | `walls.view-distance` decides who is sent anything at all |
+
+## What is free
+
+- **A screen nobody is looking at.** Nothing is sent while it is put away.
+- **A wall in an empty room.** The viewer set is checked before anything is painted.
+- **A still picture.** Nothing goes dirty, so it is sent once and then never again. Give it `fps(1)` or
+  `fps(0)` and it costs one send for its whole life.
+- **Hover, clicks and cursor movement on a wall.** Cursors are map markers rather than pixels, so a pointer
+  moving is a few bytes rather than a frame.
+- **Frames between steps of a loop limit.** The clock is quantized rather than the paints skipped, so a
+  looping value is *identical* between steps - identical pixels, no dirty rectangle, nothing sent.
+
+## What is not
+
+- `phase(...)` and `Text.scroll()` never settle. They send for as long as they are on screen.
+- Dithered gradients and video are close to the raw figures, because the 4x4 pattern is poor material for the
+  packet's own compression. Flat UI colors compress well.
+- `screenPerPlayer` multiplies the *drawing* - a surface pair, a paint pass and a terrain scan per viewer. It
+  does not multiply the bandwidth, because a wall is sent to each client separately in either mode. It suits
+  something walked up to rather than something a crowd gathers round.
+- **Hover on a *shared* wall**, unlike the cursor itself. A highlight is pixels on one surface everybody is
+  sent, so with a crowd each viewer receives everyone else's hovering. This is the one place `screenPerPlayer`
+  sends *less* per viewer, since then you only receive your own.
+- Terrain in the hand re-scans as its owner walks. `terrain.min-ticks-between-refresh` caps how often that
+  can happen. On a wall it is scanned once and kept, because a wall does not move.
+
+## Finding out what it is costing
+
+```
+/mapgui performance
+```
+
+Two views of the same bytes, worst offender first: per wall says which wall to turn down, per player says who
+is expensive. Both come with coordinates you can click to go and look.
+
+The figures are **map payload before compression**, measured at the one place bytes actually leave. Minecraft
+deflates packets over its threshold, so the real number on the wire is lower. Treat it as a ceiling.
+
+`/mapgui reload` applies a new `config.yml` to walls that are already up, which is how you throttle a
+struggling server without taking anything apart.
+
+## Memory, which is a separate question
+
+Bandwidth is the budget for everything except one thing: **decoded video**. A frame is a byte per pixel once
+decoded, so at `walls.video-size: 256` it is 64 KB - *whatever the GIF compressed to on disk*. A 20 second clip
+at 10 fps is 200 frames, so about 13 MB of heap. File size predicts nothing here; frame count does.
+
+One decode is shared by every wall showing that file, and the frames are let go once no wall does. So the bill
+is what is currently up, not everything an admin has ever previewed - placing six videos to look at them and
+keeping one costs you the one. The trade is that placing it again re-reads the file, which is about a second.
+
+## Zooming terrain out
+
+`blocksPerPixel()` widens the view, and the cost is quadratic in area: 1:8 covers 1024 blocks across, which
+is 4096 chunks. Only chunks the server already has loaded are read and the rest is left blank, so a wide zoom
+is cheap but mostly empty rather than expensive.

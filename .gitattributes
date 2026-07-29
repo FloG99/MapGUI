@@ -1,0 +1,10 @@
+# LF in the repository whatever the checkout looks like, so a Windows contributor cannot turn a one-line
+# change into a whole-file diff.
+* text=auto eol=lf
+
+*.jar binary
+*.gif binary
+*.png binary
+
+gradlew text eol=lf
+gradlew.bat text eol=crlf

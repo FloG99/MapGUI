@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: |
+        1. /mapgui wall place bunny.gif
+        2. Place it on a ceiling
+        3. Look at it from below
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: MapGUI version
+      placeholder: 1.0.0, or a commit hash
+    validations:
+      required: true
+
+  - type: input
+    id: server
+    attributes:
+      label: Server version
+      description: The full line from /version.
+      placeholder: Paper 26.2-84
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Any stack trace, or the surrounding lines if there is none. Paste it, do not screenshot it.
+      render: text
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before filing
+      options:
+        - label: I reproduced this with only MapGUI and the plugin that uses it installed
+        - label: I am on the Paper version MapGUI was built for, or I have said which one I am on above

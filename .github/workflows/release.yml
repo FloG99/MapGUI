@@ -1,0 +1,79 @@
+name: Release
+
+# Tag a commit v1.0.0 and this builds it, publishes mapgui-api and mapgui-layout to Maven Central,
+# and attaches the plugin jar to a draft GitHub release. See docs/releasing.md for the one-time setup.
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache paperweight setup
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/paperweight
+            .gradle/caches/paperweight
+          key: paperweight-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      - name: Read the version from the tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Build and test
+        run: ./gradlew build -Pversion=$VERSION --stacktrace
+
+      # Signed here rather than in the upload step, because the key has to be present while Gradle
+      # configures - that is what decides whether the signing plugin is applied at all.
+      - name: Assemble the signed Central bundle
+        env:
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: ./gradlew centralBundle -Pversion=$VERSION --stacktrace
+
+      - name: Refuse an unsigned bundle
+        run: |
+          count=$(unzip -l build/central-bundle.zip | grep -c '\.asc$' || true)
+          echo "$count signatures in the bundle"
+          test "$count" -gt 0 || { echo "::error::No .asc files - is MAVEN_GPG_PRIVATE_KEY set?"; exit 1; }
+
+      # Left as USER_MANAGED on purpose: the release waits in the Portal until you look at it and press
+      # publish. Switch to AUTOMATIC once you trust the pipeline.
+      - name: Upload to the Central Portal
+        env:
+          CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: |
+          token=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $token" \
+            -F bundle=@build/central-bundle.zip \
+            "https://central.sonatype.com/api/v1/publisher/upload?name=MapGUI-$VERSION&publishingType=USER_MANAGED"
+
+      - name: Zip the example plugins
+        run: ./gradlew :examples:examplesZip -Pversion=$VERSION --stacktrace
+
+      # The plugin is all a server needs. The examples are optional, and the two library jars are for anyone
+      # who would rather drag a jar in than add a dependency - sources included, for a usable IDE.
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            mapgui-plugin/build/libs/MapGUI-*.jar
+            examples/build/MapGUI-examples-*.zip
+            mapgui-api/build/libs/*.jar
+            mapgui-layout/build/libs/*.jar

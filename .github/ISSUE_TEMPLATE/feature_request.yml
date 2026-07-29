@@ -1,0 +1,30 @@
+name: Feature request
+description: Something MapGUI should be able to do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a look at [the roadmap](../blob/main/docs/roadmap.md) first - a few things are already filed
+        there, and a few are deliberately closed with the reasoning written down.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to build
+      description: The thing you want to make, not the API you think would let you make it. That part is easier to answer well with the goal in front of us.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do instead today
+      description: Or why nothing works.
+
+  - type: textarea
+    id: sketch
+    attributes:
+      label: How you imagine it looking
+      description: Optional. Pseudo-code is fine.
+      render: java

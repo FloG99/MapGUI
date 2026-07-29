@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MapGUI preview</title>
+<style>
+:root { color-scheme: dark; --w: 512px; }
+* { box-sizing: border-box; }
+body {
+    margin: 0; min-height: 100vh; padding: 24px; gap: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #16181f; color: #e7e9ef;
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+body > * { width: var(--w); }
+header {
+    display: flex; gap: 12px; align-items: baseline; white-space: nowrap;
+    h1 { margin: 0; font: inherit; font-weight: 600; letter-spacing: .04em; flex: none; }
+    #target { color: #7d86a0; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    #status {
+        margin-left: auto; color: #7d86a0; flex: none;
+        &::before {
+            content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px;
+            border-radius: 50%; background: #7d86a0; vertical-align: middle;
+        }
+        &.live::before { background: #38c160; }
+        &.down::before { background: #ce3333; }
+    }
+}
+/* No border-radius: rounding clips the outermost pixels, the ones you are here to check. */
+#screen {
+    width: var(--w); height: var(--w); display: block; image-rendering: pixelated;
+    background: #0c0d12; outline: 1px solid #2c313d; cursor: crosshair;
+    &.stale { opacity: .35; }
+    &.blocked { cursor: not-allowed; }
+}
+#meta {
+    display: flex; gap: 12px; color: #6b7387; white-space: nowrap;
+    #caption { color: #e7e9ef; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    #cursor { margin-left: auto; flex: none; }
+}
+/* Fixed height: anything below the canvas growing would push the canvas around. */
+#panels { height: 190px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+#panels > * { min-height: 0; }
+#tree {
+    flex: 1; overflow: auto; padding: 6px 8px;
+    border: 1px solid #262b36; background: #1b1e27;
+    div { display: flex; gap: 10px; white-space: nowrap; color: #6f7a98; }
+    .indent { color: #4d5566; }
+    b { font-weight: 400; color: #8fb8ff; }
+    span { color: #7d86a0; }
+    .hit b { color: #b6d0ff; }
+}
+#log {
+    flex: 1; overflow: auto; padding: 6px 8px;
+    border: 1px solid #262b36; background: #1b1e27; color: #9aa3ba;
+    div { white-space: pre-wrap; &:last-child { color: #e7e9ef; } }
+}
+#note { color: #f0b040; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+pre {
+    flex: none; margin: 0; padding: 8px 10px; max-height: 76px; overflow: auto;
+    white-space: pre-wrap; background: #24161a; color: #ff9d9d; border: 1px solid #46222a;
+}
+#prompt {
+    position: fixed; inset: 0; width: auto; background: #0a0b0fc7;
+    display: flex; align-items: center; justify-content: center;
+    form {
+        display: flex; flex-direction: column; gap: 10px; width: 360px; padding: 18px;
+        background: #1b1e27; border: 1px solid #333a49;
+    }
+    label { color: #9aa3ba; }
+    input { padding: 8px 10px; background: #0f1117; color: inherit; border: 1px solid #333a49; font: inherit; }
+    div { display: flex; gap: 8px; justify-content: flex-end; }
+}
+button {
+    padding: 6px 14px; background: #2b3040; color: inherit; border: 1px solid #3b4256;
+    font: inherit; cursor: pointer;
+    &.primary { background: #4a5cd0; border-color: #5a6ce0; }
+}
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header><h1>MapGUI</h1><span id="target"></span><span id="status">connecting</span></header>
+<canvas id="screen" width="128" height="128"></canvas>
+<div id="meta">
+    <span>click to press &middot; wheel to scroll</span>
+    <span id="caption"></span>
+    <span id="cursor"></span>
+</div>
+<div id="panels">
+    <div id="note" hidden></div>
+    <pre id="error" hidden></pre>
+    <div id="tree"></div>
+    <div id="log" hidden></div>
+</div>
+<div id="prompt" hidden>
+    <form>
+        <label id="promptTitle" for="promptValue"></label>
+        <input id="promptValue" autocomplete="off">
+        <div><button type="button" id="promptCancel">Cancel</button><button type="submit" class="primary">Confirm</button></div>
+    </form>
+</div>
+
+<script>
+const SIZE = 128;
+const $ = id => document.getElementById(id);
+const screenEl = $('screen'), statusEl = $('status'), promptEl = $('prompt'), promptValue = $('promptValue');
+const ctx = screenEl.getContext('2d', {alpha: false});
+
+let promptOpen = false, lastX = -1, lastY = -1, rtt = 0, palette = null;
+let shownTree = '', shownLog = '', shownTarget = '';
+
+const show = (id, text) => {
+    const element = $(id);
+    if (element.textContent === (text ?? '')) return;
+
+    element.textContent = text ?? '';
+    element.hidden = !text;
+};
+
+/** Canvas pixel under the mouse, in the surface's own 128x128 space. */
+const toSurface = event => {
+    const r = screenEl.getBoundingClientRect();
+    return {
+        x: Math.floor((event.clientX - r.left) / r.width * SIZE),
+        y: Math.floor((event.clientY - r.top) / r.height * SIZE),
+    };
+};
+
+async function ask(path, params) {
+    const started = performance.now();
+    try {
+        const state = await (await fetch(path + '?' + new URLSearchParams(params))).json();
+        rtt = rtt ? rtt * 0.8 + (performance.now() - started) * 0.2 : performance.now() - started;
+        apply(state);
+        return state;
+    } catch {
+        down();
+    }
+}
+
+/**
+ * Only ever one request in the air, and only the newest cursor position is kept. Firing one per
+ * pixel crossed builds a queue the server can never catch up with.
+ */
+let queued = null, busy = false;
+async function pump() {
+    if (busy || !queued) return;
+
+    busy = true;
+    const {x, y} = queued;
+    queued = null;
+    try {
+        await ask('input', {type: 'move', x, y});
+    } finally {
+        busy = false;
+        pump();
+    }
+}
+
+screenEl.addEventListener('mousemove', event => {
+    if (promptOpen) return;
+    const {x, y} = toSurface(event);
+    if (x === lastX && y === lastY) return;
+
+    [lastX, lastY] = [x, y];
+    $('cursor').textContent = x + ', ' + y + '   ' + Math.round(rtt) + ' ms';
+    queued = {x, y};
+    pump();
+});
+
+// Clicks and scrolls are never coalesced - every one has to land.
+screenEl.addEventListener('mousedown', event => {
+    if (promptOpen) return;
+    event.preventDefault();
+    const {x, y} = toSurface(event);
+    ask('input', {type: 'click', x, y});
+});
+
+screenEl.addEventListener('wheel', event => {
+    if (promptOpen) return;
+    event.preventDefault();
+    const {x, y} = toSurface(event);
+    ask('input', {type: 'scroll', x, y, d: event.deltaY > 0 ? 1 : -1});
+}, {passive: false});
+
+screenEl.addEventListener('contextmenu', event => event.preventDefault());
+promptEl.querySelector('form').addEventListener('submit', event => {
+    event.preventDefault();
+    ask('input', {type: 'prompt', value: promptValue.value});
+});
+$('promptCancel').addEventListener('click', () => ask('input', {type: 'cancel'}));
+document.addEventListener('keydown', event => {
+    if (promptOpen && event.key === 'Escape') ask('input', {type: 'cancel'});
+});
+
+/**
+ * Writes a changed rectangle straight into the canvas. Palette indices in, RGBA out - no image to
+ * fetch and no PNG to decode, which is what every hover and animation frame used to cost.
+ */
+function drawDelta(delta) {
+    if (!palette) return;
+
+    const raw = atob(delta.data);
+    const image = ctx.createImageData(delta.w, delta.h);
+    const out = image.data;
+    for (let i = 0; i < raw.length; i++) {
+        const rgb = palette[raw.charCodeAt(i)];
+        out[i * 4] = rgb >> 16 & 255;
+        out[i * 4 + 1] = rgb >> 8 & 255;
+        out[i * 4 + 2] = rgb & 255;
+        out[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(image, delta.x, delta.y);
+}
+
+/** The node path under the cursor, outermost first, one indented row each. */
+function showTree(path) {
+    const signature = path.map(n => n.type + n.key + n.w + n.h + n.x + n.y).join('|');
+    if (signature === shownTree) return;
+    shownTree = signature;
+
+    $('tree').replaceChildren(...path.map((n, depth) => {
+        const row = document.createElement('div');
+        if (depth === path.length - 1) row.className = 'hit';
+        row.innerHTML =
+            `<i class="indent">${'·&nbsp;&nbsp;'.repeat(depth)}</i>`
+            + `<b>${n.type}${n.key ? '#' + n.key : ''}</b>`
+            + `<span>${n.w}×${n.h} @ ${n.x},${n.y}</span>`
+            + (n.interactive ? '<span>●</span>' : '');
+        return row;
+    }));
+}
+
+function apply(state) {
+    statusEl.textContent = 'rendered ' + state.at;
+    statusEl.className = 'live';
+    if (state.target !== shownTarget) {
+        shownTarget = state.target;
+        $('target').textContent = state.target.split('.').pop();
+        $('target').title = state.target;
+    }
+    screenEl.classList.remove('stale');
+
+    if (state.delta) drawDelta(state.delta);
+    show('note', state.note);
+    show('error', state.error);
+    // In game this is drawn under the map cursor; here the browser owns the pointer.
+    $('caption').textContent = state.caption ? '⤷ ' + state.caption : '';
+    if (state.inspect) showTree(state.inspect.path);
+
+    const wasOpen = promptOpen;
+    promptOpen = !!state.prompt;
+    promptEl.hidden = !promptOpen;
+    screenEl.classList.toggle('blocked', promptOpen);
+    if (promptOpen && !wasOpen) {
+        $('promptTitle').textContent = state.prompt.title;
+        promptValue.value = state.prompt.initial;
+        promptValue.maxLength = state.prompt.maxLength;
+        promptValue.select();
+        promptValue.focus();
+    }
+
+    const log = state.actions.join('|');
+    if (log !== shownLog) {
+        shownLog = log;
+        $('log').hidden = !state.actions.length;
+        $('log').replaceChildren(...state.actions.map(action =>
+            Object.assign(document.createElement('div'), {textContent: action})));
+        $('log').scrollTop = $('log').scrollHeight;
+    }
+}
+
+/** Only down while Gradle restarts it, so say so and keep trying. */
+function down() {
+    statusEl.textContent = 'server down';
+    statusEl.className = 'down';
+    screenEl.classList.add('stale');
+}
+
+// Frames are pushed as they are produced. No polling, so an animation is not capped by a timer.
+function listen() {
+    const events = new EventSource('events');
+    events.onmessage = message => apply(JSON.parse(message.data));
+    events.onerror = () => {
+        down();
+        events.close();
+        setTimeout(listen, 500);
+    };
+}
+
+fetch('palette').then(r => r.json()).then(colors => {
+    palette = colors;
+    listen();
+});
+</script>
+</body>
+</html>

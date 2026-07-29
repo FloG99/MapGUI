@@ -1,0 +1,35 @@
+name: MapGUI
+version: '${version}'
+main: de.flog99.mapgui.plugin.MapGuiPlugin
+api-version: '${apiVersion}'
+description: Interactive map-based GUIs with an auto-layout engine.
+author: FloG99
+website: https://github.com/FloG99/MapGUI
+
+# One per command rather than one for the lot, so watching the bandwidth can be handed out
+# without also handing out reload. mapgui.admin is the parent for wanting all of it.
+permissions:
+  mapgui.command.hand:
+    description: Open, close and list GUIs in a player's hand.
+    default: op
+  mapgui.command.wall:
+    description: Place, remove and list GUIs on blocks.
+    default: op
+  mapgui.command.status:
+    description: See what is in hand and what is up.
+    default: op
+  mapgui.command.performance:
+    description: See what MapGUI is costing in bandwidth.
+    default: op
+  mapgui.command.reload:
+    description: Re-read config.yml and apply it.
+    default: op
+  mapgui.admin:
+    description: Every MapGUI command.
+    default: op
+    children:
+      mapgui.command.hand: true
+      mapgui.command.wall: true
+      mapgui.command.status: true
+      mapgui.command.performance: true
+      mapgui.command.reload: true
