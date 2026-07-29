@@ -6,7 +6,7 @@ junit = "5.11.4"
 annotations = "26.0.1"
 paperweight = "2.0.0-beta.21"
 runpaper = "3.0.2"
-shadow = "9.5.1"
+shadow = "9.6.1"
 
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
