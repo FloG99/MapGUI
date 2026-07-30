@@ -69,7 +69,7 @@ MapGui.get().open(player, new CounterScreen());
 - Anything a chest GUI does badly, in truth - the player can keep moving, the pixels are yours, and a change
   one person makes can appear on everyone else's screen.
 
-## Try it
+## Try the quick demo
 
 **Paper 26.2 and Java 25 are both required** - an older Java will not load it at all.
 
@@ -117,7 +117,7 @@ The examples are separate plugins depending on `mapgui-api` exactly as a third p
 quietly use anything you cannot. None are inside `MapGUI.jar` and none are published to Maven. From a clone,
 `./gradlew runServer` starts a test server with all of them loaded instead.
 
-## Use it in your plugin
+## Build your own GUI or wall display
 
 ```kotlin
 repositories {
