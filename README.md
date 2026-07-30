@@ -16,6 +16,8 @@ can join your server can use it.
 
 <!--TODO: Video demonstration -->
 
+<img width="605" height="499" alt="polish_cow" src="https://github.com/user-attachments/assets/7b3f0a15-e847-4208-8e49-9c5dbcccf4e1" />
+
 ```java
 public final class CounterScreen extends Screen {
 
