@@ -59,7 +59,12 @@ MapGui.get().open(player, new CounterScreen());
 
 - **A claim system** - left-click a chunk to claim it, and see at a glance who holds the rest.
   `/mapgui hand open claims` is exactly that.
-- **A minimap in the offhand**, centred on the player rather than a fixed 128x128 region.
+- **A television, or any furniture with a screen** - a grid of maps on blocks playing a video, sized and sited
+  like a block, and back up by itself after a restart.
+- **A map of spawn, or of a dungeon, hung on the wall** - terrain fixed to the wall rather than following a
+  player, which means it is scanned once and then costs almost nothing to keep showing.
+- **A notice board or a leaderboard** that changes while people are stood looking at it, for all of them at
+  once.
 - **A team or friends menu** with a real interface, instead of chat commands and chest GUIs.
 - Anything a chest GUI does badly, in truth - the player can keep moving, the pixels are yours, and a change
   one person makes can appear on everyone else's screen.
