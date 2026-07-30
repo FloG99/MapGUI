@@ -117,7 +117,7 @@ The examples are separate plugins depending on `mapgui-api` exactly as a third p
 quietly use anything you cannot. None are inside `MapGUI.jar` and none are published to Maven. From a clone,
 `./gradlew runServer` starts a test server with all of them loaded instead.
 
-## Build your own GUI or wall display
+## Build your own GUI
 
 ```kotlin
 repositories {
