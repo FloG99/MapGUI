@@ -101,7 +101,6 @@ Then [getting started](docs/getting-started.md).
 | [Architecture](docs/architecture.md) | the modules, and why there is no real map |
 | [Design notes](docs/design-notes.md) | the reasoning behind the awkward decisions |
 | [Roadmap](docs/roadmap.md) | what is worth building, and what is deliberately closed |
-| [Releasing](docs/releasing.md) | publishing to Maven Central |
 
 ## Examples
 

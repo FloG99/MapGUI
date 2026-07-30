@@ -42,16 +42,38 @@ your login. Those become `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD`.
 
 ### 3. Make a signing key
 
-Central requires every artifact to be signed.
+Central requires every artifact to be signed, and requires the public key to be findable on a keyserver.
+
+> [!IMPORTANT]
+> **Whatever you put in the key's identity becomes permanently public.** A keyserver of the SKS family -
+> `keyserver.ubuntu.com` among them - accepts a name and email with no verification whatsoever and has no
+> delete. Once sent, it is out, and it becomes searchable by that address. Decide what goes in the identity
+> *before* running these, not after.
+>
+> A name on its own is enough. Omit the email if you would rather not publish one:
 
 ```
-gpg --quick-generate-key "FloG99 <you@example.com>" rsa4096 sign 2y
-gpg --list-secret-keys --keyid-format=long          # note the key id
-gpg --keyserver keys.openpgp.org --send-keys <KEY_ID>
-gpg --armor --export-secret-keys <KEY_ID>           # the whole block, BEGIN and END lines included
+gpg --quick-generate-key "Your Name" rsa4096 sign 2y   # no email in the identity
+gpg --list-secret-keys --keyid-format=long             # note the key id
+gpg --keyserver keyserver.ubuntu.com --send-keys <KEY_ID>
+gpg --armor --export-secret-keys <KEY_ID>              # the whole block, BEGIN and END lines included
 ```
 
-Publishing the public key to a keyserver is not optional - Central checks it can find it.
+The last command prints your unprotected private key. On Windows, `| clip` sends it straight to the clipboard
+so it never reaches disk or your scrollback.
+
+One keyserver is enough for Central. `keys.openpgp.org` is worth knowing about but behaves differently: it
+**strips the identity** from a key whose email it has not confirmed by mail, and gpg refuses to import a key
+with no identity. So a key uploaded there without confirming the email reads as *unverifiable* to anyone who
+looks it up there - `Can't check signature: No public key` - even though the signatures are perfectly good.
+Either confirm the mail it sends, and accept that the address becomes public there too, or skip that keyserver.
+
+Check what a stranger actually sees, rather than trusting your own machine - your local keyring holds the
+identity whether or not any keyserver does:
+
+```
+gpg --homedir $(mktemp -d) --keyserver keyserver.ubuntu.com --recv-keys <FINGERPRINT>
+```
 
 ### 4. Add four repository secrets
 

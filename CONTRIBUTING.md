@@ -33,7 +33,7 @@ the plugin module unless a consumer genuinely needs it, and mark framework-only 
 `@ApiStatus.Internal`.
 
 `mapgui-api` and `mapgui-layout` are the only published modules, and a published version can never be
-replaced - see [docs/releasing.md](docs/releasing.md).
+replaced - see [RELEASING.md](.github/RELEASING.md).
 
 ## Code style
 
