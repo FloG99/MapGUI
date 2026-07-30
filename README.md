@@ -52,8 +52,8 @@ MapGui.get().open(player, new CounterScreen());
 - **A headless preview.** Render a screen to a browser or a PNG with no server running, and click it.
 - **Not a screen you are trapped in.** Players walk, jump and sneak with a GUI open, unlike a chest GUI that
   freezes them in an inventory screen.
-- **Nothing is real.** No `MapView`, no map item, nothing in anyone's inventory, nothing to lose on death.
-  See [architecture](docs/architecture.md).
+- **Nothing to lose.** No `MapView` to register, nothing in anyone's inventory, nothing dropped on death - the
+  pixels are faked per player and go when they do. See [architecture](docs/architecture.md).
 
 ## What you could build
 
