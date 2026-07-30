@@ -66,9 +66,38 @@ MapGui.get().open(player, new CounterScreen());
 
 ## For server owners
 
-Drop `MapGUI.jar` into `plugins/`. Nothing else to install. On its own it does nothing visible - plugins
-built on it provide the menus. To see what it can do on a test server, add the example plugins from the
-[releases page](https://github.com/FloG99/MapGUI/releases) as well.
+**Paper 26.2 and Java 25 are both required** - an older Java will not load it at all.
+
+Drop `MapGUI.jar` into `plugins/` and restart. Nothing else to install. On its own it does nothing visible:
+plugins built on it provide the menus.
+
+### Trying the examples on a server you already have
+
+Two files from the [latest release](https://github.com/FloG99/MapGUI/releases/latest):
+
+1. `MapGUI-<version>.jar` into `plugins/`.
+2. `MapGUI-examples-<version>.zip` extracted into `plugins/` as well - not into a subfolder. It is packed to
+   land in the right places:
+
+```
+plugins/
+├── MapGUI-<version>.jar
+├── MapGUI-example-claims-<version>.jar
+├── MapGUI-example-gallery-<version>.jar
+├── MapGUI-example-minimap-<version>.jar
+├── MapGUI-example-todo-<version>.jar
+├── MapGUI-example-walls-<version>.jar
+└── MapGUI/
+    └── videos/
+        └── polish-cow-transparent.gif
+```
+
+3. **Restart the server.** `/reload` is not enough: the examples declare `load: BEFORE` on MapGUI, and that
+   ordering is only honoured at startup.
+4. As an operator, run `/mapgui hand open gallery`. Every permission defaults to `op`, so there is nothing to
+   configure first. The [table below](#examples) lists the rest.
+
+Delete any example jar you do not want - that is the whole off switch, and MapGUI keeps working without them.
 
 **Right-click selects, Q closes.** Walking, jumping and sneaking all still work while a menu is open.
 
@@ -118,8 +147,10 @@ Then [getting started](docs/getting-started.md).
 
 ## Examples
 
-`./gradlew runServer` starts a Paper 26.2 test server with the plugin and every example loaded. They all
-register themselves, so one command reaches every one of them:
+Five demo plugins. On a server you already have, they are a
+[download away](#trying-the-examples-on-a-server-you-already-have); from a clone, `./gradlew runServer` starts
+a Paper 26.2 test server with the plugin and all of them loaded. They register themselves, so one command
+reaches every one:
 
 | Command | Shows |
 |---|---|
