@@ -64,14 +64,9 @@ MapGui.get().open(player, new CounterScreen());
 - Anything a chest GUI does badly, in truth - the player can keep moving, the pixels are yours, and a change
   one person makes can appear on everyone else's screen.
 
-## For server owners
+## Try it
 
 **Paper 26.2 and Java 25 are both required** - an older Java will not load it at all.
-
-Drop `MapGUI.jar` into `plugins/` and restart. Nothing else to install. On its own it does nothing visible:
-plugins built on it provide the menus.
-
-### Trying the examples on a server you already have
 
 Two files from the [latest release](https://github.com/FloG99/MapGUI/releases/latest):
 
@@ -94,17 +89,30 @@ plugins/
 
 3. **Restart the server.** `/reload` is not enough: the examples declare `load: BEFORE` on MapGUI, and that
    ordering is only honoured at startup.
-4. As an operator, run `/mapgui hand open gallery`. Every permission defaults to `op`, so there is nothing to
-   configure first. The [table below](#examples) lists the rest.
+4. As an operator, run any of these. Every permission defaults to `op`, so there is nothing to configure first.
 
-Delete any example jar you do not want - that is the whole off switch, and MapGUI keeps working without them.
+| Command | Shows |
+|---|---|
+| `/mapgui hand open gallery` | every widget, and the layout rules side by side |
+| `/mapgui hand open todo` | state, scrolling, text prompts, per-row closures |
+| `/mapgui hand open minimap` | terrain rendering, and a screen with no cursor |
+| `/mapgui hand open claims` | a full-screen map, one `Draw` node standing in for a grid, cursor tracking |
+| `/mapgui wall place draw` | a wall everyone draws on, with a palette only you can see |
+| `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
+| `/todo` | the same list, opened by its own plugin - which is how your users reach a GUI |
+| `/walls here` | a plugin placing a wall itself rather than letting an admin site it |
 
-**Right-click selects, Q closes.** Walking, jumping and sneaking all still work while a menu is open.
+Move the mouse to aim, **right-click to select, Q to close**, and the wheel to scroll. Walking, jumping and
+sneaking all still work. Placing a wall is left-click for the bottom-left corner, look at the far corner to
+size it, then left-click again - or right-click to cancel.
 
-`/mapgui` lists what you can run. See [configuration](docs/configuration.md) for `config.yml`, the commands
-and the permissions, and [performance](docs/performance.md) before putting video on a wall.
+Delete any example jar you do not want; that is the whole off switch, and MapGUI keeps working without them.
 
-## For developers
+The examples are separate plugins depending on `mapgui-api` exactly as a third party would, so they cannot
+quietly use anything you cannot. None are inside `MapGUI.jar` and none are published to Maven. From a clone,
+`./gradlew runServer` starts a test server with all of them loaded instead.
+
+## Use it in your plugin
 
 ```kotlin
 repositories {
@@ -129,6 +137,15 @@ dependencies:
 
 Then [getting started](docs/getting-started.md).
 
+## Running it in production
+
+`MapGUI.jar` on its own does nothing visible - plugins built on it provide the menus, so you only need the one
+jar and whichever of those you actually want.
+
+`/mapgui` lists what you can run. See [configuration](docs/configuration.md) for `config.yml`, the commands and
+the permissions, and [performance](docs/performance.md) before putting video on a wall - a big wall with an
+audience is the one thing here that costs real bandwidth.
+
 ## Documentation
 
 | | |
@@ -144,30 +161,6 @@ Then [getting started](docs/getting-started.md).
 | [Architecture](docs/architecture.md) | the modules, and why there is no real map |
 | [Design notes](docs/design-notes.md) | the reasoning behind the awkward decisions |
 | [Roadmap](docs/roadmap.md) | what is worth building, and what is deliberately closed |
-
-## Examples
-
-Five demo plugins. On a server you already have, they are a
-[download away](#trying-the-examples-on-a-server-you-already-have); from a clone, `./gradlew runServer` starts
-a Paper 26.2 test server with the plugin and all of them loaded. They register themselves, so one command
-reaches every one:
-
-| Command | Shows |
-|---|---|
-| `/mapgui hand open gallery` | every widget, and the layout rules side by side |
-| `/mapgui hand open todo` | state, scrolling, text prompts, per-row closures |
-| `/mapgui hand open minimap` | terrain rendering, and a screen with no cursor |
-| `/mapgui hand open claims` | a full-screen map, one `Draw` node standing in for a grid, cursor tracking |
-| `/mapgui wall place draw` | a wall everyone draws on, with a palette only you can see |
-| `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
-| `/todo` | the same list, opened by its own plugin - which is how your users reach a GUI |
-| `/walls here` | a plugin placing a wall itself rather than letting an admin site it |
-
-They are separate plugins that depend on `mapgui-api` exactly as a third party would, so they cannot quietly
-use anything you cannot - and they are packaged that way too. `MapGUI-examples-<version>.zip` on the
-[releases page](https://github.com/FloG99/MapGUI/releases) unpacks straight into `plugins/`, jars and a sample
-video included, so a test server needs no build. Delete a jar to turn one off; none of them are inside
-`MapGUI.jar` and none of them are published to Maven.
 
 ## Building
 
