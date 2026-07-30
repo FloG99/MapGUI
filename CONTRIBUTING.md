@@ -70,6 +70,16 @@ a wall mirrored, which is not visible in the code.
 When fixing a bug, write the test that fails first and check it *does* fail - a test that passes against the
 old code is not testing the fix.
 
+## Licensing
+
+MapGUI is LGPL-3.0-or-later, and anything you contribute to it is under that licence too. There is no CLA and
+no copyright assignment - you keep your copyright, the project keeps the licence.
+
+Files under `examples/` are MIT instead, so that people can copy from them freely. Contributions there are MIT.
+
+Do not paste code in from a source under an incompatible licence, including anything a model generated from
+unclear provenance. If a snippet came from somewhere, say where in the PR.
+
 ## Pull requests
 
 - One concern per PR.

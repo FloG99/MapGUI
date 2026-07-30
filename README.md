@@ -7,7 +7,7 @@ interface as a tree of nodes and MapGUI works out where every pixel goes - no co
 constants that break when you add a row.
 
 [![Build](https://github.com/FloG99/MapGUI/actions/workflows/build.yml/badge.svg)](https://github.com/FloG99/MapGUI/actions/workflows/build.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: LGPL-3.0](https://img.shields.io/badge/license-LGPL--3.0-blue.svg)](LICENSE)
 
 **Paper 26.2 · Java 25 · no runtime dependencies**
 
@@ -138,4 +138,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
 
 ## License
 
-MIT.
+**LGPL-3.0-or-later.** Copyright (c) 2026 FloG99. See [LICENSE](LICENSE), which incorporates
+[LICENSE.GPL](LICENSE.GPL) by reference.
+
+What that means in practice:
+
+- **Running a server** - including one you make money from - carries no obligations at all. Install the jar and
+  forget about it.
+- **Writing a plugin against `mapgui-api`** carries none either. Your plugin is your own, closed and paid if you
+  like: you depend on MapGUI, you do not distribute it, and LGPL exists precisely to permit that.
+- **Modifying MapGUI itself** and shipping your version is the one case with a condition - publish those
+  modifications under the same licence.
+
+The examples are [MIT](examples/LICENSE) instead, deliberately, so you can lift code from them straight into
+your own plugin without inheriting anything.
+
+If that arrangement genuinely doesn't work for your situation, open an issue and say why.

@@ -87,8 +87,8 @@ subprojects {
                 url = "https://github.com/FloG99/MapGUI"
                 licenses {
                     license {
-                        name = "MIT"
-                        url = "https://opensource.org/licenses/MIT"
+                        name = "LGPL-3.0-or-later"
+                        url = "https://www.gnu.org/licenses/lgpl-3.0.txt"
                     }
                 }
                 developers {
