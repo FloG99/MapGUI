@@ -6,6 +6,9 @@ Move the mouse to move your cursor, right-click to press things, scroll to scrol
 interface as a tree of nodes and MapGUI works out where every pixel goes - no coordinate arithmetic, no
 constants that break when you add a row.
 
+**Works on unmodified clients.** No resource pack, no client mod, no shaders. It is a map item, so anyone who
+can join your server can use it.
+
 [![Build](https://github.com/FloG99/MapGUI/actions/workflows/build.yml/badge.svg)](https://github.com/FloG99/MapGUI/actions/workflows/build.yml)
 [![License: LGPL-3.0](https://img.shields.io/badge/license-LGPL--3.0-blue.svg)](LICENSE)
 
@@ -47,8 +50,19 @@ MapGui.get().open(player, new CounterScreen());
 - **Video.** Animated GIF, decoded by the JDK alone, scaled and palette-matched to any box.
 - **Terrain.** The world drawn underneath your layout, following the player or fixed to a wall.
 - **A headless preview.** Render a screen to a browser or a PNG with no server running, and click it.
+- **Not a screen you are trapped in.** Players walk, jump and sneak with a GUI open, unlike a chest GUI that
+  freezes them in an inventory screen.
 - **Nothing is real.** No `MapView`, no map item, nothing in anyone's inventory, nothing to lose on death.
   See [architecture](docs/architecture.md).
+
+## What you could build
+
+- **A claim system** - left-click a chunk to claim it, and see at a glance who holds the rest.
+  `/mapgui hand open claims` is exactly that.
+- **A minimap in the offhand**, centred on the player rather than a fixed 128x128 region.
+- **A team or friends menu** with a real interface, instead of chat commands and chest GUIs.
+- Anything a chest GUI does badly, in truth - the player can keep moving, the pixels are yours, and a change
+  one person makes can appear on everyone else's screen.
 
 ## For server owners
 
