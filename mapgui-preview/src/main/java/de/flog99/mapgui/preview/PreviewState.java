@@ -133,8 +133,10 @@ final class PreviewState {
             // Applied per frame rather than once, since a screen can push another one.
             screen.animator().loopFps(screen.loopFps() > 0 ? screen.loopFps() : Animator.DEFAULT_LOOP_FPS);
             screen.animator().clock(System.currentTimeMillis());
+            painter.font(screen.font());
+
             if (screen.isDirty() || screen.animating()) {
-                screen.layout(MapTextFont.INSTANCE, surface.bounds());
+                screen.layout(screen.font(), surface.bounds());
                 // Laying out throws the tree away, so tell it where the cursor already is.
                 screen.cursorMoved(session.cursorX(), session.cursorY());
             }

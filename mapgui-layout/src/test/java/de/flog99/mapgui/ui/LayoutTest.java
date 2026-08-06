@@ -255,6 +255,23 @@ class LayoutTest {
         assertEquals(12, centered.bounds().y());
     }
 
+    /** Without fill() a hug column shrinks to its content, so its Spacer has nothing to push against. */
+    @Test
+    void anOverlaidColumnOnlyGetsTheWholeRectIfItFills() {
+        Panel hugging = Column(Spacer(), Row().height(10));
+        layout(Column(Ui.Overlay(Row().fill(), hugging).fill()));
+
+        assertEquals(10, hugging.bounds().height());
+        assertEquals(0, hugging.bounds().y(), "so it lands at the top, over anything underneath");
+
+        Panel filling = Column(Spacer(), Row().height(10));
+        Panel bottom = (Panel) filling.visibleChildren().get(1);
+        layout(Column(Ui.Overlay(Row().fill(), filling.fill()).fill()));
+
+        assertEquals(128, filling.bounds().height());
+        assertEquals(118, bottom.bounds().y(), "and now the spacer reaches the bottom");
+    }
+
     /** A canvas needs to know where in itself it was hit, not where on the screen. */
     @Test
     void aClickReportsWhereInsideTheNodeItLanded() {

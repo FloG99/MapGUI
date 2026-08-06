@@ -175,6 +175,27 @@ final class WallSession implements Session {
     }
 
     /**
+     * Always. A wall is operated by walking up to it and clicking, so there is no holding it and nothing to take
+     * the mouse away from - the cursor a viewer gets is the one they are pointing at the wall, not one on loan.
+     */
+    @Override
+    public boolean focused() {
+        return !suspended();
+    }
+
+    /** Nothing to give or take, so nothing happens. Kept rather than thrown, since a shared screen may ask blindly. */
+    @Override
+    public void focus(boolean focused) {
+    }
+
+    /** Null, and honestly so: a wall hangs on a block and nobody is carrying it. */
+    @Override
+    @Nullable
+    public HandOptions hand() {
+        return null;
+    }
+
+    /**
      * Asks for text, from whoever is doing the asking.
      *
      * <p>The player is captured now rather than looked up in the callback, because a prompt comes back long

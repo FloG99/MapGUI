@@ -8,12 +8,15 @@ rootProject.name = "MapGUI"
 include(
     "mapgui-layout",
     "mapgui-api",
-    "mapgui-nms",
+    "mapgui-camera",
+    // One per Minecraft version. Adding a version adds a line here; see mapgui-nms-26_2/build.gradle.kts.
+    "mapgui-nms-26_2",
     "mapgui-plugin",
     "mapgui-preview",
     "examples:gallery",
     "examples:todo",
     "examples:minimap",
+    "examples:camera",
     "examples:claims",
     "examples:walls",
 )

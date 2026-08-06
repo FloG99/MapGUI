@@ -25,6 +25,17 @@ public final class Colors {
         );
     }
 
+    /**
+     * What a drop shadow under text is drawn in: a quarter brightness, the way the game does it.
+     *
+     * <p>Not {@link #scale} at 0.25, close as that is. This truncates rather than rounds and comes back opaque,
+     * so a shadow under translucent text is a shadow rather than another translucent layer - and the pixels it
+     * produces are the ones text shadows have always been drawn with.
+     */
+    public static Color shadow(Color color) {
+        return new Color(color.getRed() / 4, color.getGreen() / 4, color.getBlue() / 4);
+    }
+
     public static Color mix(Color from, Color to, double amount) {
         double inverse = 1 - amount;
         return new Color(

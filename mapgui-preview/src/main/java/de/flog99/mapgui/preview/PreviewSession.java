@@ -1,11 +1,13 @@
 package de.flog99.mapgui.preview;
 
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.Session;
 import de.flog99.mapgui.prompt.TextPrompt;
 import de.flog99.mapgui.ui.TextField;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -116,6 +118,23 @@ final class PreviewSession implements Session {
     @Override
     public boolean suspended() {
         return suspended;
+    }
+
+    /** Nothing is being carried here, so the screen always has the mouse - there is nothing else to give it to. */
+    @Override
+    public boolean focused() {
+        return !suspended;
+    }
+
+    @Override
+    public void focus(boolean focused) {
+        suspended = !focused;
+    }
+
+    @Override
+    @Nullable
+    public HandOptions hand() {
+        return null;
     }
 
     @Override

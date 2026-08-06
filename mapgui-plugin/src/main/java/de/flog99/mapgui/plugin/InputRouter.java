@@ -78,6 +78,11 @@ public final class InputRouter {
         }
 
         @Override
+        public boolean rightClickAir() {
+            return offer(PacketInput.Handler::rightClickAir);
+        }
+
+        @Override
         public boolean leftClick() {
             return offer(PacketInput.Handler::leftClick);
         }

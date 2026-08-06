@@ -56,12 +56,12 @@ public final class WallManager {
 
     /** Takes a way to start a wall rather than the whole of {@link MapGui}, which is all it ever used it for. */
     public WallManager(Plugin plugin, Supplier<WallDisplay.Builder> walls, InputRouter router,
-                       GuiCatalog screens, int fps, int range, int videoSize) {
+                       GuiCatalog screens, int fps, int range, int videoSize, boolean prerender, Map<String, String> streams) {
         this.plugin = plugin;
         this.walls = walls;
         this.router = router;
         this.store = new WallStore(plugin);
-        this.contents = new WallContents(screens, new VideoLibrary(plugin, videoSize));
+        this.contents = new WallContents(screens, new VideoLibrary(plugin, videoSize, prerender, streams));
         this.fps = fps;
         this.range = range;
     }
@@ -75,6 +75,7 @@ public final class WallManager {
     public void close() {
         for (WallDisplay wall : List.copyOf(live.values())) wall.close();
         live.clear();
+        contents.close();
         for (UUID id : List.copyOf(placing.keySet())) {
             Player player = Bukkit.getPlayer(id);
             if (player != null) {
@@ -136,6 +137,13 @@ public final class WallManager {
 
         Consumer<WallDisplay.Builder> content = contents.find(name);
         if (content == null) {
+            // A file that is there but will not play is a different problem from a name nobody knows, and the
+            // fix differs too - so say which it was rather than sending them to look in the folder either way.
+            String problem = contents.problemWith(name);
+            if (problem != null) {
+                return "'" + name + "' will not play: " + problem;
+            }
+
             return "Nothing called '" + name + "' - drop a .gif in plugins/MapGUI/videos, "
                     + "or pick one of the suggestions";
         }

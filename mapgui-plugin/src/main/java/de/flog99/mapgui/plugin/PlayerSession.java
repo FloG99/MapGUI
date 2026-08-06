@@ -1,6 +1,7 @@
 package de.flog99.mapgui.plugin;
 
 import de.flog99.mapgui.Click;
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.MapSurface;
@@ -22,6 +23,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.map.MapCursor;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,6 +53,7 @@ final class PlayerSession implements Session {
     private final HeldMapDisplay display;
     private final MapSurface surface;
     private final Painter painter;
+    private final HandOptions hand;
 
     private final Deque<Screen> screens = new ArrayDeque<>();
 
@@ -59,6 +62,19 @@ final class PlayerSession implements Session {
     private float lastYaw;
     private boolean suspended;
     private boolean needsPaint = true;
+
+    /**
+     * Whether the screen has the player's mouse. Held rather than computed on demand so the moment it changes can
+     * be noticed: gaining it has to re-anchor the cursor, and losing it has to send the pointer away.
+     */
+    private boolean focused;
+
+    /** Set by a toggling gesture, and only read by the focus modes that toggle. */
+    private boolean focusToggled;
+
+    /** What {@link #focus} was told, or null for nobody having overruled the carry mode. */
+    @Nullable
+    private Boolean forcedFocus;
 
     /** Markers are client-drawn icons rather than pixels, so they change without dirtying the surface. */
     private List<Marker> sentMarkers = List.of();
@@ -80,10 +96,11 @@ final class PlayerSession implements Session {
     private int terrainScale = -1;
     private int ticksSinceTerrain;
 
-    PlayerSession(MapGuiPlugin plugin, Player player, HeldMapDisplay display, Screen screen) {
+    PlayerSession(MapGuiPlugin plugin, Player player, HeldMapDisplay display, Screen screen, HandOptions hand) {
         this.plugin = plugin;
         this.player = player;
         this.display = display;
+        this.hand = hand;
         this.surface = new MapSurface(width(), height());
         this.painter = new Painter(surface, MapColors.INSTANCE, MapTextFont.INSTANCE);
 
@@ -182,6 +199,7 @@ final class PlayerSession implements Session {
         suspended = true;
         // Ticking stops here, so the pointer has to be sent away explicitly or it stays on screen
         // hovering over a menu nobody can reach.
+        focused = false;
         send(markers());
     }
 
@@ -194,6 +212,7 @@ final class PlayerSession implements Session {
         lastYaw = player.getLocation().getYaw();
         applyPitch(player.getLocation().getPitch());
         needsPaint = true;
+        refocus();
         // A prompt with an inventory of its own will have wiped the client's idea of the map item.
         display.reassert(player);
     }
@@ -201,6 +220,70 @@ final class PlayerSession implements Session {
     @Override
     public boolean suspended() {
         return suspended;
+    }
+
+    @Override
+    public boolean focused() {
+        return focused;
+    }
+
+    @Override
+    public void focus(boolean value) {
+        forcedFocus = value;
+        refocus();
+    }
+
+    @Override
+    public HandOptions hand() {
+        return hand;
+    }
+
+    /**
+     * Works out whether the screen has the mouse, and reacts if that has just changed.
+     *
+     * <p>Called every tick rather than only on the events that could change it, because the answer depends on
+     * things that raise no event worth listening for - which slot is selected, whether sneak is held. A tick of
+     * latency on picking the map up is not something a player can see.
+     */
+    private void refocus() {
+        EquipmentSlot holding = display.holding(player);
+        boolean wanted = !suspended && holding != null
+                && (forcedFocus != null ? forcedFocus : hand.focused(holding, player.isSneaking(), focusToggled));
+        if (wanted == focused) return;
+
+        focused = wanted;
+        if (focused) {
+            // Re-anchor the mouse, or the head movement since it was let go arrives as one jump.
+            lastYaw = player.getLocation().getYaw();
+            applyPitch(player.getLocation().getPitch());
+            needsPaint = true;
+        } else {
+            // Nowhere rather than wherever it was, or the row the player was hovering stays lit on a map they are
+            // no longer pointing at. Repainted next tick rather than here, since a screen may drop the mouse from
+            // inside its own click handler and painting from there would be painting twice over.
+            if (screen().cursorMoved(-1, -1)) {
+                needsPaint = true;
+            }
+            // The pointer is a marker, and markers only leave when something says so.
+            send(markers());
+        }
+    }
+
+    /**
+     * A gesture asking for the mouse, or asking to give it back.
+     *
+     * <p>The player's own gesture drops whatever {@link #focus} was told, since a screen deciding it should have
+     * the mouse should not be able to stop the player disagreeing.
+     *
+     * @return whether the gesture was ours to take, so a caller reading a packet knows whether to swallow it
+     */
+    boolean toggleFocus() {
+        if (!hand.togglesFocus() || display.holding(player) == null) return false;
+
+        forcedFocus = null;
+        focusToggled = !focusToggled;
+        refocus();
+        return true;
     }
 
     @Override
@@ -249,18 +332,19 @@ final class PlayerSession implements Session {
 
     // ---- lifecycle ----
 
-    void start() {
-        display.open(this);
+    void start(int mapId) {
+        display.open(this, hand, mapId);
+        refocus();
         player.sendActionBar(Component.text(controls()));
 
         // Right-click and Q reach us only as packets - the events behind both are gated on the player
         // really holding something, and our map is not in their inventory.
-        // An open menu takes everything: the whole point is that a click means "press this" and not
+        // A focused screen takes everything: the whole point is that a click means "press this" and not
         // whatever the player is really holding.
         plugin.router().claim(player, gestures);
 
         // Centring the cursor means moving their head, so it only happens if we are allowed to.
-        if (clampPitch()) {
+        if (focused && clampPitch()) {
             RotationController rotation = plugin.rotation();
             rotation.setPitchKeepingYaw(player, midPitch());
         }
@@ -268,31 +352,87 @@ final class PlayerSession implements Session {
         task = player.getScheduler().runAtFixedRate(plugin, scheduled -> tick(), null, 1L, 1L);
     }
 
+    /** What to tell the player they can do, which depends on how the map got into their hands. */
     private String controls() {
         String hint = switch (screen().activateOn()) {
             case RIGHT -> "Right-click to select";
             case LEFT -> "Left-click to select";
             case BOTH -> "Click to select";
         };
-        return hint + ", Q to close";
+
+        return hint + switch (hand.carry()) {
+            case POPUP -> ", Q to close";
+            case ITEM -> ", scroll away to put it down";
+            case PINNED, OFFHAND -> focusHint();
+        };
     }
 
-    /** A field rather than inline, since releasing the claim needs the same instance back. */
+    private String focusHint() {
+        return switch (hand.focus()) {
+            case SWAP_HANDS -> ", swap hands to put it down";
+            case RIGHT_CLICK -> ", right-click the air to put it down";
+            case SNEAK -> ", hold sneak to use it";
+            // Only worth saying where scrolling away is possible. On a map that lives in the offhand it is not.
+            case MAIN_HAND -> hand.reachesMainHand() ? ", scroll away to put it down" : "";
+            case ALWAYS, NEVER -> "";
+        };
+    }
+
+    /**
+     * A field rather than inline, since releasing the claim needs the same instance back.
+     *
+     * <p>Everything here runs on the network thread and so may only read fields, never the world. {@code focused}
+     * is a plain boolean and a tick out of date at worst, which is exactly the tolerance
+     * {@link PacketInput.Handler} asks for.
+     */
     private final PacketInput.Handler gestures = new PacketInput.Handler() {
+
+        /**
+         * Q closes a popup, which has no other way out and nothing to drop.
+         *
+         * <p>For a faked map in one slot it is swallowed instead: there is nothing of ours to drop, and letting it
+         * through would throw away whatever is really in the slot the map is covering. A real item is left alone,
+         * because dropping it is a thing the player is allowed to do and how they put the screen away.
+         */
         @Override
         public boolean drop() {
-            onMainThread(PlayerSession.this::close);
-            return true;
+            if (hand.fillsHotbar()) {
+                onMainThread(PlayerSession.this::close);
+                return true;
+            }
+
+            return hand.faked() && focused;
         }
 
         @Override
         public boolean rightClick() {
+            if (!focused) return false;
+
             onMainThread(PlayerSession.this::rightClick);
             return true;
         }
 
+        /**
+         * The toggle for {@link HandOptions.Focus#RIGHT_CLICK}, in both directions, and an ordinary click
+         * otherwise.
+         *
+         * <p>Both directions is what "toggle" means, so a screen using this mode should activate on the left
+         * button - the right one is spoken for. Air only, so a door is still openable while the map is down.
+         */
+        @Override
+        public boolean rightClickAir() {
+            if (hand.focus() == HandOptions.Focus.RIGHT_CLICK && hand.togglesFocus()) {
+                onMainThread(PlayerSession.this::toggleFocus);
+                return true;
+            }
+
+            return rightClick();
+        }
+
         @Override
         public boolean leftClick() {
+            if (!focused) return false;
+
             onMainThread(PlayerSession.this::leftClick);
             return true;
         }
@@ -331,13 +471,20 @@ final class PlayerSession implements Session {
             return;
         }
 
-        if (now.getYaw() != lastYaw) {
-            double perDegree = width() / (plugin.config().maxPitch() - plugin.config().minPitch());
-            cursorX = clamp(cursorX + yawDelta(now.getYaw()) * perDegree, 0, width() - 1);
+        refocus();
+
+        if (focused) {
+            if (now.getYaw() != lastYaw) {
+                double perDegree = width() / (plugin.config().maxPitch() - plugin.config().minPitch());
+                cursorX = clamp(cursorX + yawDelta(now.getYaw()) * perDegree, 0, width() - 1);
+                lastYaw = now.getYaw();
+            }
+
+            applyPitch(now.getPitch());
+        } else {
+            // Still followed while the mouse is elsewhere, so picking the map back up does not arrive as a jump.
             lastYaw = now.getYaw();
         }
-
-        applyPitch(now.getPitch());
 
         ticksSinceTerrain++;
         if (screen().terrain() && movedBlock(now)
@@ -348,7 +495,7 @@ final class PlayerSession implements Session {
             needsPaint = true;
         }
 
-        if (screen().cursor() && screen().cursorMoved(cursorX(), cursorY)) {
+        if (focused && screen().cursor() && screen().cursorMoved(cursorX(), cursorY)) {
             needsPaint = true;
         }
         if (screen().isDirty()) {
@@ -417,9 +564,9 @@ final class PlayerSession implements Session {
         cursorY = (int) clamp((pitch - min) / (max - min) * (height() - 1), 0, height() - 1);
     }
 
-    /** The screen decides if it has an opinion, otherwise the server does. */
+    /** The screen decides if it has an opinion, otherwise the server does. Never while the mouse is elsewhere. */
     private boolean clampPitch() {
-        if (!screen().cursor()) return false;
+        if (!focused || !screen().cursor()) return false;
 
         Boolean wanted = screen().clampPitch();
         return wanted != null ? wanted : plugin.config().clampPitch();
@@ -461,11 +608,14 @@ final class PlayerSession implements Session {
     }
 
     private void activate(Click with) {
-        if (suspended || !screen().cursor()) return;
+        if (suspended || !focused) return;
 
         // Read from the screen that was clicked - handling it may well have pushed another one.
         Screen clicked = screen();
-        if (!clicked.click(cursorX(), cursorY, with)) return;
+        // A cursorless screen still hears the click, but only through Screen#clickedAnywhere: -1 means there is
+        // no position, so nothing is hit-tested.
+        boolean aiming = clicked.cursor();
+        if (!clicked.click(aiming ? cursorX() : -1, aiming ? cursorY : -1, with)) return;
 
         Sound sound = clicked.clickSound();
         if (sound != null) {
@@ -479,7 +629,7 @@ final class PlayerSession implements Session {
     }
 
     void scroll(int direction) {
-        if (!suspended && screen().cursor()) {
+        if (focused && !suspended && screen().cursor()) {
             screen().scroll(cursorX(), cursorY, direction);
         }
     }
@@ -491,9 +641,13 @@ final class PlayerSession implements Session {
         lastFrame = System.currentTimeMillis();
         screen.animator().clock(lastFrame);
 
+        // Measured and drawn with the same font, which is the screen's to choose and can differ between the
+        // screens one session has stacked - so it is set per frame rather than when the painter was built.
+        painter.font(screen.font());
+
         // Animations are resolved during layout, so an in-flight one needs a fresh pass each frame.
         if (screen.isDirty() || screen.animating()) {
-            screen.layout(MapTextFont.INSTANCE, surface.bounds());
+            screen.layout(screen.font(), surface.bounds());
             screen.cursorMoved(cursorX(), cursorY);
         }
 
@@ -513,10 +667,10 @@ final class PlayerSession implements Session {
         sentMarkers = markers;
     }
 
-    /** The screen's own markers, plus the pointer - which is just another marker. */
+    /** The screen's own markers, plus the pointer - which is just another marker, and only while we have the mouse. */
     private List<Marker> markers() {
         List<Marker> markers = new ArrayList<>(screen().markers());
-        if (!suspended && screen().cursor()) {
+        if (focused && !suspended && screen().cursor()) {
             markers.add(new Marker(cursorType(), cursorX(), cursorY, (byte) 8, screen().cursorCaption()));
         }
         return markers;

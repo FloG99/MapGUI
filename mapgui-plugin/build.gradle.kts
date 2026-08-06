@@ -5,8 +5,14 @@ plugins {
 
 dependencies {
     implementation(project(":mapgui-api"))
-    implementation(project(":mapgui-nms"))
+    implementation(project(":mapgui-camera"))
+    // runtimeOnly, and one line per supported version: the plugin finds its backend by name at startup, and
+    // importing one would put a single version's server classes on the compile classpath for everything.
+    runtimeOnly(project(":mapgui-nms-26_2"))
     compileOnly(libs.paper.api)
+    // Never shipped: VideoLibraryLoader downloads these at runtime, and only when video.ffmpeg is on.
+    compileOnly(libs.javacv)
+    compileOnly(libs.ffmpeg)
     // Wall geometry is worth testing, and it speaks BlockFace. The API alone needs no server to load.
     testImplementation(libs.paper.api)
 }
@@ -28,7 +34,8 @@ tasks {
         dependencies {
             include(project(":mapgui-layout"))
             include(project(":mapgui-api"))
-            include(project(":mapgui-nms"))
+            include(project(":mapgui-camera"))
+            include(project(":mapgui-nms-26_2"))
         }
     }
 
@@ -43,6 +50,7 @@ tasks {
             project(":examples:gallery").tasks.named("jar").map { it.outputs.files },
             project(":examples:todo").tasks.named("jar").map { it.outputs.files },
             project(":examples:minimap").tasks.named("jar").map { it.outputs.files },
+            project(":examples:camera").tasks.named("jar").map { it.outputs.files },
             project(":examples:claims").tasks.named("jar").map { it.outputs.files },
             project(":examples:walls").tasks.named("jar").map { it.outputs.files },
         )

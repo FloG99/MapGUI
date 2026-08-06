@@ -5,19 +5,13 @@ import org.bukkit.entity.Player;
 /**
  * Reads the two gestures that no event can see.
  *
- * <p>Both are invisible for the same reason: the server decides what happened from the item really in
- * the player's hand, and MapGUI's map is not in their inventory at all.
+ * <p>Both are invisible for the same reason: the server decides what happened from the item really in the player's
+ * hand, and MapGUI's map is not in their inventory at all. <b>Drop</b> only becomes {@code PlayerDropItemEvent} once
+ * there is an item entity to hand, and <b>right-click into air</b> is worse - the server's whole handler sits behind
+ * {@code if (!itemStack.isEmpty())}, so it fired or not depending on what the player happened to be carrying.
  *
- * <ul>
- *   <li><b>Drop</b> only becomes {@code PlayerDropItemEvent} once there is an item entity to hand, so
- *       on an empty slot nothing is raised.
- *   <li><b>Right-click into air</b> is worse - the whole body of the server's handler, event included,
- *       sits behind {@code if (!itemStack.isEmpty())}. So it worked or not depending on what the player
- *       happened to be carrying in that slot.
- * </ul>
- *
- * <p>Right-clicking a block or an entity does raise events, but they are read here too so that every
- * right-click arrives by one route regardless of what the player is aiming at.
+ * <p>Right-clicking a block or an entity does raise events, but they are read here too so every right-click arrives
+ * by one route whatever the player is aiming at.
  */
 public interface PacketInput {
 
@@ -40,6 +34,17 @@ public interface PacketInput {
         boolean drop();
 
         boolean rightClick();
+
+        /**
+         * Right-click into empty air, as against at a block or an entity.
+         *
+         * <p>Its own method because one focus mode turns on the difference: a map that is focused by right-clicking
+         * has to leave a door openable, so it takes the click that hit nothing and lets the rest past. Everything
+         * else wants all three, which is what the default gives.
+         */
+        default boolean rightClickAir() {
+            return rightClick();
+        }
 
         /**
          * Left-click while aiming at an entity, which is less niche than it sounds: every frame MapGUI puts

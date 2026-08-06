@@ -37,6 +37,12 @@ import java.util.function.Function;
  */
 public final class WallDisplay {
 
+    /**
+     * The most steps {@link Builder#prerender} will take, so a caller can tell in advance whether an animation
+     * is short enough to be worth sending once rather than streaming.
+     */
+    public static final int MAX_PRERENDER_STEPS = WallLoop.MAX_STEPS;
+
     private final WallServices services;
     private final World world;
     private final WallLayout layout;
@@ -60,6 +66,10 @@ public final class WallDisplay {
     /** Painted over whatever the wall shows, for every viewer. Null unless one was asked for. */
     @Nullable
     private final WallContent overlay;
+
+    /** Set when the wall was asked to prerender and the transport can repoint its maps. */
+    @Nullable
+    private final WallLoop loop;
 
     private int rangeSquared;
     private int intervalMs;
@@ -95,6 +105,12 @@ public final class WallDisplay {
         if (shared != null) {
             prepare(shared);
         }
+
+        // Painted up front, since the whole idea is that playback sends no pixels at all. A transport that
+        // cannot repoint its maps is asked before any of that work is done, and the wall simply streams.
+        this.loop = builder.prerenderSteps > 0 && tiles.canShowLayers()
+                ? WallLoop.paint(layout, builder.content, builder.prerenderSteps, builder.prerenderPeriodMs)
+                : null;
     }
 
     // ---- lifecycle ----
@@ -110,21 +126,49 @@ public final class WallDisplay {
         List<Player> arrived = admitAndEvict(now);
         List<Player> watching = online(viewers);
 
+        if (loop != null) {
+            playLoop(arrived, watching, now);
+            return;
+        }
+
         for (WallView view : views()) view.paint(now, intervalMs);
+
+        // Everyone watching a shared wall is sent the same bytes, so they are cut out of the surface once.
+        TileRegions frame = new TileRegions();
 
         for (Player player : watching) {
             WallView view = viewOf(player);
-            if (arrived.contains(player)) {
-                tiles.sendAll(player, view.surface());
-            } else if (view.surface().isDirty()) {
-                tiles.sendChanged(player, view.surface());
-            }
-            if (interactive) {
-                cursors.send(player, watching, markersOf(view));
-            }
+            // One frame is one packet per map that changed, and a wall that goes up in pieces tears.
+            services.transport().bundled(player, () -> {
+                if (arrived.contains(player)) {
+                    tiles.sendAll(player, view.surface(), frame);
+                } else if (view.surface().isDirty()) {
+                    tiles.sendChanged(player, view.surface(), frame);
+                }
+                if (interactive) {
+                    cursors.send(player, watching, markersOf(view));
+                }
+            });
         }
 
         for (WallView view : views()) view.surface().clearDirty();
+    }
+
+    /** A prerendered wall: everything on arrival, and a nudge per frame after that. */
+    private void playLoop(List<Player> arrived, List<Player> watching, long now) {
+        WallLoop playing = loop;
+        TileRegions frame = new TileRegions();
+
+        for (Player player : watching) {
+            // Kept together, or a wall would change one map at a time in front of whoever is watching.
+            services.transport().bundled(player, () -> {
+                if (arrived.contains(player)) {
+                    playing.start(player, tiles, now, frame);
+                } else {
+                    playing.tick(player, tiles, now);
+                }
+            });
+        }
     }
 
     /**
@@ -330,6 +374,9 @@ public final class WallDisplay {
                 tiles.hide(player);
             }
             cursors.forget(id);
+            if (loop != null) {
+                loop.forget(id);
+            }
 
             // Their own screen goes with them, so anything it registered itself with hears about it.
             WallView view = owned.remove(id);
@@ -377,6 +424,8 @@ public final class WallDisplay {
         private WallContent overlay;
         private int fps = 10;
         private int range = 48;
+        private int prerenderSteps;
+        private long prerenderPeriodMs;
         private int aimMargin;
         private boolean showOthers;
 
@@ -613,6 +662,40 @@ public final class WallDisplay {
             return this;
         }
 
+        /**
+         * Sends a repeating animation once instead of streaming it, and plays it by pointing the maps at the
+         * copies already sitting in the client.
+         *
+         * <p>For a short loop that never varies - an animated sign, a logo, a few seconds of clip - it is the
+         * difference between paying for the animation forever and paying for it once: a 2x2 wall at 10 fps costs
+         * around 640 KB a second streamed and under a kilobyte a second flipped.
+         *
+         * <p>The trade is memory. Every step is a complete copy of the wall, held here and in each viewer's client -
+         * twelve steps of a 3x3 wall is 1.7 MB per client, sent in one go when somebody walks into range. Capped at
+         * {@value #MAX_PRERENDER_STEPS} steps, above which streaming is cheaper anyway.
+         *
+         * <p>Only for {@link #content}, and only for content that repeats <i>exactly</i>: the steps are painted when
+         * the wall opens and never again, so anything reading the world, the clock or the viewer is frozen as it was.
+         * A menu cannot be prerendered at all, since it has to answer clicks.
+         *
+         * <p>For a video, the natural call is its own frame count and duration:
+         * {@code prerender(video.frames().count(), video.frames().durationMs())}.
+         *
+         * @param steps  how many frames the loop is cut into
+         * @param periodMs how long one time round takes
+         */
+        public Builder prerender(int steps, long periodMs) {
+            if (steps < 1 || periodMs < 1) {
+                throw new IllegalArgumentException("A prerendered loop needs at least one step and some length, not "
+                        + steps + " steps over " + periodMs + "ms"
+                );
+            }
+
+            this.prerenderSteps = steps;
+            this.prerenderPeriodMs = periodMs;
+            return this;
+        }
+
         /** How close a player has to be to be sent anything. Keep it inside the server's view distance. */
         public Builder range(int value) {
             this.range = value;
@@ -641,13 +724,16 @@ public final class WallDisplay {
             view.startedAt(now);
             view.paint(now, wall.intervalMs);
             wall.tiles.show(player);
-            wall.tiles.sendAll(player, view.surface());
+            services.transport().bundled(player, () -> wall.tiles.sendAll(player, view.surface(), new TileRegions()));
             view.surface().clearDirty();
             return wall;
         }
 
         private WallDisplay build() {
             if (world == null || layout == null) throw new IllegalStateException("A wall needs at(..)");
+            if (prerenderSteps > 0 && (sharedScreen != null || screenPerPlayer != null)) {
+                throw new IllegalStateException("A menu cannot be prerendered - it has to answer clicks. Use content(..) for a wall that only plays something.");
+            }
 
             this.layout = allowed(layout);
             return new WallDisplay(this);

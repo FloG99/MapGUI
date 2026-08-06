@@ -1,0 +1,192 @@
+package de.flog99.mapgui.examples.camera;
+
+import de.flog99.mapgui.Click;
+import de.flog99.mapgui.MapGui;
+import de.flog99.mapgui.Marker;
+import de.flog99.mapgui.Screen;
+import de.flog99.mapgui.camera.Camera;
+import de.flog99.mapgui.camera.CameraAssets;
+import de.flog99.mapgui.camera.CameraOptions;
+import de.flog99.mapgui.camera.CameraShot;
+import de.flog99.mapgui.media.VideoPlayer;
+import de.flog99.mapgui.ui.Align;
+import de.flog99.mapgui.ui.Colors;
+import de.flog99.mapgui.ui.Justify;
+import de.flog99.mapgui.ui.Node;
+import de.flog99.mapgui.ui.State;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.map.MapCursor;
+
+import java.awt.Color;
+import java.util.List;
+
+import static de.flog99.mapgui.ui.Ui.Button;
+import static de.flog99.mapgui.ui.Ui.Column;
+import static de.flog99.mapgui.ui.Ui.Draw;
+import static de.flog99.mapgui.ui.Ui.Row;
+import static de.flog99.mapgui.ui.Ui.Spacer;
+import static de.flog99.mapgui.ui.Ui.Text;
+
+/**
+ * Aim with your head, left-click or sneak to capture, right-click for settings.
+ *
+ * <p>The input model is the point of this example. A cursor's vertical axis <i>is</i> the player's pitch, so a
+ * screen that asks them to press a button also decides where they are looking - which is useless for a camera.
+ * So aiming mode has no cursor at all and takes its shutter from {@link #clickedAnywhere}, and the settings
+ * panel is a second mode that turns the cursor back on because there is something to point at.
+ */
+public final class CameraScreen extends Screen {
+
+    private static final List<Integer> SIZES = List.of(Camera.MAP_SIZE, 96, 64);
+    private static final List<Integer> FOVS = List.of(50, 70, 90, 110);
+
+    /** Far enough up that the client's label sits on the map rather than off the bottom of it. */
+    private static final int HINT_INSET_Y = 8;
+
+    private final State<CameraShot> shot = state(null);
+    private final State<Boolean> capturing = state(false);
+    private final State<Boolean> settings = state(false);
+    private final State<CameraOptions> options = state(CameraOptions.defaults());
+    private final State<String> notice = state(null);
+
+    private boolean asked;
+
+    @Override
+    public Component title() {
+        return Component.text("Camera", NamedTextColor.AQUA);
+    }
+
+    /** Only the settings panel has anything to point at, so only it takes the player's aim. */
+    @Override
+    public boolean cursor() {
+        return settings.get();
+    }
+
+    @Override
+    public Click activateOn() {
+        return Click.BOTH;
+    }
+
+    /**
+     * Nothing over the picture while it is working.
+     *
+     * <p>No control hints: a viewfinder covered in captions is not a viewfinder, and the two controls are
+     * left-click and right-click, which anyone finds in a second. What does earn a marker is the one state where
+     * clicking cannot produce anything, since that is not discoverable and an operator can fix it.
+     */
+    @Override
+    public List<Marker> markers() {
+        if (settings.get() || !(MapGui.get().camera().assets() instanceof CameraAssets.Unavailable)) return List.of();
+
+        return List.of(Marker.at(MapCursor.Type.RED_X, width() / 2, height() - HINT_INSET_Y)
+                .label(player().hasPermission("mapgui.command.camera") ? "/mapgui camera" : "Ask an admin"));
+    }
+
+    /**
+     * Left-click is the shutter and right-click opens the settings, wherever the player is looking. In settings
+     * mode the widgets take right-click themselves, so only the shutter is handled here.
+     */
+    @Override
+    protected boolean clickedAnywhere(int x, int y, Click with) {
+        if (with == Click.LEFT) {
+            take();
+            return true;
+        }
+
+        if (!settings.get()) {
+            settings.set(true);
+            return true;
+        }
+
+        return false;
+    }
+
+    void sneaked() {
+        take();
+    }
+
+    @Override
+    protected Node build() {
+        if (!asked) {
+            asked = true;
+            MapGui.get().camera().prepare();
+        }
+
+        return settings.get() ? settingsPanel() : viewfinder();
+    }
+
+    private Node viewfinder() {
+        CameraShot taken = shot.get();
+
+        return taken == null
+                ? Row(Text(this::placeholder).color(new Color(190, 190, 190)).shadow())
+                        .justify(Justify.CENTER).align(Align.CENTER).fill()
+                : Draw(context -> new VideoPlayer(taken).fit(VideoPlayer.Fit.COVER).paint(context.painter(), context.bounds(), 0)).fill();
+    }
+
+    private Node settingsPanel() {
+        CameraOptions current = options.get();
+
+        return Column(
+                Row(Text("Camera").color(Color.WHITE).shadow()).justify(Justify.CENTER).fillWidth(),
+                setting("Size", current.size() + "px", () -> options.set(current.size(next(SIZES, current.size())))),
+                setting("View", (int) current.fov() + " deg", () -> options.set(current.fov(next(FOVS, (int) current.fov())))),
+                setting("Selfie", current.selfie() ? "on" : "off", () -> options.set(current.selfie(!current.selfie()))),
+                setting("People", current.entities() ? "on" : "off", () -> options.set(current.entities(!current.entities()))),
+                setting("Clouds", current.clouds() ? "on" : "off", () -> options.set(current.clouds(!current.clouds()))),
+                setting("Haze", current.fog() ? "on" : "off", () -> options.set(current.fog(!current.fog()))),
+                Spacer(),
+                Row(Button("Back").background(theme().accent()).radius(3).textColor(Color.WHITE)
+                        .onClick(() -> settings.set(false)).fillWidth()).fillWidth()
+        ).gap(2).padding(4).align(Align.STRETCH).fill();
+    }
+
+    private Node setting(String name, String value, Runnable onClick) {
+        return Row(
+                Text(name).color(new Color(190, 190, 190)),
+                Spacer(),
+                Text(value).color(Color.WHITE)
+        ).padding(1, 2).background(Colors.alpha(Color.BLACK, 120)).radius(2).onClick(onClick).fillWidth();
+    }
+
+    private static <T> T next(List<T> values, T current) {
+        int at = values.indexOf(current);
+        return values.get((at + 1) % values.size());
+    }
+
+    /**
+     * Kept to about twenty characters: a map line has no more room than that and does not wrap. The full
+     * sentence and the fix live in the console and in {@code /mapgui camera status}.
+     */
+    private String placeholder() {
+        if (notice.get() != null) return notice.get();
+        if (capturing.get()) return "Capturing...";
+
+        return switch (MapGui.get().camera().assets()) {
+            case CameraAssets.Ready ignored -> "Aim and left-click";
+            case CameraAssets.Loading loading -> "Textures " + loading.percent() + "%";
+            case CameraAssets.Unavailable ignored -> "No textures yet";
+        };
+    }
+
+    private void take() {
+        if (capturing.get()) return;
+
+        if (!MapGui.get().camera().assets().ready()) {
+            MapGui.get().camera().prepare();
+            return;
+        }
+
+        capturing.set(true);
+        notice.set(null);
+        MapGui.get().camera().capture(player(), options.get(), taken -> {
+            capturing.set(false);
+            if (taken == null) {
+                notice.set("Capture failed");
+                return;
+            }
+            shot.set(taken);
+        });
+    }
+}

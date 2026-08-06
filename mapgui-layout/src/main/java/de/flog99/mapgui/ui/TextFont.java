@@ -1,9 +1,10 @@
 package de.flog99.mapgui.ui;
 
+import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Bitmap font measurements and glyph blitting, so the layout engine can size text. */
+/** Font measurements and glyph blitting, so the layout engine can size text. */
 public interface TextFont {
 
     int lineHeight();
@@ -16,7 +17,38 @@ public interface TextFont {
 
     void drawChar(Surface surface, int x, int y, char ch, byte color, Rect clip);
 
+    /**
+     * The same, through a painter, which is what lets a font shade the edge of a glyph.
+     *
+     * <p>A bitmap font has nothing to say here: a pixel is on or off, so the default is the flat blit. An
+     * outline font rasterizes to coverage rather than to pixels, and hands the part-covered ones over as a
+     * translucent color for the painter to blend - which is where the smooth edge of a large glyph comes from.
+     */
+    default void drawChar(Painter painter, int x, int y, char ch, Color color) {
+        drawChar(painter.surface(), x, y, ch, painter.palette().index(color), painter.clip());
+    }
+
     int charWidth(char ch);
+
+    /**
+     * Blank columns left between one glyph and the next.
+     *
+     * <p>One for the vanilla map font, whose sprites are drawn hard against their own edges. An outline font
+     * carries its own spacing inside the advance width and wants none added.
+     */
+    default int letterSpacing() {
+        return 1;
+    }
+
+    /**
+     * The same font in bold or italic, or this one when it cannot do either.
+     *
+     * <p>Returning {@code this} is an answer rather than a failure: a caller drawing styled text fakes bold by
+     * drawing the glyph twice a pixel apart, the way the game itself does, and leaves italic alone.
+     */
+    default TextFont styled(boolean bold, boolean italic) {
+        return this;
+    }
 
     /**
      * Splits text into lines that fit, hard-breaking any single word that still doesn't.

@@ -25,6 +25,17 @@ public interface Palette {
     }
 
     /**
+     * The same from a packed pixel.
+     *
+     * <p>For the per-pixel paths - blending, quantizing an image - where making a {@link Color} to ask with
+     * would be an object per pixel. The default does exactly that, so a palette need only override it if it
+     * cares; one backed by a table answers straight from the bits.
+     */
+    default byte index(int argb, int x, int y) {
+        return index(new Color(argb, true), x, y);
+    }
+
+    /**
      * Indices this palette can actually produce, for anything that needs to pick between entries.
      *
      * <p>The default scans every slot and keeps one per distinct color, which is enough for a

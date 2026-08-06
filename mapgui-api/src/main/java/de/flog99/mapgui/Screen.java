@@ -94,6 +94,30 @@ public abstract class Screen {
         return Theme.DARK;
     }
 
+    /**
+     * The font this screen's text is measured and drawn with. The vanilla map font unless overridden.
+     *
+     * <p>Override with an {@link de.flog99.mapgui.ui.AwtFont} to use a TrueType file your plugin ships, at
+     * whatever size the design wants. Load it once and hand back the same instance - it caches a rasterized
+     * glyph per character, so a font built per call would rasterize the alphabet again every frame:
+     *
+     * <pre>{@code
+     * private static final TextFont TITLE = AwtFont.load(MyPlugin.font(), 16f, true);
+     *
+     * @Override
+     * public TextFont font() {
+     *     return TITLE;
+     * }
+     * }</pre>
+     *
+     * <p>One font per screen rather than per label, because measuring and painting have to agree about what
+     * text is: a layout sized with one font and drawn with another puts the words in the wrong place. For a
+     * heading in a different face, draw it with {@link ComponentText} inside a {@code Draw} node.
+     */
+    public TextFont font() {
+        return MapTextFont.INSTANCE;
+    }
+
     /** Fill color used when {@link #terrain()} is false. */
     public Color background() {
         return theme().background();
@@ -107,11 +131,12 @@ public abstract class Screen {
     /**
      * Whether this screen has a cursor at all.
      *
-     * <p>Off means no pointer is drawn and nothing is interactive - no hover, no clicks, no scrolling -
-     * and the player's head is left alone, since there is nothing to aim at. For anything meant only to
-     * be looked at: a photo, a video, or a minimap that is all terrain and no buttons.
+     * <p>Off means no pointer is drawn and no node is interactive - no hover, no scrolling - and the player's
+     * head is left alone, since there is nothing to aim at. For anything meant to be looked at rather than
+     * operated: a photo, a video, a minimap that is all terrain and no buttons.
      *
-     * <p>Q still closes the screen - that is a key, not something you point at.
+     * <p>Clicks still arrive, but only at {@link #clickedAnywhere}, which is how a cursorless screen can have a
+     * shutter without asking the player to give up their aim. Q still closes either way.
      */
     public boolean cursor() {
         return true;
@@ -123,6 +148,20 @@ public abstract class Screen {
      */
     public Click activateOn() {
         return Click.RIGHT;
+    }
+
+    /**
+     * How this screen wants to be carried - a popup, an item, something worn in the offhand - or null to
+     * follow the server's setting.
+     *
+     * <p>A screen that is a menu should leave this alone: the default is a popup, and a popup is what a menu
+     * wants. Override it for a screen that is meant to be carried about rather than opened, and read
+     * {@link HandOptions} first, because the choice decides more than where the map sits - a popup owns the
+     * player's clicks and their scroll wheel, and nothing else does.
+     */
+    @Nullable
+    public HandOptions hand() {
+        return null;
     }
 
     /**
@@ -435,12 +474,29 @@ public abstract class Screen {
         return hovered == null ? null : hovered.caption();
     }
 
+    /**
+     * A click before any node sees it, and the only kind a screen with no cursor gets at all.
+     *
+     * <p>For a press that should not depend on aim: a shutter, a confirm, a dismiss. Aiming a cursor costs the
+     * player their pitch - the vertical axis <i>is</i> their head - so a screen whose whole job is pointing at
+     * the world cannot also ask them to point at a button.
+     *
+     * @param x -1 when the screen has no cursor, since then there is no position to report
+     * @return true to keep the click, which stops it reaching a node
+     */
+    protected boolean clickedAnywhere(int x, int y, Click with) {
+        return false;
+    }
+
     @ApiStatus.Internal
     public final boolean click(int x, int y, Click with) {
+        clicking = with;
+        if (clickedAnywhere(x, y, with)) return true;
+        if (x < 0 || y < 0) return false;
+
         Node hit = root == null ? null : root.hitTest(x, y);
         if (hit == null) return false;
 
-        clicking = with;
         stateOf(hit.identity()).pressedAt = animator.now();
         hit.click(x - hit.bounds().x(), y - hit.bounds().y());
         return true;

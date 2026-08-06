@@ -45,8 +45,16 @@ see [design notes](design-notes.md) for the reasoning behind the closed ones.
 - **Markers could carry a `Component`.** The transport builds `MapDecoration` names itself, so a marker label
   could be styled instead of being a plain `String`. It stays a String because that is what
   `Label#revealOnHover` produces, and half-supporting it would be worse than not.
-- **Camera screenshots.** Render the player's view into a surface and keep it. Wants `Surface -> BufferedImage`
-  export, which is a handful of lines once a `Palette` can go backwards.
+- **Horse and llama models.** Everything else people photograph has one now. These two have two-segment legs and an
+  angled neck, and their UVs could not be read off the texture with any confidence, so they stay bounding boxes
+  until somebody can check them against the real thing.
+- **Held items, armor and name tags** on a captured entity.
+- **A live camera view.** The trace is already fast enough at a low resolution - the constraint is egress, since
+  every pixel changes every frame and the dirty rectangle buys nothing. The way through is that turning your head
+  does not invalidate a `ChunkSnapshot`, only moving does, so a look-around preview can re-trace for free and
+  only re-capture when the player crosses a block.
+- **Voxel LOD past a distance.** Marching a 4x4x4 mip of averaged colors beyond about 64 blocks. At map
+  resolution a block that far off is well under a pixel, so averaging is antialiasing rather than a compromise.
 
 ## Video
 

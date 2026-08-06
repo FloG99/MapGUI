@@ -36,6 +36,7 @@ final class HandCommand {
 
     private static final List<Listing.Choice> VERBS = List.of(
             new Listing.Choice("/mapgui hand open", "put a GUI in someone's hand"),
+            new Listing.Choice("/mapgui hand give", "hand out the item that opens one"),
             new Listing.Choice("/mapgui hand close", "take it away again"),
             new Listing.Choice("/mapgui hand list", "who has one open")
     );
@@ -51,8 +52,51 @@ final class HandCommand {
                     return Command.SINGLE_SUCCESS;
                 })
                 .then(open(sessions))
+                .then(item(sessions))
                 .then(close(sessions))
                 .then(list(sessions));
+    }
+
+    /**
+     * {@code give <gui> [players]} - the real item that opens a GUI for whoever ends up holding it.
+     *
+     * <p>Next to {@code open} rather than hidden behind an API call, because the whole point of the item is that it
+     * changes hands, and that is not something you can test by writing a plugin and reloading it.
+     */
+    private static ArgumentBuilder<CommandSourceStack, ?> item(SessionManager sessions) {
+        return Commands.literal("give")
+                .then(Commands.argument("gui", StringArgumentType.string())
+                        .suggests((context, builder) -> {
+                            for (GuiCatalog.Entry entry : sessions.guis().openable()) {
+                                builder.suggest(entry.name());
+                            }
+                            return builder.buildFuture();
+                        })
+                        .executes(context -> {
+                            Player self = self(context);
+                            return self == null ? Command.SINGLE_SUCCESS : hand(context, sessions, List.of(self));
+                        })
+                        .then(Commands.argument("players", ArgumentTypes.players())
+                                .executes(context -> hand(context, sessions, resolve(context)))
+                        )
+                );
+    }
+
+    private static int hand(CommandContext<CommandSourceStack> context, SessionManager sessions, List<Player> targets) {
+        String name = StringArgumentType.getString(context, "gui");
+        CommandSender sender = context.getSource().getSender();
+
+        for (Player target : targets) {
+            try {
+                target.getInventory().addItem(sessions.item(name));
+            } catch (IllegalArgumentException e) {
+                sender.sendRichMessage("<red>" + e.getMessage() + " - see <white>/mapgui hand open</white>.");
+                return Command.SINGLE_SUCCESS;
+            }
+        }
+        sender.sendRichMessage("<green>Gave the <white>" + name + "</white> item to "
+                + (targets.size() == 1 ? targets.getFirst().getName() : targets.size() + " players") + ".");
+        return Command.SINGLE_SUCCESS;
     }
 
     /** {@code open <gui> [players]}, or with no name the catalog of what there is. */
@@ -95,7 +139,7 @@ final class HandCommand {
         }
 
         for (Player target : targets) {
-            sessions.open(target, entry.open().apply(target), entry.name());
+            sessions.from(target, entry.open().apply(target), null, entry.name());
         }
         sender.sendRichMessage(targets.size() == 1
                 ? "<green>Opened <white>" + name + "</white> for " + targets.getFirst().getName() + "."

@@ -1,5 +1,6 @@
 package de.flog99.mapgui.examples.minimap;
 
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Marker;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.ui.Align;
@@ -34,6 +35,19 @@ public final class MinimapScreen extends Screen {
     private static final int BLOCKS_PER_PIXEL = 1;
 
     private boolean showPlayer;
+
+    /**
+     * Worn in the offhand, and taking nothing from the player.
+     *
+     * <p>A minimap is the clearest case for not being a popup. A popup fills the hotbar and swallows every click,
+     * which for something you look at while walking about is exactly wrong - you would be unable to mine, hit or
+     * place anything while your map was up. In the offhand the whole hotbar stays the player's, and
+     * {@link de.flog99.mapgui.HandOptions.Focus#NEVER} says the map never wants their mouse either.
+     */
+    @Override
+    public HandOptions hand() {
+        return HandOptions.offhand().focus(HandOptions.Focus.NEVER);
+    }
 
     /**
      * Draw an icon for the player themselves. Off by default: the terrain is centered on them, so the

@@ -1,13 +1,19 @@
 package de.flog99.mapgui.plugin;
 
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.MapGui;
+import de.flog99.mapgui.MapIds;
+import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.MapTransport;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.GuiCatalog;
+import de.flog99.mapgui.HeldTrigger;
 import de.flog99.mapgui.Session;
 import de.flog99.mapgui.WallDisplay;
+import de.flog99.mapgui.map.MapPrinter;
 import de.flog99.mapgui.prompt.PromptRegistry;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -16,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 final class SessionManager implements MapGui {
 
@@ -32,7 +40,12 @@ final class SessionManager implements MapGui {
 
     @Override
     public Session open(Player player, Screen screen) {
-        return open(player, screen, null);
+        return from(player, screen, null, null);
+    }
+
+    @Override
+    public Session open(Player player, Screen screen, HandOptions hand) {
+        return from(player, screen, hand, null);
     }
 
     /**
@@ -41,14 +54,58 @@ final class SessionManager implements MapGui {
      * <p>Which is what lets {@code /mapgui hand list} name it, and what lets an unregistering plugin's menus be
      * closed while its classes are still loaded - the next repaint of one would otherwise fail to find them.
      */
-    Session open(Player player, Screen screen, @Nullable String from) {
+    Session from(Player player, Screen screen, @Nullable HandOptions hand, @Nullable String entry) {
+        return open(player, screen, carry(screen, hand), entry, MapIds.next());
+    }
+
+    /**
+     * A screen opened because somebody picked up the item that opens it, drawn under that item's own map id.
+     *
+     * <p>The id has to be the item's: it is stamped into the stack, and the client looks up pixels by it. Which is
+     * also what lets the same item show two players their own screen - map data goes down one connection, so one id
+     * can mean different pixels to different people.
+     */
+    Session openCarried(Player player, Screen screen, HandOptions hand, String entry, int mapId) {
+        return open(player, screen, hand.sane(), entry, mapId);
+    }
+
+    private Session open(Player player, Screen screen, HandOptions hand, @Nullable String entry, int mapId) {
         close(player, true);
 
-        PlayerSession session = new PlayerSession(plugin, player, display, screen);
-        session.openedFrom(from);
+        PlayerSession session = new PlayerSession(plugin, player, display, screen, hand);
+        session.openedFrom(entry);
         sessions.put(player.getUniqueId(), session);
-        session.start();
+        session.start(mapId);
         return session;
+    }
+
+    /**
+     * How this screen is carried: what the caller said, else what the screen wants, else what the server's config
+     * says.
+     *
+     * <p>The same order everything else here resolves in - the closest opinion to the screen wins, and the config
+     * is the floor rather than the ceiling, because carry mode is not a cost to be capped.
+     */
+    private HandOptions carry(Screen screen, @Nullable HandOptions asked) {
+        if (asked != null) return asked.sane();
+
+        HandOptions wanted = screen.hand();
+        return (wanted != null ? wanted : plugin.config().hand()).sane();
+    }
+
+    @Override
+    public ItemStack item(String gui, HandOptions hand) {
+        return plugin.handItems().mint(gui, hand);
+    }
+
+    @Override
+    public HeldTrigger openWhileHolding(Predicate<ItemStack> item, HandOptions hand, Function<Player, Screen> factory) {
+        return plugin.heldTriggers().add(item, hand, factory);
+    }
+
+    @Override
+    public ItemStack item(String gui) {
+        return item(gui, HandOptions.item().focus(plugin.config().hand().focus()));
     }
 
     /** Closes every screen opened from a catalog entry that has just been unregistered. */
@@ -95,6 +152,10 @@ final class SessionManager implements MapGui {
         return List.copyOf(sessions.values());
     }
 
+    HeldMapDisplay display() {
+        return display;
+    }
+
     @Override
     public WallDisplay.Builder wall() {
         return walls.builder();
@@ -108,6 +169,16 @@ final class SessionManager implements MapGui {
     @Override
     public MapTransport transport() {
         return plugin.transport();
+    }
+
+    @Override
+    public Camera camera() {
+        return plugin.camera();
+    }
+
+    @Override
+    public MapPrinter printer() {
+        return plugin.printer();
     }
 
     @Override

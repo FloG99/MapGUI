@@ -18,7 +18,7 @@ public record WallLayout(BlockFace facing, int anchorX, int anchorY, int anchorZ
     /** Six is 36 maps, which is already 47 Mbit/s a viewer for full-frame video. Far enough. */
     public static final int MAX_SIDE = 6;
 
-    public static final int TILE = 128;
+    public static final int TILE = MapSurface.TILE;
 
     /**
      * A one-by-one wall on the face that was clicked. Its up follows from that face - see {@link #upFor}.

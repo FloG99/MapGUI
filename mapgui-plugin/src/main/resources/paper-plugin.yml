@@ -1,6 +1,8 @@
 name: MapGUI
 version: '${version}'
 main: de.flog99.mapgui.plugin.MapGuiPlugin
+# Only ever adds anything when video.ffmpeg is on in config.yml.
+loader: de.flog99.mapgui.plugin.video.VideoLibraryLoader
 api-version: '${apiVersion}'
 description: Interactive map-based GUIs with an auto-layout engine.
 author: FloG99
@@ -14,6 +16,9 @@ permissions:
     default: op
   mapgui.command.wall:
     description: Place, remove and list GUIs on blocks.
+    default: op
+  mapgui.command.camera:
+    description: See and fetch the textures a camera capture draws with.
     default: op
   mapgui.command.status:
     description: See what is in hand and what is up.
@@ -30,6 +35,7 @@ permissions:
     children:
       mapgui.command.hand: true
       mapgui.command.wall: true
+      mapgui.command.camera: true
       mapgui.command.status: true
       mapgui.command.performance: true
       mapgui.command.reload: true

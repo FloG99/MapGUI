@@ -3,6 +3,7 @@ package de.flog99.mapgui.plugin;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import de.flog99.mapgui.plugin.camera.CameraCommand;
 import de.flog99.mapgui.plugin.wall.WallCommand;
 import de.flog99.mapgui.plugin.wall.WallManager;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
@@ -46,11 +47,12 @@ final class MapGuiCommand {
 
     private static final Sub HAND = new Sub("hand", "mapgui.command.hand", "GUIs in a player's hand");
     private static final Sub WALL = new Sub("wall", "mapgui.command.wall", "GUIs and pictures on blocks");
+    private static final Sub CAMERA = new Sub("camera", "mapgui.command.camera", "the textures a capture draws with");
     private static final Sub STATUS = new Sub("status", "mapgui.command.status", "what is happening right now");
     private static final Sub PERFORMANCE = new Sub("performance", "mapgui.command.performance", "what it is costing in bandwidth");
     private static final Sub RELOAD = new Sub("reload", "mapgui.command.reload", "re-read config.yml");
 
-    private static final List<Sub> ALL = List.of(HAND, WALL, STATUS, PERFORMANCE, RELOAD);
+    private static final List<Sub> ALL = List.of(HAND, WALL, CAMERA, STATUS, PERFORMANCE, RELOAD);
 
     private MapGuiCommand() {
     }
@@ -67,6 +69,9 @@ final class MapGuiCommand {
                 })
                 .then(HandCommand.hand(sessions, HAND.permission()))
                 .then(WallCommand.wall(walls, WALL.permission()))
+                // The plugin rather than the two objects: a reload replaces the service, and a command tree that
+                // captured the old one would quietly go on driving something nothing else can see.
+                .then(CameraCommand.camera(plugin, CAMERA.permission()))
                 .then(status(sessions, walls))
                 .then(performance(performance))
                 .then(reload(plugin))

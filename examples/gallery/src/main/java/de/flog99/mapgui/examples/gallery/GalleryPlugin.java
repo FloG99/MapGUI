@@ -20,6 +20,9 @@ public final class GalleryPlugin extends JavaPlugin {
 
     private static final String NAME = "gallery";
 
+    /** A second entry rather than a page of the first, because a screen picks one font for all of it. */
+    private static final String TYPE = "type";
+
     /** Decoded at startup, since it takes about a second and every screen shares the one copy. */
     private VideoPlayer video;
 
@@ -28,6 +31,7 @@ public final class GalleryPlugin extends JavaPlugin {
         video = loadVideo();
 
         MapGui.get().guis().registerOpenable(NAME, "Every widget and layout rule", player -> new GalleryScreen(video));
+        MapGui.get().guis().registerOpenable(TYPE, "A TrueType face and styled components", player -> new TypeScreen());
     }
 
     /**
@@ -39,6 +43,7 @@ public final class GalleryPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         MapGui.get().guis().unregister(NAME);
+        MapGui.get().guis().unregister(TYPE);
     }
 
     private VideoPlayer loadVideo() {

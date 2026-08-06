@@ -4,6 +4,53 @@ prompts:
   # Other plugins can register their own and be named here.
   default: dialog
 
+hand:
+  # How a GUI in a player's hand is carried, unless the screen or the plugin opening it says otherwise.
+  # This is the default for every GUI on the server, so a screen that needs a particular mode should set
+  # it itself rather than relying on this.
+  #
+  #   popup    A map in every hotbar slot, offhand reported empty so it draws large and two-handed. Cannot be
+  #            moved, dropped or taken, because it is not in anybody's inventory. Always has the player's
+  #            mouse, and is the only mode where the plain scroll wheel is the menu's scroll - every slot
+  #            shows the same map, so nothing is lost by taking it. Q closes. MapGUI's original, and the
+  #            right answer for a menu.
+  #   item     A real item. Picked up, dropped, handed over, left in a chest - and whoever holds it gets
+  #            THEIR OWN screen, built fresh for them, so a phone found in a chest shows its finder their
+  #            phone. Needs the GUI registered by name; see MapGui#item.
+  #   pinned   A fake map in one hotbar slot, which never leaves the player's own inventory. Reads like an
+  #            item and cannot be lost like one.
+  #   offhand  A fake map in the offhand, with the main hand left entirely to the player. Cannot be held in
+  #            the main hand at all, so `focus` is the only way to reach it.
+  carry: popup
+
+  # Which hotbar slot, 0 to 8, a pinned map sits in. Ignored by the other modes.
+  slot: 8
+
+  # Whether the player may move a pinned map to another slot of their own - never out of their inventory.
+  # Done with the number keys over its slot while the inventory is open, which is the one move gesture that
+  # works on an item the server does not really have.
+  movable: false
+
+  # Whether the map may be carried in the offhand, for `item` and `pinned`. Always true for `offhand`,
+  # always false for `popup`, which claims both hands to draw itself big.
+  offhand: false
+
+  # What gives a map in the OFFHAND the player's mouse - a cursor, head movement, and their clicks
+  # swallowed instead of reaching the world. A map in the main hand always has it, and a popup always has
+  # it, so this is only ever about the offhand.
+  #
+  #   main-hand    Only the main hand. In the offhand it is a picture. Nothing to explain to a player: to
+  #                use the map, hold it.
+  #   swap-hands   The swap-hands key - F unless they have rebound it - toggles it, moving nothing. The
+  #                natural one for `offhand`, where that key has nothing else to do, and the default there.
+  #   right-click  Right-clicking into empty air toggles it. Pair with a screen that activates on the left
+  #                button, since the right one is then spoken for.
+  #   sneak        Held while sneak is held, let go when it is released.
+  #   always       Both hands. Which means an offhand map eats every click, so the player cannot mine or
+  #                place anything until the screen closes.
+  #   never        Neither hand. A display and nothing more.
+  focus: main-hand
+
 animations:
   # Ease scrolling and color changes instead of snapping.
   enabled: true
@@ -35,6 +82,57 @@ terrain:
   # one block column per pixel, so don't set this too low.
   min-ticks-between-refresh: 4
 
+camera:
+  # Vertical field of view for a capture, in degrees. 70 is the client's default, and the server has no way
+  # to know what any given player has set theirs to, so this is as close as it gets.
+  fov: 70
+
+  # How far a capture traces, in blocks. Capped by the server's view distance whatever this says: beyond
+  # that the chunks are not loaded, so there is nothing to trace and the ray draws sky.
+  max-distance: 96
+
+  # Serve a chunk copied for one capture to another capture taken within this many milliseconds, instead of
+  # copying it again. Copying the world is the half of a capture that has to happen on the main thread, and
+  # two shots a moment apart want almost the same chunks - a walking player taking one shot after another
+  # reuses over 90% of them.
+  #
+  # Zero, and deliberately. There is no way to know a chunk has changed: block events miss pistons, fluid,
+  # growth, explosions and every other plugin, and a chunk holds light as well as blocks, so a torch placed
+  # in the chunk next door changes this one without touching it. So this is a timer, not a guarantee, and a
+  # capture can show a block as it was up to this long ago. Everything else the camera does to be fast is
+  # exact; this is the one thing that trades a little truth for speed.
+  #
+  # Worth turning on for a live view or a burst of shots, since two captures further apart than this reuse
+  # nothing anyway. 1000 is a sensible value if you want it.
+  reuse-chunks-for-ms: 0
+
+  assets:
+    # The camera draws blocks and mobs with Minecraft's real textures, which are not ours to ship. With this
+    # on, MapGUI downloads the official client jar from Mojang the first time something takes a capture,
+    # checks it against Mojang's own SHA-1, keeps the textures and deletes the rest. Once, per version, into
+    # plugins/MapGUI/cache/camera/.
+    #
+    # Nothing is downloaded at startup: most installs of MapGUI never take a capture, and 39 MB of outbound
+    # traffic for a feature nobody has called is not something a plugin should do unasked.
+    #
+    # Off means MapGUI never makes an outbound connection, and the camera is disabled unless you supply the
+    # files yourself below.
+    download: true
+
+    # Files in plugins/MapGUI/assets/ to draw with - a client jar, a resource pack zip, or both. Layered
+    # top-down the way the client stacks packs, so your own pack wins where it has a texture and vanilla
+    # fills in the rest. Leave empty to use only what MapGUI downloaded.
+    #
+    # Anything here is read and never written: a file you pinned deliberately is never replaced.
+    packs: []
+
+    # Load textures whose version does not match the server's. Off, because wrong textures are worse than
+    # none - a capture that quietly draws the old grass is a confusing bug report. On, blocks added or
+    # renamed since then render as the missing-texture checkerboard.
+    #
+    # For snapshot servers and forks, where the matching assets may not exist to download at all.
+    allow-version-mismatch: false
+
 walls:
   # Walls placed with /mapgui wall place. Every map in a wall is 16 KB per frame, so this is the
   # setting that decides what a wall costs: a 2x2 at 10 is 640 KB/s per viewer, and a 6x6 is nine
@@ -45,6 +143,15 @@ walls:
   # view-distance - beyond that the client has unloaded the chunk and thrown the frames away.
   view-distance: 48
 
+  # Send a short looping animation once instead of streaming it, and play it by pointing each client at
+  # the frames it already has. A 2x2 wall at 10 fps costs about 640 KB/s streamed and under 1 KB/s this way.
+  #
+  # Only for animations of 32 frames or fewer - longer ones stream, since sampling them down to 32 would
+  # change what they look like. The cost is memory and one burst: every frame is a whole copy of the wall,
+  # held here and in each viewer's client, and all of it is sent the moment somebody walks into range.
+  # A 12 frame 3x3 wall is about 1.7 MB per client, which pays for itself in a couple of seconds.
+  prerender: true
+
   # Longest edge videos are decoded at. Bigger walls upscale rather than decoding again, since a
   # resize would otherwise mean re-reading the file for every step. 256 is 1:1 for a 2x2 wall.
   #
@@ -53,3 +160,27 @@ walls:
   # is 200 frames, so roughly 13 MB of heap. Frames are let go once no wall shows them, so what you
   # pay for is what is up - not everything you have ever tried. Takes effect on restart.
   video-size: 256
+
+video:
+  # Play mp4 and live streams as well as GIFs, using FFmpeg.
+  #
+  # Off, and turning it on downloads about 80 MB of native libraries on the next start - only the build for
+  # this operating system and processor, once, cached by the server alongside every other plugin library.
+  # MapGUI does not ship it: most servers never play a video, and a full FFmpeg build is not something to
+  # hand out on everybody's behalf.
+  #
+  # With this on, any file in plugins/MapGUI/videos that FFmpeg can open - .mp4, .mkv, .webm, .mov and so
+  # on - can be placed with /mapgui wall place, the same as a GIF. The difference is that a GIF is decoded
+  # into memory once and a video is decoded as it plays, which is what makes a two hour film possible.
+  ffmpeg: false
+
+  # Live streams, by a name you choose. Anything FFmpeg can open: rtmp, rtsp, hls, a plain http url.
+  #
+  # Named here rather than typed into the command on purpose - a url an operator types is a url this server
+  # connects to, so it is a decision for whoever has access to this file. Placed exactly like a video:
+  # /mapgui wall place lobby-cam
+  #
+  # One connection and one decode per name however many walls show it. Needs ffmpeg above.
+  streams: {}
+    # lobby-cam: rtsp://10.0.0.5:554/stream1
+    # bbb: https://example.com/big_buck_bunny.mp4

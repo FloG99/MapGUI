@@ -44,19 +44,55 @@ rather than painted black - so give the node a background and the letterbox matc
 
 `Fit.COVER` crops to fill. `Fit.STRETCH` distorts.
 
-## Why not MP4
+## MP4, and live streams
 
-**GIF is the format, and MP4 is deliberately unsupported.**
+GIF is what works out of the box, and it stays the default for the reason it always was: Java SE ships no
+video decoder, so anything else means FFmpeg, and MapGUI is not going to put 80 MB of native code on every
+server that only wanted a menu.
 
-Java SE ships no video decoder at all, and JCodec - the only pure-Java H.264 decoder - decodes High profile
-measurably wrong. That is what phones and ffmpeg produce by default. Measured against ffmpeg on the
-gallery's own sample, frame 100 came back at 22.8/255 mean absolute error where a correct decoder lands
-under 2, and it is a reconstruction bug rather than anything a caller can work around - see
-[design notes](design-notes.md#mp4-is-closed-not-pending) for how that was pinned down.
+So it is asked for instead. Turn it on:
 
-Anything else means bundling or downloading ffmpeg, which would end "no runtime dependencies".
+```yaml
+video:
+  ffmpeg: true
+```
 
-Converting costs you very little, because a map is a small target. The palette is a fixed set of about 250
-colors, so GIF's 256 per frame is already more than the canvas can show - MP4 has no color advantage here. A
-minute at 128x128 and 10 fps is roughly 3 MB of GIF, against 10 MB of map packets sent to every viewer each
-time it plays. The file is not the expensive part.
+and on the next start the server downloads FFmpeg through Paper's own library loader - the build for this
+operating system and processor only, once, cached alongside every other plugin library. After that, any file
+in `plugins/MapGUI/videos` that FFmpeg can open sits next to the GIFs in `/mapgui wall place`.
+
+Live streams are named in config rather than typed into the command:
+
+```yaml
+video:
+  ffmpeg: true
+  streams:
+    lobby-cam: rtsp://10.0.0.5:554/stream1
+```
+
+`/mapgui wall place lobby-cam` then puts it up. Named rather than typed on purpose: a url an operator hands to
+the server is a url the server connects to, so it is a decision for whoever has access to `config.yml`. One
+connection and one decode serve however many walls show it.
+
+### The difference it makes
+
+A GIF is decoded once into memory and drawn from there. A video or a stream is decoded as it plays, on its own
+thread, and the wall paints whatever frame is current when it comes round:
+
+```java
+LiveSource source = new FfmpegSource("/media/clip.mp4", 256, 256, true);
+MapGui.get().wall().at(block, face).size(2, 2).content(WallContent.live(source)).open();
+```
+
+That is what makes a two hour film possible where a GIF of it would not fit in memory, and it is why nothing
+waits: FFmpeg scales inside the decoder, quantizing is a table lookup per pixel, and a stall in the stream
+leaves the last frame up rather than the server. Close the source when you are done with it - it owns a thread
+and, for a stream, a connection.
+
+### What it does not change
+
+The bytes on the wire. A frame is a frame however it was decoded, so everything in
+[performance](performance.md) applies unchanged: the frame rate, the area that actually moves and the number
+of people watching are still what a wall costs. Converting to GIF was never expensive because the map palette
+is about 250 colors - MP4 has no color advantage on a canvas this size. What it has is length, seeking and
+live input.

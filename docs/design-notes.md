@@ -47,7 +47,7 @@ The fix is temporal rather than a better pattern: quantize against the previous 
 pixel's existing entry while its new color is within some tolerance. Hysteresis. Likely worth more than
 switching to error diffusion, and the two are independent.
 
-## MP4 is closed, not pending
+## Pure-Java MP4 is closed; FFmpeg is the way in
 
 JCodec, the only pure-Java H.264 decoder, mis-decodes High profile - which is what phones and ffmpeg produce
 by default.
@@ -64,11 +64,16 @@ Worth knowing *why* rather than just that: JCodec targets Baseline and Main, and
 that it reads a High profile header and decodes anyway instead of refusing. A decoder that threw would have
 taken five minutes to rule out instead of an evening.
 
-Every other route - a bundled binary, a first-use download, bytedeco natives through Paper's library loader -
-ends "no runtime dependencies", and buys less than it looks like. The map palette is ~250 fixed colors, so
-MP4's color depth is moot; a minute at 128x128 and 10 fps is ~3 MB of GIF against ~1.3 MB of H.264, both
-trivial next to the ~10 MB of map packets each viewer receives to watch it once. Converting is the author's
-job, once, on their own machine.
+So there is no pure-Java route, and MapGUI now takes the other one: bytedeco's FFmpeg, pulled through Paper's
+library loader when `video.ffmpeg` is turned on. Off by default and downloaded per platform on demand, so a
+server that only wanted a menu still has no runtime dependencies and GIF still works with none.
+
+The earlier reasoning against it was right about *format* and wrong about *scope*. The map palette is ~250
+fixed colors, so MP4's color depth is still moot, and a minute at 128x128 is trivial either way next to the
+~10 MB of map packets a viewer receives to watch it once. What it buys is not fidelity but length and liveness:
+a GIF has to be decoded whole into memory, which rules out anything long, and rules out streams entirely
+because there is no file to decode. A source that hands over one frame at a time answers both, and the same
+machinery serves an RTSP camera and a two hour film.
 
 ## Never reimplement the layout engine in JavaScript
 

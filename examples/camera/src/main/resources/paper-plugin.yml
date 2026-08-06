@@ -1,0 +1,13 @@
+name: MapGUI-Camera
+version: '${version}'
+main: de.flog99.mapgui.examples.camera.CameraPlugin
+api-version: '${apiVersion}'
+description: MapGUI example - capturing the world onto a map.
+author: FloG99
+
+dependencies:
+  server:
+    MapGUI:
+      load: BEFORE
+      required: true
+      join-classpath: true

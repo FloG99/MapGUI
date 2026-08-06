@@ -25,6 +25,22 @@ that.
 | **Area** | the cost is the rectangle that *changed*, so a small animation is cheap and a full-bleed one is not |
 | **Audience** | `walls.view-distance` decides who is sent anything at all |
 
+## What the wire actually carries
+
+Two things narrow it further than the frame rate does.
+
+**Only the maps that changed.** A wall tracks what moved per map, not per wall, so a clock in one corner and a
+caption in the other send two small rectangles rather than the box around both - which on a 6x6 wall is the
+difference between two updates and thirty-six.
+
+**One frame arrives at once.** Every map that changed in a frame goes out in a single bundle, so a client
+applies all of them in the same tick or none. Without it a large wall visibly tears, the top showing the new
+frame while the bottom still shows the old.
+
+**A repeating loop can be sent once.** See [prerendering](walls.md#a-loop-sent-once-instead-of-forever): a
+short animation sent as a copy per frame is then played by telling clients which copy to show. Two walls next
+to each other, one streamed and one prerendered, measured about 3 Mbit/s against nothing.
+
 ## What is free
 
 - **A screen nobody is looking at.** Nothing is sent while it is put away.

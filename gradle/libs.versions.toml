@@ -3,17 +3,28 @@ java = "25"
 minecraft = "26.2"
 paper = "26.2.build.84-stable"
 junit = "5.11.4"
+# FFmpeg playback. compileOnly here and downloaded at runtime by VideoLibraryLoader, so these two must
+# stay in step with the constants in VideoNatives. The FFmpeg version is the one that JavaCV release ships.
+javacv = "1.5.11"
+ffmpeg = "7.1-1.5.11"
 annotations = "26.0.1"
+# Matched to what Paper 26.2 puts on the runtime classpath, since that is what this actually runs against.
+gson = "2.14.0"
 paperweight = "2.0.0-beta.21"
 runpaper = "3.0.2"
 shadow = "9.5.1"
 
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+# Only for mapgui-camera, which has no Bukkit dependency and so cannot pick this up from paper-api the way
+# every other module does. compileOnly there too: the server puts it on the runtime classpath either way.
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+javacv = { module = "org.bytedeco:javacv", version.ref = "javacv" }
+ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "ffmpeg" }
 
 [plugins]
 paperweight-userdev = { id = "io.papermc.paperweight.userdev", version.ref = "paperweight" }

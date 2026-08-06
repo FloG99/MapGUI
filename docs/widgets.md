@@ -36,6 +36,74 @@ Draw(this::paintGrid).onClick((x, y) -> select(x / 16, y / 16)).fill()
 `tracksCursor()` asks for a repaint on every pixel of cursor movement, which anything drawing at the cursor
 needs - see `/claims`, where an eight by eight grid with a hover highlight is one node.
 
+### Shapes
+
+The painter draws shapes, not just pixels, and every one of them takes the same two arguments a box does: a
+`Fill` for the inside and a `Border` for the outline.
+
+```java
+painter.triangle(10, 40, 30, 5, 50, 40, Fill.solid(GOLD), Border.solid(2, BLACK));
+painter.circle(64, 64, 20, Fill.gradient(TOP, BOTTOM, VERTICAL), Border.none());
+painter.polygon(xs, ys, null, Border.solid(3, RED));
+painter.line(0, 0, 128, 128, WHITE, 4);
+painter.polyline(xs, ys, WHITE, 2);
+```
+
+Thickness works on all of them because the outline is defined rather than drawn: it is every pixel inside the
+shape within the border's width of somewhere outside it. A shape of your own is one method - implement
+`Shape.contains` and hand it to `painter.shape(..)`, and it gets fills, outlines and thickness for free.
+
+### Fonts
+
+The vanilla map font is the default and needs nothing. For anything else, `AwtFont` takes any font the JVM can
+load - a TrueType file shipped with your plugin, at any size - and rasterizes each glyph once. A screen picks
+its font by overriding `font()`:
+
+```java
+private static final TextFont TITLE = AwtFont.load(MyPlugin.fontFile(), 16f, true);
+
+@Override
+public TextFont font() {
+    return TITLE;
+}
+```
+
+Load it once and hand back the same instance - a font caches a rasterized glyph per character, so building one
+per call rasterizes the alphabet again every frame. One font per screen rather than per label, because
+measuring and painting have to agree: a layout sized with one font and drawn with another puts the words in
+the wrong place. For a heading in a different face, draw it with `ComponentText` inside a `Draw` node.
+
+The last argument is anti-aliasing. Glyphs are rendered to coverage rather than on-or-off pixels, so
+part-covered edges are blended with what is behind them. Worth having at large sizes and mostly noise at small
+ones, which is why it is a choice.
+
+### Adventure components
+
+Anything that already exists as a `Component` - a MiniMessage string from a config, an item's display name, a
+chat line - can be drawn with its own colors and styles:
+
+```java
+ComponentText.draw(painter, x, y, component, fallbackColor, true);
+```
+
+Runs are drawn in the colors the component author wrote. Bold uses the font's own bold weight where it has one
+and the vanilla double-draw trick where it does not; underline and strikethrough are ruled in the run's color.
+Obfuscated is not animated - a map redraws on its own clock, and scrambling it every frame would send the
+whole line every frame with it.
+
+To put one in a layout rather than paint it yourself, `RichText` is a node like any other:
+
+```java
+Column(
+    RichText.of(() -> miniMessage.deserialize(config.getString("title"))).shadow(),
+    Text(() -> "and an ordinary label under it")
+)
+```
+
+It measures the way it draws, so it sizes and aligns like anything else. One line, though: wrapping styled text
+means cutting runs at the break, which is a different job from cutting a string - so wrapping, ellipsis and
+scrolling stay with `Text`, on plain text.
+
 ## Reusing a look
 
 ```java

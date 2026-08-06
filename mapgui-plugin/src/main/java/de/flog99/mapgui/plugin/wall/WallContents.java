@@ -3,7 +3,7 @@ package de.flog99.mapgui.plugin.wall;
 import de.flog99.mapgui.GuiCatalog;
 import de.flog99.mapgui.WallContent;
 import de.flog99.mapgui.WallDisplay;
-import de.flog99.mapgui.media.VideoPlayer;
+import de.flog99.mapgui.plugin.video.VideoNatives;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -45,8 +45,7 @@ final class WallContents {
         GuiCatalog.Entry entry = screens.get(name);
         if (entry != null && entry.placeable()) return entry.place();
 
-        VideoPlayer video = videos.find(name);
-        return video == null ? null : wall -> wall.content(WallContent.video(video));
+        return videos.place(name);
     }
 
     /**
@@ -72,6 +71,11 @@ final class WallContents {
             lines.add(heading("Media", "plugins/MapGUI/videos"));
             for (String name : files) lines.add(line(name, "video"));
         }
+        if (videos.needsFfmpeg() && !VideoNatives.available()) {
+            lines.add(Component.text("    Video files and streams need ", NamedTextColor.DARK_GRAY)
+                    .append(Component.text("video.ffmpeg: true", NamedTextColor.GRAY))
+                    .append(Component.text(" in config.yml and a restart.", NamedTextColor.DARK_GRAY)));
+        }
         return lines;
     }
 
@@ -92,8 +96,19 @@ final class WallContents {
         videos.forget(name);
     }
 
+    /** Why a name that looked like media did not play, for a command to pass on rather than saying "no such thing". */
+    @Nullable
+    String problemWith(String name) {
+        return videos.problemWith(name);
+    }
+
     /** Lets go of the decoded frames of anything no longer wanted. Names that are screens are simply not videos. */
     int retainOnly(Set<String> wanted) {
         return videos.retainOnly(wanted);
+    }
+
+    /** Stops every decoder, for shutdown. */
+    void close() {
+        videos.close();
     }
 }

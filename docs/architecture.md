@@ -6,7 +6,7 @@
 |---|---|---|
 | `mapgui-layout` | the node tree, DSL and layout engine. **No Bukkit dependency**, so it unit tests without a server | yes |
 | `mapgui-api` | what you compile against: `Screen`, `Session`, `WallDisplay`, `Marker`, prompts | yes |
-| `mapgui-nms` | the two things with no API equivalent. The only module that touches server internals | no |
+| `mapgui-nms-26_2` | the things with no API equivalent, for one Minecraft version. One module per version, and the only ones that touch server internals | no |
 | `mapgui-plugin` | the runtime: sessions, input, walls, commands, prompt providers | no, it *is* the plugin |
 | `mapgui-preview` | renders a screen to a browser or a PNG with no server running | no |
 
@@ -47,9 +47,11 @@ The same idea carries walls: the item frames are client-only entities, never add
 placed, so nothing can be broken, and a restart leaves nothing behind. Only the *record* of a wall persists,
 in `walls.yml`.
 
-## Why the NMS module
+## Why the NMS modules, and how to add a version
 
-Two things have no API equivalent, and they are the whole of `mapgui-nms`:
+Four things have no API equivalent, and they are the whole of `mapgui-nms-26_2`. Each is an interface in
+`mapgui-api` - `MapTransport`, `PacketInput`, `RotationController`, `SavedMapPixels` - and `ServerBackend`
+hands over one of each:
 
 - **Sending map pixels and a fake item** as `ClientboundMapItemDataPacket` and
   `ClientboundSetPlayerInventoryPacket`. Bukkit's `MapRenderer` requires a real map to render, which is exactly
@@ -58,8 +60,26 @@ Two things have no API equivalent, and they are the whole of `mapgui-nms`:
 - **Pushing a player's pitch back into range without touching their yaw.** Yaw is the horizontal cursor axis,
   so setting both at once would send a yaw that is already a tick stale and snap their aim sideways mid-flick.
 
+- **Writing a picture into the pixels the world itself saves for a map**, which is what makes a printed map
+  survive MapGUI being uninstalled.
+- **Repointing a client-only item frame at a different map id**, so a prerendered loop plays without sending
+  pixels.
+
 Everything else is plain Paper API - terrain from `BlockData#getMapColor`, most input from ordinary events. The
-other three modules build against `paper-api` alone, in seconds, with no dev bundle.
+other modules build against `paper-api` alone, in seconds, with no dev bundle.
+
+There is one module per Minecraft version, because each is compiled against that version's own server jar and
+nothing else can be. Nothing imports one: `Backends` looks up a class name at startup from the version the
+server reports, so several can sit in the same jar with only the right one ever loaded. Adding a version is
+therefore mechanical, and nothing above the interfaces has to know it happened:
+
+1. Copy `mapgui-nms-26_2` to `mapgui-nms-<version>` and point its dev bundle at the new Paper.
+2. Fix whatever the compiler objects to.
+3. Add it to `settings.gradle.kts`, and to the plugin's `runtimeOnly` and `shadowJar` lists.
+4. Add the family and the backend's class name to the table in `Backends`.
+
+Versions are matched by family, so `26.2.1` runs on the module built for `26.2`. A server MapGUI has no
+backend for fails to enable and says which versions it knows, rather than half-working.
 
 ## Input, and why some of it is read off the connection
 

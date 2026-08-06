@@ -51,6 +51,9 @@ MapGui.get().open(player, new CounterScreen());
   room or private per viewer.
 - **Video.** Animated GIF, decoded by the JDK alone, scaled and palette-matched to any box.
 - **Terrain.** The world drawn underneath your layout, following the player or fixed to a wall.
+- **A camera.** A screenshot of what the player is looking at, with real block textures, transparency through
+  glass and water, biome tints read from Minecraft's own colormaps, a sky with the sun, moon, stars and clouds
+  where they actually are, and the people in view wearing their own skins. Point it back at yourself for a selfie.
 - **A headless preview.** Render a screen to a browser or a PNG with no server running, and click it.
 - **Not a screen you are trapped in.** Players walk, jump and sneak with a GUI open, unlike a chest GUI that
   freezes them in an inventory screen.
@@ -103,9 +106,11 @@ plugins/
 | `/mapgui hand open gallery` | every widget, and the layout rules side by side |
 | `/mapgui hand open todo` | state, scrolling, text prompts, per-row closures |
 | `/mapgui hand open minimap` | terrain rendering, and a screen with no cursor |
+| `/mapgui hand open camera` | a screenshot of the world, and a screen that aims instead of pointing |
 | `/mapgui hand open claims` | a full-screen map, one `Draw` node standing in for a grid, cursor tracking |
 | `/mapgui wall place draw` | a wall everyone draws on, with a palette only you can see |
 | `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
+| `/snapshot` | the camera with its own command, aim with your head and left-click to shoot |
 | `/todo` | the same list, opened by its own plugin - which is how your users reach a GUI |
 | `/walls here` | a plugin placing a wall itself rather than letting an admin site it |
 
@@ -159,8 +164,10 @@ audience is the one thing here that costs real bandwidth.
 |---|---|
 | [Getting started](docs/getting-started.md) | depending on it, your first screen, the input model |
 | [Widgets and styling](docs/widgets.md) | the widget set, themes, borders, corners, long text, text input |
+| [Carrying a GUI](docs/hand.md) | popup, real item, pinned slot or offhand, and who has the mouse |
 | [Animation](docs/animation.md) | easing, looping effects, frame limits |
-| [Video](docs/video.md) | GIF playback, fit modes, and why not MP4 |
+| [Video](docs/video.md) | GIF playback, fit modes, and optional MP4 and live streams |
+| [Camera](docs/camera.md) | capturing the world onto a map, and where the textures come from |
 | [Walls](docs/walls.md) | video walls, menus on walls, shared state, the placement catalog |
 | [Performance](docs/performance.md) | what costs bandwidth, and how to find out what is costing it |
 | [Configuration](docs/configuration.md) | `config.yml`, commands, permissions |

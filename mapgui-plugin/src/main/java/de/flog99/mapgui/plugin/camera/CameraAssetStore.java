@@ -1,0 +1,278 @@
+package de.flog99.mapgui.plugin.camera;
+
+import de.flog99.mapgui.camera.CameraAssets;
+import de.flog99.mapgui.render.AssetCache;
+import de.flog99.mapgui.render.AssetResolver;
+import de.flog99.mapgui.render.AssetStack;
+import org.bukkit.Bukkit;
+import org.bukkit.plugin.Plugin;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * Owns the camera's textures: what state they are in, when to fetch them, and what to tell whoever can fix it.
+ *
+ * <p>Nothing is fetched at startup. MapGUI.jar on its own does nothing visible, so most installs of it are
+ * somebody setting up a library and will never take a screenshot - pulling 39 MB from an external host for a
+ * feature nobody has called is the kind of thing that gets a plugin distrusted, and it fails on hosts with no
+ * outbound route. The fetch happens on the first capture instead, because that is somebody actually asking
+ * for the feature.
+ *
+ * <p>Logging is per state change rather than per attempt. A camera renders repeatedly, so anything that logs
+ * on the render path buries the one line that mattered under a hundred thousand copies of it.
+ */
+public final class CameraAssetStore {
+
+    private final Plugin plugin;
+    private final Path assetsDir;
+    private final Path cacheDir;
+
+    /** Guards against a second fetch starting while the first is still running. */
+    private final AtomicBoolean fetching = new AtomicBoolean();
+
+    private volatile CameraAssets state;
+    private volatile AssetStack stack;
+
+    private List<String> packNames;
+    private boolean downloadEnabled;
+    private boolean allowVersionMismatch;
+
+    public CameraAssetStore(Plugin plugin, List<String> packNames, boolean downloadEnabled, boolean allowVersionMismatch) {
+        this.plugin = plugin;
+        this.assetsDir = plugin.getDataFolder().toPath().resolve("assets");
+        this.cacheDir = plugin.getDataFolder().toPath().resolve("cache").resolve("camera");
+        this.packNames = List.copyOf(packNames);
+        this.downloadEnabled = downloadEnabled;
+        this.allowVersionMismatch = allowVersionMismatch;
+        // Replaced by announce() during onEnable, so nothing observes this.
+        this.state = new CameraAssets.Unavailable(CameraAssets.Cause.NOT_INSTALLED, "Camera textures have not been checked yet.", "Run '/mapgui camera status'.");
+    }
+
+    /**
+     * Reads what is on disk and says what will happen about it. Called once, at enable.
+     *
+     * <p>Reading is not fetching, and doing it now is what lets {@code /mapgui camera status} answer before
+     * anybody has taken a capture. The download still waits for something to ask for one.
+     */
+    public synchronized void announce() {
+        load(false);
+
+        if (downloadEnabled && state instanceof CameraAssets.Unavailable unavailable && unavailable.cause() == CameraAssets.Cause.NOT_INSTALLED) {
+            plugin.getLogger().info("Camera textures are not installed. They will download from Mojang the first time something takes a capture.");
+            plugin.getLogger().info("To get it over with now, run 'mapgui camera fetch-assets' from the console. To turn it off, set camera.assets.download to false in config.yml.");
+        }
+    }
+
+    /**
+     * What the camera can do right now. Cheap enough to call per frame.
+     *
+     * <p>A screen should check this before drawing rather than after: greying out its own button reads better
+     * than any error frame can.
+     */
+    public CameraAssets state() {
+        return state;
+    }
+
+    /**
+     * The loaded layers, or null when {@link #state()} is not {@link CameraAssets.Ready}.
+     *
+     * <p>Held rather than handed out per call because opening the zips again per frame would be absurd, and
+     * every reader of it is on the render path.
+     */
+    public AssetStack stack() {
+        return stack;
+    }
+
+    /**
+     * Loads what is on disk, and starts a download if that is what is missing and it is allowed.
+     *
+     * <p>Called on the first capture and by {@code /mapgui camera reload}. Safe to call repeatedly: it does
+     * nothing once loaded, and will not start a second download over the top of a running one.
+     */
+    public synchronized void ensure() {
+        if (state instanceof CameraAssets.Ready || state instanceof CameraAssets.Loading) {
+            return;
+        }
+
+        load(true);
+    }
+
+    /** Drops what is loaded and works it out again from scratch. */
+    public synchronized void reload() {
+        closeStack();
+        load(true);
+    }
+
+    /** Picks up a config change without re-reading the disk unless something that matters moved. */
+    public synchronized void retune(List<String> packNames, boolean downloadEnabled, boolean allowVersionMismatch) {
+        boolean changed = !this.packNames.equals(packNames)
+                || this.downloadEnabled != downloadEnabled
+                || this.allowVersionMismatch != allowVersionMismatch;
+
+        this.packNames = List.copyOf(packNames);
+        this.downloadEnabled = downloadEnabled;
+        this.allowVersionMismatch = allowVersionMismatch;
+
+        if (changed) {
+            reload();
+        }
+    }
+
+    /**
+     * Downloads now rather than on first use, for an admin who would rather not wait for it later.
+     *
+     * @return false if a download is already running or the config forbids one
+     */
+    public synchronized boolean fetchNow() {
+        if (!downloadEnabled) return false;
+
+        return startFetch(Bukkit.getMinecraftVersion(), null);
+    }
+
+    public synchronized void close() {
+        closeStack();
+    }
+
+    /**
+     * @param mayFetch whether being short of what it needs is allowed to start a download. False at enable,
+     *                 where the point is to find out what is there rather than to go and get it
+     */
+    private void load(boolean mayFetch) {
+        String wanted = Bukkit.getMinecraftVersion();
+        AssetResolver.Request request = new AssetResolver.Request(assetsDir, cacheDir, packNames, wanted, allowVersionMismatch);
+
+        switch (AssetResolver.resolve(request)) {
+            case AssetResolver.Resolution.Loaded loaded -> adopt(loaded);
+            case AssetResolver.Resolution.Missing missing -> onMissing(missing, mayFetch);
+            case AssetResolver.Resolution.Mismatched mismatched -> onMismatch(mismatched, mayFetch);
+            case AssetResolver.Resolution.Broken broken -> unavailable(CameraAssets.Cause.UNREADABLE, broken.detail(), broken.fix(), true);
+        }
+    }
+
+    /**
+     * Nothing on disk. With downloading on this is a normal fresh install and fixes itself, so it is reported
+     * as a plain fact rather than as a fault - {@link #announce} is what tells an admin it is going to happen.
+     */
+    private void onMissing(AssetResolver.Resolution.Missing missing, boolean mayFetch) {
+        if (mayFetch && startFetch(missing.wantedVersion(), null)) {
+            return;
+        }
+
+        if (downloadEnabled) {
+            state = new CameraAssets.Unavailable(
+                    CameraAssets.Cause.NOT_INSTALLED,
+                    "Camera textures for Minecraft " + missing.wantedVersion() + " are not installed",
+                    "They download on the first capture. To do it now, run 'mapgui camera fetch-assets' from the console."
+            );
+            return;
+        }
+
+        unavailable(
+                CameraAssets.Cause.DOWNLOAD_DISABLED,
+                "Camera textures are not installed and camera.assets.download is false, so MapGUI will not fetch them",
+                "Set camera.assets.download: true in config.yml, or put a client jar or resource pack zip in plugins/MapGUI/assets/ and list it under camera.assets.packs. See docs/camera.md.",
+                true
+        );
+    }
+
+    private void adopt(AssetResolver.Resolution.Loaded loaded) {
+        closeStack();
+        stack = loaded.stack();
+        state = new CameraAssets.Ready(loaded.stack().version(), loaded.stack().blockTextureCount());
+
+        plugin.getLogger().info("Camera assets ready: Minecraft " + loaded.stack().version() + ", " + loaded.stack().blockTextureCount() + " block textures, " + loaded.stack().entityMeshCount() + " mob shapes, layers " + String.join(" over ", loaded.stack().layerNames()) + ".");
+
+        if (loaded.stack().entityMeshCount() == 0) {
+            // Not a fault. Mob geometry is baked out of a client jar, so a base that is only a resource pack has
+            // none to give, and a jar whose libraries do not match this server's cannot be run for it.
+            plugin.getLogger().info("No mob shapes came with those assets, so mobs will be drawn as bounding boxes. Everything else is unaffected. See docs/camera.md.");
+        }
+
+        if (loaded.mismatchAllowed()) {
+            plugin.getLogger().warning("Those assets are for Minecraft " + loaded.stack().version() + ", not " + Bukkit.getMinecraftVersion() + ", and camera.assets.allow-version-mismatch is true. Blocks added or renamed since then will render as missing-texture checkerboard.");
+        }
+    }
+
+    /**
+     * The wrong version is usually a server that has just been upgraded, so the common case fixes itself:
+     * fetch the right base and put it underneath whatever the admin supplied. Their file is never replaced,
+     * which is the difference between a cache we manage and a directory we only read.
+     */
+    private void onMismatch(AssetResolver.Resolution.Mismatched mismatched, boolean mayFetch) {
+        String detail = "Camera assets are for Minecraft " + mismatched.baseVersion() + " but this server is " + mismatched.wantedVersion();
+
+        if (mayFetch && startFetch(mismatched.wantedVersion(), detail + ". Downloading the correct textures from Mojang. This happens once.")) {
+            return;
+        }
+
+        String fix = mismatched.adminSupplied()
+                ? "Replace plugins/MapGUI/assets/" + mismatched.baseName() + " with the Minecraft " + mismatched.wantedVersion() + " client jar, or set camera.assets.download: true and run '/mapgui camera reload'."
+                : "Set camera.assets.download: true in config.yml and run '/mapgui camera reload'.";
+
+        if (downloadEnabled) {
+            // Will right itself on the first capture, so this is a heads-up rather than a fault.
+            state = new CameraAssets.Unavailable(CameraAssets.Cause.VERSION_MISMATCH, detail, "The correct textures download on the first capture. To do it now, run 'mapgui camera fetch-assets' from the console.");
+            plugin.getLogger().warning(detail + ". The correct ones will be downloaded on the first capture.");
+            return;
+        }
+
+        unavailable(CameraAssets.Cause.VERSION_MISMATCH, detail + ", and camera.assets.download is false so MapGUI will not fetch the right ones", fix, true);
+    }
+
+    /**
+     * @param announcement logged before the download starts, or null to stay quiet about it
+     * @return whether a download actually started
+     */
+    private boolean startFetch(String minecraftVersion, String announcement) {
+        if (!downloadEnabled || !fetching.compareAndSet(false, true)) {
+            return false;
+        }
+
+        state = new CameraAssets.Loading(0);
+        if (announcement != null) {
+            plugin.getLogger().info(announcement);
+        } else {
+            plugin.getLogger().info("Downloading camera textures for Minecraft " + minecraftVersion + " from Mojang. This is the client jar, it happens once, and only the textures are kept.");
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                new AssetCache(cacheDir).fetch(minecraftVersion, percent -> state = new CameraAssets.Loading(percent));
+                // Back on the main thread: reading the zips settles the state, and every reader of it is
+                // either a command or a render, both of which are there.
+                Bukkit.getScheduler().runTask(plugin, this::reload);
+            } catch (IOException e) {
+                state = new CameraAssets.Unavailable(
+                        CameraAssets.Cause.DOWNLOAD_FAILED,
+                        "Could not download camera textures from Mojang: " + e.getMessage(),
+                        "If this server has no outbound internet access, copy the Minecraft " + minecraftVersion + " client jar into plugins/MapGUI/assets/ and list it under camera.assets.packs, then run '/mapgui camera reload'. See docs/camera.md."
+                );
+                plugin.getLogger().warning("Could not download camera textures from Mojang: " + e.getMessage());
+                plugin.getLogger().warning("The camera is disabled until this is fixed. If this server has no outbound internet access, copy the Minecraft " + minecraftVersion + " client jar into plugins/MapGUI/assets/ and list it under camera.assets.packs, then run '/mapgui camera reload'.");
+            } finally {
+                fetching.set(false);
+            }
+        });
+
+        return true;
+    }
+
+    private void unavailable(CameraAssets.Cause cause, String detail, String fix, boolean warn) {
+        state = new CameraAssets.Unavailable(cause, detail, fix);
+        if (!warn) return;
+
+        plugin.getLogger().warning(detail + ".");
+        plugin.getLogger().warning("The camera is disabled until this is fixed. " + fix);
+    }
+
+    private void closeStack() {
+        AssetStack open = stack;
+        if (open != null) {
+            open.close();
+            stack = null;
+        }
+    }
+}

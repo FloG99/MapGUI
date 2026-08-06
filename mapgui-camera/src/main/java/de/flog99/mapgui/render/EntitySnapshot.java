@@ -1,0 +1,236 @@
+package de.flog99.mapgui.render;
+
+import java.util.Set;
+
+/**
+ * One entity as it stood when the capture was taken, copied out of the server so the trace can run off-thread.
+ *
+ * @param bodyYaw where the body faces, in degrees, Bukkit's convention
+ * @param headYaw where the head faces, which is a separate field on a living entity and usually differs
+ * @param texture the texture name for {@link Textures}, so a skin and a pack's mob texture look the same here
+ * @param tint    {@code 0xFFRRGGBB} to multiply every texel of this layer by, or 0 for the ordinary none. What a
+ *                sheep's fleece needs: the assets hold one white wool texture and the color is the animal's own,
+ *                so it cannot come from the texture name the way a cold cow's coat does
+ */
+public record EntitySnapshot(
+        double x, double y, double z,
+        float bodyYaw, float headYaw, float pitch,
+        float scale,
+        EntityModel model,
+        String texture,
+        int tint) {
+
+    /** Untinted, which is every layer but a dyed one. */
+    public EntitySnapshot(double x, double y, double z, float bodyYaw, float headYaw, float pitch, float scale, EntityModel model, String texture) {
+        this(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, 0);
+    }
+
+    /**
+     * What a capture scales an animal that is not yet grown by, and so how {@link #mob} recognizes one.
+     *
+     * <p>Reading it off the scale rather than being told is worth a word. Vanilla now builds a separate mesh for
+     * most young animals - a calf is not a small cow, it is a big head on a short body - and picking the right one
+     * needs to know which it is. Half is the one value a capture produces for a baby and for nothing else, so it
+     * carries the fact without a second parameter on a public method a caller is already using. A caller that knows
+     * outright should say so through {@link #mob(String, double, double, double, float, float, float, float,
+     * boolean)}, and a capture that stops halving babies loses the baby mesh rather than drawing the wrong thing.
+     */
+    private static final float BABY_SCALE = 0.5f;
+
+    /**
+     * The same entity wearing a different texture.
+     *
+     * <p>For a variant: a cold cow is the same animal in a different coat, so the shape is reused and only the name
+     * changes. Exists because the model type is not visible outside this package, so a caller cannot rebuild the
+     * record itself.
+     */
+    public EntitySnapshot texture(String value) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, value, tint);
+    }
+
+    /** The same layer in a dye color, for the one mob whose color is not in its texture. */
+    public EntitySnapshot tint(int value) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, value);
+    }
+
+    /**
+     * The same mob with some of its parts left out, named as vanilla names them.
+     *
+     * <p>For the parts a mesh always carries and the client only sometimes draws. A donkey's mesh has its two
+     * panniers built in, hidden unless the animal is really carrying a chest - so drawn as it comes, every donkey in
+     * the world has been to the shops. A name that is not in the mesh is ignored, so a caller may ask for the same
+     * pair on every chested animal without knowing which of them build them.
+     */
+    public EntitySnapshot without(String... parts) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.without(Set.of(parts)), texture, tint);
+    }
+
+    /** A player, whose head turns, whose arms may be slim, and who chooses which skin layers to wear. */
+    public static EntitySnapshot player(double x, double y, double z, float bodyYaw, float headYaw, float pitch, boolean slim, SkinLayers layers, String texture) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, 1f, EntityModel.player(slim, layers), texture);
+    }
+
+    /**
+     * A mob with a mesh, texture and all - or null when there is none for this type, which is the caller's cue to
+     * fall back to {@link #box}.
+     *
+     * <p>The type is a vanilla entity id, lowercase and unqualified: {@code creeper}, {@code zombie_villager}.
+     *
+     * @param scale multiplies the whole model, for the handful of mobs that come in sizes. A slime's mesh is one
+     *              size and its size is a property, which is how the game does it too
+     */
+    public static EntitySnapshot mob(String type, double x, double y, double z, float bodyYaw, float headYaw, float pitch, float scale) {
+        return mob(type, x, y, z, bodyYaw, headYaw, pitch, scale, scale == BABY_SCALE);
+    }
+
+    /**
+     * The same, saying outright whether this one is grown.
+     *
+     * @param baby draws it from the young mesh where vanilla has one, at that mesh's own size rather than at
+     *             {@code scale} - a calf mesh is already calf sized, so halving it again would produce a kitten
+     */
+    public static EntitySnapshot mob(String type, double x, double y, double z, float bodyYaw, float headYaw, float pitch, float scale, boolean baby) {
+        return mob(type, null, x, y, z, bodyYaw, headYaw, pitch, scale, baby);
+    }
+
+    /**
+     * And the same again for an animal whose coat is a shape rather than a color.
+     *
+     * @param variant the word the assets name the coat by - {@code cold}, {@code warm}, {@code brown} - or null for
+     *                a type with no variants. Cold and warm cows, pigs and chickens are built from meshes of their
+     *                own, and drawing one from the temperate mesh puts its horns where the texture has none
+     */
+    public static EntitySnapshot mob(String type, String variant, double x, double y, double z, float bodyYaw, float headYaw, float pitch, float scale, boolean baby) {
+        EntityMeshes.Mob mob = EntityMeshes.of(type, variant, baby);
+        if (mob == null) return null;
+
+        float drawn = (baby && EntityMeshes.hasBaby(type) ? 1f : scale) * mob.scale();
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, drawn, mob.model(), mob.texture());
+    }
+
+    /**
+     * The second layer of a mob that wears one, sitting on {@code base}, or null for the mobs that do not - which
+     * is all of them but the sheep.
+     *
+     * <p>Its own snapshot rather than more cubes on the base model, because a layer comes from a texture of its own
+     * and a snapshot samples one texture. That costs nothing: the renderer keeps the nearest entity texel along the
+     * ray whatever entity it belongs to, and a layer's cubes are inflated outward, so the fleece lands in front of
+     * the body it covers without anything having to order the two.
+     */
+    public static EntitySnapshot over(EntitySnapshot base, String type) {
+        return over(base, type, null);
+    }
+
+    /** The same for an animal that has variants, so the layer is looked up off the mesh the base was built from. */
+    public static EntitySnapshot over(EntitySnapshot base, String type, String variant) {
+        // Which of the two meshes this snapshot was built from, since a lamb's fleece is not a sheep's shrunk and
+        // vanilla only gives the layer to the grown one.
+        EntityMeshes.Mob young = EntityMeshes.of(type, variant, true);
+        EntityMeshes.Mob mob = young != null && young.model() == base.model() ? young : EntityMeshes.of(type, variant, false);
+        if (mob == null || mob.over() == null) return null;
+
+        return new EntitySnapshot(base.x(), base.y(), base.z(), base.bodyYaw(), base.headYaw(), base.pitch(), base.scale(),
+                mob.over().model(), mob.over().texture());
+    }
+
+    /**
+     * A sheep's fleece: the one white wool texture in the assets, multiplied by the animal's own dye - or null once
+     * it is shorn, because a shorn sheep wears no fleece rather than a colorless one.
+     *
+     * <p>Its own factory because the fleece is the only worn layer whose color is not in its texture. There are
+     * sixteen wools and one wool texture, so the dye has to travel with the layer, and a fleece drawn from the
+     * texture alone is white on every sheep in the world.
+     *
+     * @param dye the lowercase dye name, {@code light_blue} and the rest, or null for a sheep with none
+     */
+    public static EntitySnapshot fleece(EntitySnapshot base, String type, String variant, boolean sheared, String dye) {
+        if (sheared) return null;
+
+        EntitySnapshot worn = over(base, type, variant);
+        return worn == null || dye == null ? worn : worn.tint(Tints.wool(dye));
+    }
+
+    /**
+     * A piece of equipment on a mob: its own mesh and its own texture, in the same place and the same pose.
+     *
+     * <p>Its own snapshot for the same reason a fleece is - a layer samples one texture, and a chestplate does not
+     * share the texture of the body under it. Nothing has to order them either: every equipment mesh is the body
+     * inflated by the amount the client inflates it, so it lands in front, and the renderer keeps the nearest entity
+     * texel along the ray whichever layer it came from.
+     *
+     * <p>Null when this version would not give the mesh up, which is the caller cue to draw the mob without it rather
+     * than to fail.
+     *
+     * @param mesh a name from the equipment table - {@code armor/chest}, {@code pig_saddle}
+     */
+    public static EntitySnapshot worn(EntitySnapshot base, String mesh, String texture) {
+        EntityModel model = EntityMeshes.worn(mesh);
+        if (model == null) return null;
+
+        // Standing the way the mob under it stands, which the piece's own mesh cannot know: one armor mesh is worn by
+        // every humanoid and is posed as a plain one.
+        return new EntitySnapshot(base.x(), base.y(), base.z(), base.bodyYaw(), base.headYaw(), base.pitch(),
+                base.scale(), model.posedLike(base.model()), texture);
+    }
+
+    /** The parts vanilla puts an item in, and the only two names it looks them up by. */
+    private static final String RIGHT_ARM = "right_arm";
+
+    private static final String LEFT_ARM = "left_arm";
+
+    /**
+     * An item in one of a mob's hands, or null when there is nowhere to put it.
+     *
+     * <p>Placed and turned off the holder's own mesh rather than from a table: the arm is looked up by name, and the
+     * item inherits its rotation, so an archer's levelled arm carries its bow up with it. A mob with no arm to find
+     * holds nothing, which is also true of a cow. How the item itself is turned is {@link ItemPoses}.
+     *
+     * <p>The item rides on the holder's position and yaw rather than being placed in the world, which is what keeps
+     * it in the hand - one rotation rather than two that have to agree.
+     *
+     * @param rightArm which arm it is in, since a left-handed mob holds its main-hand item in its left one and the
+     *                  client poses an item by the arm rather than by the hand
+     * @param sprite   one layer from {@link ItemModels#held}, which decided already whether the item is a flat icon or
+     *                 a block model and which texture this layer of it wears - this only puts it in the hand
+     */
+    public static EntitySnapshot held(EntitySnapshot holder, boolean rightArm, EntitySnapshot sprite, ItemPoses.Pose pose) {
+        if (sprite == null || pose == null) return null;
+
+        EntityModel.Joint arm = holder.model().joint(rightArm ? RIGHT_ARM : LEFT_ARM);
+        if (arm == null) return null;
+
+        // Head yaw and pitch are the body's: an item is not a head part, so nothing here turns with the head, and
+        // saying so plainly beats carrying values that have no effect.
+        return new EntitySnapshot(holder.x(), holder.y(), holder.z(), holder.bodyYaw(), holder.bodyYaw(), 0,
+                holder.scale(), sprite.model().inHand(arm, pose), sprite.texture(), sprite.tint());
+    }
+
+    /**
+     * The same mob tilted bodily, the way the client tilts the few that swim at an angle.
+     *
+     * @param pivotY where the tilt turns about, in entity pixels off the feet
+     */
+    public EntitySnapshot tilted(float xRot, float zRot, float pivotY) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.tilted(xRot, zRot, pivotY), texture, tint);
+    }
+
+    /**
+     * The same mob with one part turned as the client's own animation turns it.
+     *
+     * <p>For the poses that are how a mob stands rather than motion - a zombie's arms out in front, an archer's arms
+     * levelled. A mesh carries the rest pose only, so without this they stand there like scarecrows.
+     */
+    public EntitySnapshot posed(String part, float xRot, float yRot, float zRot) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.turned(part, xRot, yRot, zRot), texture, tint);
+    }
+
+    /** Anything with no mesh, drawn as its own bounding box. */
+    public static EntitySnapshot box(double x, double y, double z, float bodyYaw, float headYaw, double width, double height, String texture) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, 0, 1f, EntityModel.box(width, height), texture);
+    }
+
+    /** How far from the feet position any part of it can reach, for the bounding sphere the search uses. */
+    double reach() {
+        return Math.max(model.radius(), model.height() / 16.0) * scale;
+    }
+}

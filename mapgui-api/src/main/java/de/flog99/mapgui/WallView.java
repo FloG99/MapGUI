@@ -2,6 +2,7 @@ package de.flog99.mapgui;
 
 import de.flog99.mapgui.media.Frames;
 import de.flog99.mapgui.ui.Painter;
+import de.flog99.mapgui.ui.TextFont;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
@@ -114,8 +115,13 @@ final class WallView {
         Screen screen = session.screen();
         screen.animator().clock(now);
 
+        // Measured and drawn with the same font, which is the screen's to choose and can differ between the
+        // screens of one session - so it is set per paint rather than when the painter was built.
+        TextFont font = screen.font();
+        painter.font(font);
+
         if (screen.isDirty() || screen.animating() || session.takeDirty()) {
-            screen.layout(MapTextFont.INSTANCE, canvas.bounds());
+            screen.layout(font, canvas.bounds());
         }
         screen.cursorMoved(session.cursorX(), session.cursorY());
 

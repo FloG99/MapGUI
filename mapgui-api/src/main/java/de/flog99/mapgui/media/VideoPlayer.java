@@ -43,43 +43,8 @@ public final class VideoPlayer {
         return frames;
     }
 
-    /**
-     * Draws whichever frame belongs at {@code millis}, looping for anything past the end.
-     *
-     * <p>Nearest neighbor on purpose. Smoothing an already tiny picture would mean blending palette
-     * entries back into colors and matching them again, which costs more than the smoothing is worth on
-     * a canvas this size.
-     */
+    /** Draws whichever frame belongs at {@code millis}, looping for anything past the end. */
     public void paint(Painter painter, Rect bounds, int millis) {
-        Rect target = fitInto(bounds);
-        if (target.width() <= 0 || target.height() <= 0) return;
-
-        byte[] pixels = frames.pixels(frames.indexAt(millis));
-
-        for (int y = 0; y < target.height(); y++) {
-            int row = y * frames.height() / target.height() * frames.width();
-            for (int x = 0; x < target.width(); x++) {
-                byte pixel = pixels[row + x * frames.width() / target.width()];
-                // Skipped, not drawn as the transparent index: a see-through GIF should show the
-                // background under it, and on a wall there is nothing under it to show.
-                if (pixel == Frames.TRANSPARENT) continue;
-
-                // Anything hanging outside the node is clipped by the painter, which is what crops COVER.
-                painter.pixel(target.x() + x, target.y() + y, pixel);
-            }
-        }
-    }
-
-    /** The box the picture actually occupies, which for {@link Fit#CONTAIN} is centered inside. */
-    private Rect fitInto(Rect bounds) {
-        if (fit == Fit.STRETCH) return bounds;
-
-        double byWidth = bounds.width() / (double) frames.width();
-        double byHeight = bounds.height() / (double) frames.height();
-        double scale = fit == Fit.COVER ? Math.max(byWidth, byHeight) : Math.min(byWidth, byHeight);
-
-        int width = Math.max(1, (int) Math.round(frames.width() * scale));
-        int height = Math.max(1, (int) Math.round(frames.height() * scale));
-        return new Rect(bounds.x() + (bounds.width() - width) / 2, bounds.y() + (bounds.height() - height) / 2, width, height);
+        Scaling.paint(painter, bounds, frames.pixels(frames.indexAt(millis)), frames.width(), frames.height(), fit);
     }
 }

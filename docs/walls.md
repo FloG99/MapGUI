@@ -29,6 +29,30 @@ Only the *wall* persists, in `walls.yml`. That is what lets a player who joins n
 sent it when they come into range, exactly like someone walking up to it. The same has to happen for anyone
 who walks out and back, since clients throw away entities whose chunk unloads.
 
+### A loop sent once instead of forever
+
+A wall that plays the same few seconds over and over does not have to be streamed. Ask for it to be
+prerendered and MapGUI paints the loop up front, sends every frame once under its own set of map ids, and then
+plays it by telling each client which set to show:
+
+```java
+MapGui.get().wall()
+        .at(block, face)
+        .size(2, 2)
+        .content(WallContent.video(video))
+        .prerender(video.frames().count(), video.frames().durationMs())
+        .open();
+```
+
+Measured side by side on one server, one viewer, two walls: the streamed one ran at about 3 Mbit/s and the
+prerendered one settled at nothing at all once it had arrived. The trade is memory and a burst: every step is a complete copy of the wall held here and in each viewer's client,
+and all of it goes out at once when somebody walks into range. Twelve steps of a 3x3 wall is 1.7 MB per
+client, which pays for itself in a couple of seconds of playback. Steps are capped at 32.
+
+Only for `content`, and only when the content repeats exactly - the steps are painted once and never again, so
+anything reading the world, the clock or the viewer freezes as it was. A menu cannot be prerendered at all,
+since it has to answer clicks.
+
 ### Floors and ceilings
 
 They work, with one thing you do not get to choose: which way the picture faces. An item frame on a

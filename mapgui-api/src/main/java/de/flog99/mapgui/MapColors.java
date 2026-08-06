@@ -1,18 +1,20 @@
 package de.flog99.mapgui;
 
 import de.flog99.mapgui.ui.Palette;
+import de.flog99.mapgui.ui.PaletteLut;
 import org.bukkit.map.MapPalette;
 
 import java.awt.Color;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * Bukkit's map palette with a lookup cache.
+ * Bukkit's map palette, answered from a lookup table.
  *
- * <p>{@code MapPalette.matchColor} walks the whole palette on every call, which is brutal
- * per-pixel; menus only use a handful of colors, so results are memoized. Everything runs on
- * the main thread, so a plain map is fine.
+ * <p>{@code MapPalette.matchColor} walks the whole palette on every call, which is brutal per pixel, so it is
+ * called 32768 times on first use to fill a {@link PaletteLut} and never again. That makes matching a shift and
+ * an array read, with nothing allocated and nothing to synchronize - which is what lets a camera or a video
+ * frame be quantized off the main thread.
+ *
+ * <p>The table is built on first use rather than at startup, so nothing pays for it that never draws.
  */
 @SuppressWarnings("removal") // Color matching is deprecated for removal with no replacement offered.
 public final class MapColors implements Palette {
@@ -21,21 +23,66 @@ public final class MapColors implements Palette {
 
     private static final Color UNDEFINED = new Color(0, 0, 0);
 
-    private final Map<Integer, Byte> toIndex = new HashMap<>();
     private final Color[] toColor = new Color[256];
     private byte[] entries;
 
     private MapColors() {
     }
 
+    /** Built when something first asks for a color, which is well after {@link #INSTANCE} exists. */
+    private static final class Table {
+
+        static final PaletteLut LUT = new PaletteLut(new Matcher());
+    }
+
+    /** Bukkit's own matching, used only to fill the table. */
+    private static final class Matcher implements Palette {
+
+        @Override
+        public byte index(Color color) {
+            return MapPalette.matchColor(new Color(color.getRed(), color.getGreen(), color.getBlue()));
+        }
+
+        @Override
+        public Color color(byte index) {
+            return INSTANCE.color(index);
+        }
+
+        @Override
+        public byte[] entries() {
+            return INSTANCE.entries();
+        }
+    }
+
     @Override
     public byte index(Color color) {
-        Byte cached = toIndex.get(color.getRGB());
-        if (cached != null) return cached;
+        return Table.LUT.index(color);
+    }
 
-        byte match = MapPalette.matchColor(new Color(color.getRed(), color.getGreen(), color.getBlue()));
-        toIndex.put(color.getRGB(), match);
-        return match;
+    /** The same from a packed int, for anything holding pixels rather than colors. */
+    public byte index(int argb) {
+        return Table.LUT.index(argb);
+    }
+
+    @Override
+    public byte index(int argb, int x, int y) {
+        return Table.LUT.index(argb);
+    }
+
+    /**
+     * Fills the table now rather than the first time something draws.
+     *
+     * <p>Worth doing at startup for two reasons: it is 32768 searches through Bukkit's palette, which is a
+     * visible hitch mid-frame, and Bukkit's own colour cache is not built to be raced - so the first caller
+     * should not be a decoder thread that got there before the server finished starting.
+     */
+    public static void warmUp() {
+        INSTANCE.index(Color.BLACK);
+    }
+
+    /** A whole frame at once, into indices somebody else owns. */
+    public void quantize(int[] argb, byte[] out) {
+        Table.LUT.quantize(argb, out);
     }
 
     /**
