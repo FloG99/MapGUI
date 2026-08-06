@@ -10,7 +10,7 @@ ffmpeg = "7.1-1.5.11"
 annotations = "26.0.1"
 # Matched to what Paper 26.2 puts on the runtime classpath, since that is what this actually runs against.
 gson = "2.14.0"
-paperweight = "2.0.0-beta.21"
+paperweight = "2.0.0-SNAPSHOT"
 runpaper = "3.0.2"
 shadow = "9.5.1"
 
