@@ -14,3 +14,6 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
+
+# Server logs from the test run directory
+logs/
