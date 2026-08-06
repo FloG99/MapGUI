@@ -5,6 +5,30 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ## Unreleased
 
+### Camera
+
+- `MapGui.camera()` - a screenshot of the world onto a map. Real block textures, transparency through glass, ice,
+  water and leaves, biome tints, the sky with its sun, moon, stars and clouds, and the players and mobs in view
+  turned the way they stand. `CameraOptions` sets size, field of view, range, fog, entities, clouds and selfie.
+- 92 entity types are drawn from vanilla's own geometry, executed out of the client jar rather than transcribed,
+  along with armor, saddles, held items and each animal's own coat. Anything without a mesh is its bounding box.
+- The textures are not ours to ship, so MapGUI downloads the official client jar on the first capture, checks it
+  against Mojang's SHA-1 and keeps about 3.6 MB of the 39 MB. `camera.assets.download: false` turns that off and
+  reads a jar or resource pack you supply instead. `/mapgui camera status`, `fetch-assets`, `reload` and `timings`.
+- A capture is taken in one tick and traced off it, so it is of the instant it was asked for. See
+  [camera](docs/camera.md) for what it costs and [what it does not show](docs/camera.md#not-shown).
+
+### Carrying a GUI
+
+- `HandOptions` splits what the player appears to be holding from whether it has their mouse. A screen can be a
+  popup filling the hotbar, a real `ItemStack`, a fake map pinned to one slot, or one in the offhand - and it takes
+  the player's clicks in the main hand, on a gesture, always, or never.
+- `MapGui.item(gui)` mints a map item that opens a registered GUI for whoever holds it, so one found in a chest
+  shows its finder their own screen.
+- `MapGui.openWhileHolding` opens a screen while a player holds an item of *yours* and closes it when they put it
+  down - a camera in the main hand with its viewfinder in the offhand. Returns a `HeldTrigger` to cancel.
+- Both are swept once a tick rather than listened for, since an item reaches a hand a dozen ways.
+
 ### Bandwidth
 
 - Walls track what changed per map rather than per wall. Two small changes at opposite corners of a 6x6 wall
