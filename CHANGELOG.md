@@ -21,6 +21,21 @@ surface is `mapgui-api` and `mapgui-layout`.
 - A capture is taken in one tick and traced off it, so it is of the instant it was asked for. See
   [camera](docs/camera.md) for what it costs and [what it does not show](docs/camera.md#not-shown).
 
+- **A resource pack's own items are drawn.** Asset paths are built from the namespace an id states rather than
+  always from `minecraft`, so `item_model=yourpack:whatever` resolves to the pack's model instead of falling back
+  to the material. And any item model carrying geometry is now baked as a shape, where the test used to be that it
+  sat under `block/` - a pack's 3D item had its texture sheet extruded as if it were a 16x16 icon. Vanilla is
+  unaffected either way: exactly one of its 1271 item models carries elements, and it is reached through a
+  condition the server cannot evaluate.
+- **Packs in `plugins/MapGUI/assets/` are used without being listed.** An empty `camera.assets.packs` now means
+  "whatever is in there, sorted by name" rather than "nothing", so a server that ships a pack has one thing to do
+  rather than two. Naming files still pins the exact set and their order.
+- **A layer that stops being readable is reported.** Replacing a pack while the server has it open leaves the
+  reader following a table of contents into bytes that have moved, and every entry after that fails - as
+  "not in this layer", which is how a file that was never there fails too. So captures went on working and drew
+  from the layer underneath, silently, with a plugin's own items coming out as their base material. The stack
+  now remembers, `/mapgui camera status` names the file, and a warning follows the next capture.
+
 ### Carrying a GUI
 
 - `HandOptions` splits what the player appears to be holding from whether it has their mouse. A screen can be a
@@ -60,6 +75,14 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 - Shapes with a fill, an outline and a line thickness: `triangle`, `polygon`, `circle`, `ellipse`, `line`,
   `polyline`, and `shape` for anything you implement `Shape#contains` for.
+- **Small circles are round rather than pointed.** An exact disc ends each axis in a single pixel, because the
+  boundary runs through the middle of that one and only clips its neighbours - correct, and at the sizes an icon
+  is drawn at it reads as a four-pointed star. `Shape.Ellipse` measures to the outside of the boundary pixel
+  instead, putting the edge on the grid rather than through it. A radius of one goes from a plus to a 3x3 block,
+  which is the same fix at the smallest size it can happen.
+- `PaintContext#hovered` - whether the cursor is on the node being drawn. A custom-painted mark has no background
+  for `hoverBackground` to change, so it is the one widget that has to answer for its own hover state, and the
+  alternative was mirroring the flag into a field of your own from `onHover`.
 - `AwtFont` - any TrueType font the JVM can load, at any size, with optional anti-aliasing. A screen chooses
   its own by overriding `Screen#font()`.
 - `ComponentText` - draw an Adventure component with the colors and styles it carries - and `RichText`, a node
