@@ -51,6 +51,19 @@ public interface Shape {
         }
     }
 
+    /**
+     * An ellipse, measured to the outside edge of the boundary pixel rather than to its middle.
+     *
+     * <p>Measuring to the middle - the exact test, is this pixel's centre within the radius - draws a star. At
+     * the end of an axis the boundary runs straight through the middle of the one pixel sitting on it, covering
+     * exactly half and so taking it, while clipping its neighbours too lightly to take them. Every radius
+     * therefore ends in a one-pixel spike, invisible at twenty and most of what you see at four.
+     *
+     * <p>Half a pixel of radius moves the boundary onto the grid instead of through it, so no row can be the
+     * half-covered case and no pole comes to a point. Taking less than half - just enough to widen the pole -
+     * looks like the smaller change and is not: it cuts corners the circle owns, and a disc of thirteen across
+     * comes out an octagon.
+     */
     record Ellipse(int centerX, int centerY, int radiusX, int radiusY) implements Shape {
 
         @Override
@@ -58,12 +71,13 @@ public interface Shape {
             int dx = x - centerX;
             int dy = y - centerY;
             if (radiusX < 0 || radiusY < 0) return false;
-            if (radiusX == 0) return dx == 0 && Math.abs(dy) <= radiusY;
-            if (radiusY == 0) return dy == 0 && Math.abs(dx) <= radiusX;
+            // The half pixel is slack against the radius asked for, and must not draw past it.
+            if (Math.abs(dx) > radiusX || Math.abs(dy) > radiusY) return false;
 
-            long rx = radiusX;
-            long ry = radiusY;
-            return (long) dx * dx * ry * ry + (long) dy * dy * rx * rx <= rx * rx * ry * ry;
+            // Radii in half pixels, which keeps the whole test in integers: (dx/rx)² + (dy/ry)² <= 1, times four.
+            long rx = 2L * radiusX + 1;
+            long ry = 2L * radiusY + 1;
+            return 4 * (long) dx * dx * ry * ry + 4 * (long) dy * dy * rx * rx <= rx * rx * ry * ry;
         }
 
         @Override

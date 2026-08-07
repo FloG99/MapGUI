@@ -67,16 +67,45 @@ class PainterTest {
         return new Painter(buffer, PALETTE, TestFont.INSTANCE);
     }
 
+    /** A plus is what the exact test gives, and a plus is the spike this size: the smallest case of the star. */
     @Test
-    void radiusOneCircleIsAPlus() {
+    void radiusOneCircleIsABlockRatherThanAPlus() {
         Buffer buffer = new Buffer();
         painter(buffer).circle(10, 10, 1, Color.WHITE, null);
 
-        assertEquals(5, buffer.count());
-        assertTrue(buffer.painted(10, 10));
-        assertTrue(buffer.painted(9, 10));
-        assertTrue(buffer.painted(10, 9));
-        assertFalse(buffer.painted(9, 9));
+        assertEquals(9, buffer.count());
+        assertTrue(buffer.painted(9, 9), "the corners round the four points off");
+    }
+
+    /**
+     * The artifact this guards against, at the size it was noticed: a lens drawn as a starburst.
+     *
+     * <p>Stated as run lengths per row because that is what goes wrong - the poles collapsing to one pixel - and
+     * asserting pixels one at a time would say it less clearly.
+     */
+    @Test
+    void smallCirclesHaveNoSpikeAtTheirPoles() {
+        for (int radius = 2; radius <= 8; radius++) {
+            Buffer buffer = new Buffer();
+            painter(buffer).circle(15, 15, radius, Color.WHITE, null);
+
+            assertTrue(run(buffer, 15 - radius) >= 3, "radius " + radius + " ends in a point");
+            for (int y = 15 - radius; y < 15; y++) {
+                assertTrue(run(buffer, y) <= run(buffer, y + 1),
+                        "radius " + radius + " narrows again at row " + (y + 1) + ", so it is not a circle");
+            }
+        }
+    }
+
+    /** How many pixels wide the shape is on one row. */
+    private static int run(Buffer buffer, int y) {
+        int width = 0;
+        for (int x = 0; x < 32; x++) {
+            if (buffer.painted(x, y)) {
+                width++;
+            }
+        }
+        return width;
     }
 
     @Test
