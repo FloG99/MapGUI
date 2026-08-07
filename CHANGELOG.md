@@ -15,6 +15,9 @@ surface is `mapgui-api` and `mapgui-layout`.
 - The textures are not ours to ship, so MapGUI downloads the official client jar on the first capture, checks it
   against Mojang's SHA-1 and keeps about 3.6 MB of the 39 MB. `camera.assets.download: false` turns that off and
   reads a jar or resource pack you supply instead. `/mapgui camera status`, `fetch-assets`, `reload` and `timings`.
+- Held and dropped items follow their `item_model` component rather than their material, so a stick renamed into a
+  diamond sword photographs as the sword the player is looking at. Pose included, and it falls back to the material
+  where the named model is one MapGUI cannot draw.
 - A capture is taken in one tick and traced off it, so it is of the instant it was asked for. See
   [camera](docs/camera.md) for what it costs and [what it does not show](docs/camera.md#not-shown).
 
@@ -30,6 +33,11 @@ surface is `mapgui-api` and `mapgui-layout`.
   `Focus` rather than a whole `HandOptions`, because the screen is always in the offhand: any other carry mode puts
   the map in the hotbar, where reaching for it would mean letting go of the item that opened it.
 - Both are swept once a tick rather than listened for, since an item reaches a hand a dozen ways.
+- **A swallowed right-click now puts the held slot back.** Eating the packet is what stops the item being used, but
+  the client had already predicted that use and was never told otherwise - so a trigger item passed to
+  `openWhileHolding` appeared to be consumed, scoped or drawn, and stayed that way until something unrelated
+  resent the slot. A knowledge book vanished from the hand on every click. Only sent when the main hand holds a
+  real item, so a popup being clicked through costs nothing.
 - **A map in the offhand no longer takes over the player's aim.** The pitch clamp is for a map held up in front of
   you, so it now applies only in the main hand - an offhand viewfinder or quest log leaves your head alone whatever
   `cursor.clamp-pitch` and `Screen#clampPitch` say. Unclamped, the vertical axis follows the head as a delta the way

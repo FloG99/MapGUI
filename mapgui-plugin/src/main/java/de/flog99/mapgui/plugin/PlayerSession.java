@@ -642,9 +642,29 @@ final class PlayerSession implements Session {
         }
     }
 
+    /**
+     * A right-click the menu took, and the slot it has to put back.
+     *
+     * <p>The packet is swallowed before the server ever sees it, which is what stops the held item being used.
+     * The client predicted that use the instant it clicked, though, and a refusal it is never told about is
+     * not a refusal it can undo - so an item that predicts being eaten, scoped or drawn stays that way on
+     * screen until something unrelated happens to resend the slot.
+     *
+     * <p>It bites hardest on {@link de.flog99.mapgui.MapGui#openWhileHolding}, where the main hand holds the
+     * caller's own item by design: a camera made from a knowledge book vanished on every right-click, and the
+     * spyglass this API is documented with would scope and stay scoped.
+     *
+     * <p>Safe to resend while a map is faked because {@code FakeSlots} wraps the synchronizer for exactly
+     * this - and only sent when the main hand holds something real, since a faked map is a filled map to the
+     * client and predicts nothing. So a popup being clicked through sends no inventories at all.
+     */
     void rightClick() {
         if (screen().activateOn().accepts(Click.RIGHT)) {
             activate(Click.RIGHT);
+        }
+
+        if (!mapInMainHand) {
+            player.updateInventory();
         }
     }
 
