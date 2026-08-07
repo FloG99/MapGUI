@@ -77,6 +77,14 @@ final class PlayerSession implements Session {
     /** Set by a toggling gesture, and only read by the focus modes that toggle. */
     private boolean focusToggled;
 
+    /**
+     * Whether the map is what the player has in their main hand, which is the only place the drop key can reach it.
+     *
+     * <p>Kept as a field because the gesture handler reads it from the network thread, where the inventory may not
+     * be touched. A tick out of date at worst, which is the same tolerance {@code focused} carries.
+     */
+    private boolean mapInMainHand;
+
     /** What {@link #focus} was told, or null for nobody having overruled the carry mode. */
     @Nullable
     private Boolean forcedFocus;
@@ -254,6 +262,9 @@ final class PlayerSession implements Session {
      */
     private void refocus() {
         EquipmentSlot holding = display.holding(player);
+        // Before the early return below, since the drop key cares where the map is whether or not focus changed.
+        mapInMainHand = holding == EquipmentSlot.HAND;
+
         boolean wanted = !suspended && holding != null
                 && (forcedFocus != null ? forcedFocus : hand.focused(holding, player.isSneaking(), focusToggled));
         if (wanted == focused) return;
@@ -398,9 +409,14 @@ final class PlayerSession implements Session {
         /**
          * Q closes a popup, which has no other way out and nothing to drop.
          *
-         * <p>For a faked map in one slot it is swallowed instead: there is nothing of ours to drop, and letting it
-         * through would throw away whatever is really in the slot the map is covering. A real item is left alone,
-         * because dropping it is a thing the player is allowed to do and how they put the screen away.
+         * <p>Otherwise it is swallowed only when the faked map is the thing Q would throw away, which means the
+         * main hand: there is nothing of ours to drop, and letting it through would discard whatever is really in
+         * the slot the map is covering.
+         *
+         * <p>Anywhere else it is the player's own item being dropped and the key is theirs. That covers an offhand
+         * map, where Q always drops from the other hand - swallowing it there left a player holding a real item
+         * unable to drop it, for a map the key was never going to reach. A real item is left alone too, since
+         * dropping it is allowed and is how the player puts the screen away.
          */
         @Override
         public boolean drop() {
@@ -409,7 +425,7 @@ final class PlayerSession implements Session {
                 return true;
             }
 
-            return hand.faked() && focused;
+            return hand.faked() && mapInMainHand;
         }
 
         @Override
@@ -591,7 +607,7 @@ final class PlayerSession implements Session {
         // Only for a map the player is holding up in front of them. An offhand map is something they glance at
         // while looking at the world - a viewfinder, a quest log, a minimap - so pushing their head into its pitch
         // range takes over the aim they are still using. The cursor stops at the edge there instead.
-        if (display.holding(player) != EquipmentSlot.HAND) return false;
+        if (!mapInMainHand) return false;
 
         Boolean wanted = screen().clampPitch();
         return wanted != null ? wanted : plugin.config().clampPitch();
