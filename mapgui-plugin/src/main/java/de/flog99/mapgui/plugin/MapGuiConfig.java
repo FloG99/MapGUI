@@ -31,6 +31,7 @@ public record MapGuiConfig(
         boolean cameraDownload,
         List<String> cameraPacks,
         boolean cameraAllowVersionMismatch,
+        boolean cameraFollowServerPacks,
         float cameraFov,
         int cameraDistance,
         int cameraReuseChunksMillis) {
@@ -59,6 +60,7 @@ public record MapGuiConfig(
                 config.getBoolean("camera.assets.download", true),
                 List.copyOf(config.getStringList("camera.assets.packs")),
                 config.getBoolean("camera.assets.allow-version-mismatch", false),
+                config.getBoolean("camera.assets.follow-server-packs", true),
                 (float) config.getDouble("camera.fov", CameraView.DEFAULT_FOV),
                 Math.max(1, config.getInt("camera.max-distance", 96)),
                 // Zero by default: reusing a copied chunk is the only fast path the camera has that is not exact.

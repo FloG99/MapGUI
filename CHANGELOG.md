@@ -30,6 +30,14 @@ surface is `mapgui-api` and `mapgui-layout`.
 - **Packs in `plugins/MapGUI/assets/` are used without being listed.** An empty `camera.assets.packs` now means
   "whatever is in there, sorted by name" rather than "nothing", so a server that ships a pack has one thing to do
   rather than two. Naming files still pins the exact set and their order.
+- **The server's own resource pack is used, with nothing to set up.** A server that dresses its world in a pack
+  was having to install it twice - once for its players, once for MapGUI - and keep the two in step forever. The
+  one in `server.properties` is now found on its own, fetched once, kept under its own SHA-1 and layered under
+  whatever is in `assets/`. `camera.assets.follow-server-packs: false` turns it off.
+- **`Camera#useResourcePack`** - a plugin hands MapGUI a pack out of its own jar, so its custom items photograph
+  as themselves rather than as the material underneath them. This is a call rather than detection because a pack
+  pushed by a plugin cannot be detected: `PlayerResourcePackStatusEvent` reports a pack's id and hash and never
+  its URL, and a URL is what a fetch would need. When players are sent a pack and MapGUI has none, it says so.
 - **A layer that stops being readable is reported.** Replacing a pack while the server has it open leaves the
   reader following a table of contents into bytes that have moved, and every entry after that fails - as
   "not in this layer", which is how a file that was never there fails too. So captures went on working and drew

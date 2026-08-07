@@ -1,6 +1,7 @@
 package de.flog99.mapgui.camera;
 
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 
 import java.util.function.Consumer;
 
@@ -26,6 +27,24 @@ public interface Camera {
      * <p>Cheap enough to call every frame.
      */
     CameraAssets assets();
+
+    /**
+     * Draw captures with a resource pack of yours, out of your own jar.
+     *
+     * <p>For a plugin that adds items. A capture is a server-side render and knows nothing about what any client
+     * has, so an item whose {@code item_model} points into your pack is drawn from its base material - a camera
+     * built on a knowledge book photographs as a knowledge book - until MapGUI has the pack too.
+     *
+     * <p>Call it whenever; the first capture after it lands is drawn with the pack. The bytes are kept under
+     * their own SHA-1, so calling this on every startup with an unchanged pack writes nothing and reloads
+     * nothing, and shipping a new version of it replaces the old one on its own.
+     *
+     * <p>Layered under anything in {@code plugins/MapGUI/assets/}, which is the admin's and outranks yours.
+     *
+     * @param plugin   yours, whose jar the resource is read from
+     * @param resource path inside that jar, such as {@code pack/my-pack.zip}
+     */
+    void useResourcePack(Plugin plugin, String resource);
 
     /**
      * Captures the player's view and hands it back on the main thread.

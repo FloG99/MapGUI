@@ -131,6 +131,25 @@ camera:
     # Anything here is read and never written: a file you pinned deliberately is never replaced.
     packs: []
 
+    # Draw with the resource packs this server hands its own players, so a capture matches what they see
+    # without anybody installing the same pack twice.
+    #
+    # This is the pack named in server.properties. It is fetched once, kept in
+    # plugins/MapGUI/cache/camera/packs/ under its own SHA-1, and layered UNDER anything in the packs list
+    # above, since that list is a decision and this is a convenience.
+    #
+    # A pack a PLUGIN pushes cannot be found this way - nothing reports its address - so a plugin serving its
+    # own pack calls Camera#useResourcePack instead. That works whatever this is set to.
+    #
+    # Off stops the looking. A pack already fetched stays in use, since having it is not the same as reaching
+    # out for it - delete it from cache/camera/packs/ if you want it gone.
+    #
+    # Two things to know. It is an outbound connection to whatever address the pack is served from, so turn it
+    # off alongside download if the point is that this plugin never reaches out. And it is server-wide: if
+    # different players get different packs, or one declines theirs, everybody's captures still use whatever
+    # was found.
+    follow-server-packs: true
+
     # Load textures whose version does not match the server's. Off, because wrong textures are worse than
     # none - a capture that quietly draws the old grass is a confusing bug report. On, blocks added or
     # renamed since then render as the missing-texture checkerboard.

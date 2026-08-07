@@ -25,6 +25,9 @@ public final class AssetResolver {
 
     /**
      * @param packNames           files in {@code assetsDir}, highest priority first, as named in config.yml
+     * @param followedPacks       packs the server was seen handing its players, already fetched. Below anything
+     *                            an admin put in {@code assetsDir}, because one of those is a decision and these
+     *                            are a convenience, and never candidates for the base
      * @param allowVersionMismatch an override for snapshot servers and forks, where the right assets may not
      *                            exist to download. Off by default, because wrong textures are worse than none
      */
@@ -32,6 +35,7 @@ public final class AssetResolver {
             Path assetsDir,
             Path cacheDir,
             List<String> packNames,
+            List<Path> followedPacks,
             String minecraftVersion,
             boolean allowVersionMismatch) {
     }
@@ -114,11 +118,22 @@ public final class AssetResolver {
 
             // The first complete layer becomes the base and stops being an overlay, so an admin who supplies a
             // client jar alongside their own pack gets the arrangement they meant without saying which is which.
+            // Only the admin's files are candidates - looked for before the followed ones are opened, so a
+            // total-conversion pack that happens to carry stone and dirt cannot promote itself to the base.
             int baseIndex = -1;
             for (int i = 0; i < opened.size(); i++) {
                 if (AssetStack.isComplete(opened.get(i))) {
                     baseIndex = i;
                     break;
+                }
+            }
+
+            for (Path followed : request.followedPacks()) {
+                try {
+                    opened.add(AssetPack.open(followed));
+                } catch (IOException unreadable) {
+                    // Ours, fetched rather than supplied, so there is nobody to send after it. The layer is
+                    // simply not there, which is the same as the server never having had a pack.
                 }
             }
 

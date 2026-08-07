@@ -8,6 +8,7 @@ import de.flog99.mapgui.RotationController;
 import de.flog99.mapgui.ServerBackend;
 import de.flog99.mapgui.plugin.camera.CameraAssetStore;
 import de.flog99.mapgui.plugin.camera.CameraService;
+import de.flog99.mapgui.plugin.camera.ServerPacks;
 import de.flog99.mapgui.plugin.map.MapPrinterService;
 import de.flog99.mapgui.plugin.prompt.AnvilPrompt;
 import de.flog99.mapgui.plugin.prompt.DialogPrompt;
@@ -33,6 +34,7 @@ public final class MapGuiPlugin extends JavaPlugin {
     private GuiCatalogImpl screens;
     private CameraAssetStore cameraAssets;
     private CameraService camera;
+    private ServerPacks serverPacks;
     private MapPrinterService printer;
     private HandItems handItems;
     private HeldTriggers heldTriggers;
@@ -65,8 +67,13 @@ public final class MapGuiPlugin extends JavaPlugin {
 
         // Resolves what is on disk but fetches nothing, so a server that only uses menus never pays for this.
         cameraAssets = new CameraAssetStore(this, config.cameraPacks(), config.cameraDownload(), config.cameraAllowVersionMismatch());
-        camera = new CameraService(this, cameraAssets, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
+
+        // Before announce(), so the first load already layers whatever was kept on an earlier run.
+        serverPacks = new ServerPacks(this, cameraAssets, getDataFolder().toPath().resolve("cache").resolve("camera"), config.cameraFollowServerPacks());
+        cameraAssets.follow(serverPacks::followed);
+        camera = new CameraService(this, cameraAssets, serverPacks, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
         cameraAssets.announce();
+        serverPacks.start();
 
         printer = new MapPrinterService(this, backend.savedMapPixels());
         announceVideo();
@@ -153,8 +160,9 @@ public final class MapGuiPlugin extends JavaPlugin {
 
         // Re-reads the disk only if something that decides what to load actually moved. The baked models and
         // textures go either way, since the fov and distance they were built against may have changed.
+        serverPacks.retune(config.cameraFollowServerPacks());
         cameraAssets.retune(config.cameraPacks(), config.cameraDownload(), config.cameraAllowVersionMismatch());
-        camera = new CameraService(this, cameraAssets, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
+        camera = new CameraService(this, cameraAssets, serverPacks, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
     }
 
     MapGuiConfig config() {
@@ -187,6 +195,10 @@ public final class MapGuiPlugin extends JavaPlugin {
 
     public CameraService camera() {
         return camera;
+    }
+
+    public ServerPacks serverPacks() {
+        return serverPacks;
     }
 
     public CameraAssetStore cameraAssets() {

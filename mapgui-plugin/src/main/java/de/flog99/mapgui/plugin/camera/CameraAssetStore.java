@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
  * Owns the camera's textures: what state they are in, when to fetch them, and what to tell whoever can fix it.
@@ -45,6 +46,14 @@ public final class CameraAssetStore {
     private boolean downloadEnabled;
     private boolean allowVersionMismatch;
 
+    /**
+     * The packs the server was seen handing its players, asked for at load rather than held.
+     *
+     * <p>A supplier because the two point at each other: what finds those packs needs this to reload once it has
+     * one, and this needs the list every time it loads. Nothing is set up before the other exists this way.
+     */
+    private Supplier<List<Path>> followedPacks = List::of;
+
     public CameraAssetStore(Plugin plugin, List<String> packNames, boolean downloadEnabled, boolean allowVersionMismatch) {
         this.plugin = plugin;
         this.assetsDir = plugin.getDataFolder().toPath().resolve("assets");
@@ -69,6 +78,11 @@ public final class CameraAssetStore {
             plugin.getLogger().info("Camera textures are not installed. They will download from Mojang the first time something takes a capture.");
             plugin.getLogger().info("To get it over with now, run 'mapgui camera fetch-assets' from the console. To turn it off, set camera.assets.download to false in config.yml.");
         }
+    }
+
+    /** Where to ask for the packs the server hands its players. Set once, at enable. */
+    public void follow(Supplier<List<Path>> packs) {
+        this.followedPacks = packs;
     }
 
     /**
@@ -170,7 +184,7 @@ public final class CameraAssetStore {
      */
     private void load(boolean mayFetch) {
         String wanted = Bukkit.getMinecraftVersion();
-        AssetResolver.Request request = new AssetResolver.Request(assetsDir, cacheDir, packNames, wanted, allowVersionMismatch);
+        AssetResolver.Request request = new AssetResolver.Request(assetsDir, cacheDir, packNames, followedPacks.get(), wanted, allowVersionMismatch);
 
         switch (AssetResolver.resolve(request)) {
             case AssetResolver.Resolution.Loaded loaded -> adopt(loaded);

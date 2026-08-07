@@ -29,7 +29,54 @@ class AssetResolverTest {
     }
 
     private AssetResolver.Request request(List<String> packs, boolean allowMismatch) {
-        return new AssetResolver.Request(assets(), cache(), packs, "26.2", allowMismatch);
+        return request(packs, List.of(), allowMismatch);
+    }
+
+    private AssetResolver.Request request(List<String> packs, List<Path> followed, boolean allowMismatch) {
+        return new AssetResolver.Request(assets(), cache(), packs, followed, "26.2", allowMismatch);
+    }
+
+    /**
+     * A pack the server was seen handing its players is layered, and beneath the admin's own files.
+     *
+     * <p>Which way round matters: what an admin put in {@code assets/} is a decision, and what was followed off
+     * the wire is a convenience, so the decision wins where the two disagree.
+     */
+    @Test
+    void aFollowedPackLayersUnderTheAdminsOwn() throws IOException {
+        Zips.write(cache().resolve("26.2.zip"), Zips.cachedBase("26.2"));
+        Zips.write(assets().resolve("mine.zip"), Map.of("assets/minecraft/textures/block/stone.png", "the admin's"));
+        Path followed = Zips.write(root.resolve("followed.zip"), Map.of(
+                "assets/minecraft/textures/block/stone.png", "the server's",
+                "assets/minecraft/textures/block/dirt.png", "only the server's"));
+
+        AssetResolver.Resolution resolution = AssetResolver.resolve(request(List.of(), List.of(followed), false));
+
+        AssetResolver.Resolution.Loaded loaded = assertInstanceOf(AssetResolver.Resolution.Loaded.class, resolution);
+        try (AssetStack stack = loaded.stack()) {
+            assertEquals("the admin's", new String(stack.read("assets/minecraft/textures/block/stone.png"), StandardCharsets.UTF_8));
+            assertEquals("only the server's", new String(stack.read("assets/minecraft/textures/block/dirt.png"), StandardCharsets.UTF_8));
+        }
+    }
+
+    /**
+     * A followed pack is never the base, however complete it looks.
+     *
+     * <p>A total-conversion pack can carry stone, dirt and a couple of models, which is all {@code isComplete}
+     * asks for. Promoting one to the base would put a pack with no {@code version.json} where vanilla belongs and
+     * report the whole camera broken - over a file nobody chose to install.
+     */
+    @Test
+    void aFollowedPackIsNeverPromotedToTheBase() throws IOException {
+        Zips.write(cache().resolve("26.2.zip"), Zips.cachedBase("26.2"));
+        Path followed = Zips.write(root.resolve("conversion.zip"), Zips.completeBase("26.2"));
+
+        AssetResolver.Resolution resolution = AssetResolver.resolve(request(List.of(), List.of(followed), false));
+
+        AssetResolver.Resolution.Loaded loaded = assertInstanceOf(AssetResolver.Resolution.Loaded.class, resolution);
+        try (AssetStack stack = loaded.stack()) {
+            assertEquals("26.2", stack.version(), "the cached download is still what says which version this is");
+        }
     }
 
     @Test

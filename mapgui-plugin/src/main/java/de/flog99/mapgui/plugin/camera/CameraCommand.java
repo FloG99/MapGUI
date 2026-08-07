@@ -27,12 +27,12 @@ public final class CameraCommand {
         return Commands.literal("camera")
                 .requires(source -> source.getSender().hasPermission(permission))
                 .executes(context -> {
-                    status(context.getSource().getSender(), plugin.cameraAssets());
+                    status(context.getSource().getSender(), plugin);
                     return Command.SINGLE_SUCCESS;
                 })
                 .then(Commands.literal("status")
                         .executes(context -> {
-                            status(context.getSource().getSender(), plugin.cameraAssets());
+                            status(context.getSource().getSender(), plugin);
                             return Command.SINGLE_SUCCESS;
                         }))
                 .then(Commands.literal("fetch-assets")
@@ -44,7 +44,7 @@ public final class CameraCommand {
                         .executes(context -> {
                             plugin.cameraAssets().reload();
                             plugin.camera().invalidate();
-                            status(context.getSource().getSender(), plugin.cameraAssets());
+                            status(context.getSource().getSender(), plugin);
                             return Command.SINGLE_SUCCESS;
                         }))
                 .then(Commands.literal("timings")
@@ -58,7 +58,8 @@ public final class CameraCommand {
      * What state the textures are in, and for anything wrong, both what is wrong and what to do - the same two
      * lines the console gets, because the person reading this is the person who can fix it.
      */
-    private static void status(CommandSender sender, CameraAssetStore assets) {
+    private static void status(CommandSender sender, MapGuiPlugin plugin) {
+        CameraAssetStore assets = plugin.cameraAssets();
         switch (assets.state()) {
             case CameraAssets.Ready ready -> sender.sendMessage(Component.text("Camera  ", NamedTextColor.GOLD)
                     .append(Component.text("ready", NamedTextColor.GREEN))
@@ -75,6 +76,17 @@ public final class CameraCommand {
                 sender.sendMessage(Component.text(unavailable.fix(), NamedTextColor.YELLOW));
             }
         }
+
+        // The layers by name, because "ready" says nothing about whether the server's own pack made it in - which
+        // is the question anybody following one is actually asking.
+        if (assets.stack() != null) {
+            sender.sendMessage(Component.text("Layers  ", NamedTextColor.GOLD)
+                    .append(Component.text(String.join(" over ", assets.stack().layerNames()), NamedTextColor.WHITE)));
+        }
+
+        sender.sendMessage(Component.text("Extra packs  ", NamedTextColor.GOLD)
+                .append(Component.text(plugin.serverPacks().followed().size()
+                        + " kept in cache/camera/packs/", NamedTextColor.WHITE)));
 
         // Under the state rather than instead of it: a stack with a broken layer still reports itself ready,
         // because the layers underneath it are fine and that is what a capture is coming out of.

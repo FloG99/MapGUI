@@ -56,6 +56,7 @@ public final class CameraService implements Camera {
 
     private final Plugin plugin;
     private final CameraAssetStore assets;
+    private final ServerPacks packs;
     private final SkinCache skins = new SkinCache();
 
     /**
@@ -111,16 +112,17 @@ public final class CameraService implements Camera {
                          MobAssets mobs, FrameTracer tracer, String version) {
     }
 
-    public CameraService(Plugin plugin, CameraAssetStore assets, float defaultFov, int defaultDistance) {
-        this(plugin, assets, defaultFov, defaultDistance, 0);
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, float defaultFov, int defaultDistance) {
+        this(plugin, assets, packs, defaultFov, defaultDistance, 0);
     }
 
     /**
      * @param reuseChunksMillis how long a copied chunk may be served to a later capture, or 0 to copy every time
      */
-    public CameraService(Plugin plugin, CameraAssetStore assets, float defaultFov, int defaultDistance, int reuseChunksMillis) {
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, float defaultFov, int defaultDistance, int reuseChunksMillis) {
         this.plugin = plugin;
         this.assets = assets;
+        this.packs = packs;
         this.defaultFov = defaultFov;
         this.defaultDistance = defaultDistance;
         this.snapshots = new SnapshotCache(TimeUnit.MILLISECONDS.toNanos(reuseChunksMillis));
@@ -129,6 +131,11 @@ public final class CameraService implements Camera {
     @Override
     public CameraAssets assets() {
         return assets.state();
+    }
+
+    @Override
+    public void useResourcePack(Plugin owner, String resource) {
+        packs.use(owner, resource);
     }
 
     @Override

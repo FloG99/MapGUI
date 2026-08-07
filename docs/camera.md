@@ -81,6 +81,49 @@ A cached copy also carries a stamp saying which subset it is, and a MapGUI upgra
 new bumps it. An older copy is then treated as not installed and replaced, because the alternative is worse than
 an error: it loads, reports itself ready, and quietly draws a checkerboard where the sun should be.
 
+### The pack your players already have
+
+**Nothing to set up.** If this server hands its players a resource pack, captures are drawn with it. MapGUI
+fetches it once, keeps it under its own SHA-1 in `plugins/MapGUI/cache/camera/packs/`, and layers it over
+vanilla - so a photograph looks like what the people in it are looking at.
+
+This is the pack named in `server.properties`, which the API hands over outright.
+
+**A pack a plugin pushes at runtime cannot be found this way**, and that is a limit worth stating plainly rather
+than working around: nothing reports one. `PlayerResourcePackStatusEvent` fires, but it carries the pack's id and
+hash and never its URL, and a URL is what a fetch needs. So a plugin serving its own pack has to say so:
+
+```java
+MapGui.get().camera().useResourcePack(this, "pack/my-pack.zip");
+```
+
+That reads the zip out of your own jar, keeps it under its own SHA-1 and layers it - which is what makes **a
+plugin's own items** photograph as themselves instead of as the material underneath them. Call it whenever;
+unchanged bytes on the next startup write nothing and reload nothing. It works with `follow-server-packs` off,
+since a plugin asking directly is not MapGUI going looking.
+
+If players are sent a pack and none of this has happened, MapGUI says so once rather than quietly drawing
+vanilla.
+
+```yaml
+camera:
+  assets:
+    follow-server-packs: true
+```
+
+Three things worth knowing before leaving it on:
+
+- **It is an outbound connection**, to whatever address the pack is served from. If the reason `download` is
+  off is that this plugin must never reach out, turn this off with it.
+- **The address is written for clients.** Usually the server can reach it too, and when it cannot, the fetch
+  fails at INFO and captures stay vanilla - the same as before.
+- **It is server-wide.** Players can be sent different packs and can decline the one they were sent; captures
+  use whatever was found either way. Per-player layers would mean a baked model set per player, and nearly
+  every server sends everyone the same pack or none.
+
+Anything in `assets/` still wins over anything followed, since one is a decision and the other is a
+convenience. And a followed pack is never used as the *base*, however complete it looks.
+
 ### Supplying them yourself
 
 For a server with no outbound route, one that already ships a resource pack, or an admin who would rather not
