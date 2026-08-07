@@ -10,6 +10,8 @@ import org.bukkit.plugin.Plugin;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -32,6 +34,9 @@ public final class CameraAssetStore {
 
     /** Guards against a second fetch starting while the first is still running. */
     private final AtomicBoolean fetching = new AtomicBoolean();
+
+    /** What {@link #reportDamage()} has already said, so a broken layer is not announced once per capture. */
+    private final Set<String> reportedDamage = ConcurrentHashMap.newKeySet();
 
     private volatile CameraAssets state;
     private volatile AssetStack stack;
@@ -63,6 +68,29 @@ public final class CameraAssetStore {
         if (downloadEnabled && state instanceof CameraAssets.Unavailable unavailable && unavailable.cause() == CameraAssets.Cause.NOT_INSTALLED) {
             plugin.getLogger().info("Camera textures are not installed. They will download from Mojang the first time something takes a capture.");
             plugin.getLogger().info("To get it over with now, run 'mapgui camera fetch-assets' from the console. To turn it off, set camera.assets.download to false in config.yml.");
+        }
+    }
+
+    /**
+     * Says once that a layer has stopped being readable, and what it was.
+     *
+     * <p>Nothing else would say it. A pack that goes bad under an open handle is read as a pack that simply does
+     * not have the file, so a capture keeps working and quietly draws from the wrong layer - a plugin's own items
+     * come out as their base material with no message anywhere. Called after a capture rather than at load,
+     * because that is when it happens: the usual cause is another plugin installing its pack over the top of the
+     * one this already has open.
+     *
+     * <p>Once per pack. Every capture after the first would say the same thing.
+     */
+    public void reportDamage() {
+        AssetStack loaded = stack;
+        if (loaded == null) return;
+
+        for (String hurt : loaded.damage()) {
+            if (reportedDamage.add(hurt)) {
+                plugin.getLogger().warning("A camera asset layer has stopped being readable: " + hurt);
+                plugin.getLogger().warning("Anything it was drawing now falls back to the layer underneath. This is what a pack replaced while the server had it open looks like - restart to pick up the new one.");
+            }
         }
     }
 

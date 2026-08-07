@@ -84,7 +84,13 @@ an error: it loads, reports itself ready, and quietly draws a checkerboard where
 ### Supplying them yourself
 
 For a server with no outbound route, one that already ships a resource pack, or an admin who would rather not
-have a plugin reach out. Put a client jar or a resource pack zip in `plugins/MapGUI/assets/` and list it:
+have a plugin reach out. Put a client jar or a resource pack zip in `plugins/MapGUI/assets/`.
+
+**That is the whole of it.** With `packs` left empty, every zip and jar in that directory is used, sorted by
+name. A server that already ships a pack to its players gets the same look in a capture by dropping a copy in
+there, with nothing to configure and nothing to keep in step.
+
+Name them when you want a particular order, or want some of them ignored:
 
 ```yaml
 camera:
@@ -108,6 +114,16 @@ that directory holds sounds and languages in a content-addressed store, and the 
 Packs are layered top-down the way the client stacks them, so a server that ships its own pack gets its own look
 in a capture. Anything in `plugins/MapGUI/assets/` is only ever read - a file you pinned deliberately is never
 replaced.
+
+A pack's **own** items are drawn too, not only its retextures of vanilla ones. An id carrying a namespace is
+resolved under that namespace, so an item whose `minecraft:item_model` is `yourpack:camera` is looked for at
+`assets/yourpack/items/camera.json` and drawn from the model it names, geometry and all. Vanilla is the default
+for an id that states no namespace, which is how vanilla's own files are written.
+
+> A pack replaced while the server has it open cannot be picked up, and worse, cannot go on being read: the
+> table of contents was read at open time and now points into bytes that have moved. MapGUI notices and says so
+> after the next capture, and `/mapgui camera status` lists the layer - but the fix is a restart. If a plugin of
+> yours installs a pack here, write it before MapGUI enables.
 
 A client jar also carries the mob shapes, and one you supply is read for them the same way a downloaded one is. A
 resource pack alone cannot: entity geometry is not in the assets, so a pack-only setup draws mobs as bounding

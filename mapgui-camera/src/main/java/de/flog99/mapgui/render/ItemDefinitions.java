@@ -55,7 +55,7 @@ public final class ItemDefinitions {
     }
 
     private Definition read(String item) {
-        JsonObject definition = json(AssetStack.ITEM_DEFINITIONS + item + ".json");
+        JsonObject definition = json(AssetStack.asset(item, "items", ".json"));
         if (definition == null || !definition.has("model") || !definition.get("model").isJsonObject()) {
             return plain(item);
         }
@@ -82,9 +82,9 @@ public final class ItemDefinitions {
     private static String named(JsonObject model, String item) {
         if (!model.has("model") || !model.get("model").isJsonPrimitive()) return item;
 
-        String stated = model.get("model").getAsString();
-        int colon = stated.indexOf(':');
-        return colon < 0 ? stated : stated.substring(colon + 1);
+        // Kept whole, namespace and all. A pack's item names its own model, and dropping the namespace here
+        // is what used to send that lookup into assets/minecraft/ to find nothing.
+        return model.get("model").getAsString();
     }
 
     /**

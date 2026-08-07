@@ -21,6 +21,9 @@ import java.util.Set;
  */
 public final class AssetStack implements AutoCloseable {
 
+    /** What an id means when it names no namespace, which is what nearly every id in vanilla's own files does. */
+    static final String VANILLA = "minecraft";
+
     static final String BLOCKSTATES = "assets/minecraft/blockstates/";
     static final String BLOCK_MODELS = "assets/minecraft/models/block/";
     static final String BLOCK_TEXTURES = "assets/minecraft/textures/block/";
@@ -91,6 +94,54 @@ public final class AssetStack implements AutoCloseable {
             BLOCKSTATES + "stone.json",
             BLOCK_MODELS + "cube_all.json"
     );
+
+    /**
+     * The namespace an id states, or {@code minecraft} for one that states none.
+     *
+     * <p>Vanilla writes both - {@code block/stone} and {@code minecraft:item/apple} mean the same kind of thing -
+     * and a resource pack that adds its own items writes a third, {@code yourpack:item/whatever}. Reading the
+     * namespace rather than assuming it is what lets a pack's own items be drawn at all.
+     */
+    static String namespaceOf(String id) {
+        int colon = id.indexOf(':');
+        return colon < 0 ? VANILLA : id.substring(0, colon);
+    }
+
+    /**
+     * An id with a redundant {@code minecraft:} taken off and anything else left alone.
+     *
+     * <p>For the places that used to strip the namespace outright. Vanilla keeps the one spelling it has always
+     * had, so nothing is cached twice under two names for the same file, and a pack's own id survives to be
+     * looked up under its own namespace instead of being hunted for in vanilla's.
+     */
+    static String canonical(String id) {
+        return VANILLA.equals(namespaceOf(id)) ? pathOf(id) : id;
+    }
+
+    /** The rest of the id, which is its path inside that namespace. */
+    static String pathOf(String id) {
+        int colon = id.indexOf(':');
+        return colon < 0 ? id : id.substring(colon + 1);
+    }
+
+    /**
+     * The file an id names: {@code mapcamera:item/camera} in {@code models} is
+     * {@code assets/mapcamera/models/item/camera.json}.
+     */
+    static String asset(String id, String folder, String extension) {
+        return "assets/" + namespaceOf(id) + "/" + folder + "/" + pathOf(id) + extension;
+    }
+
+    /**
+     * The same path under the namespace of {@code like}, for building one id out of another.
+     *
+     * <p>Vanilla comes back unqualified, because that is how ids are written everywhere else here and a texture is
+     * cached under whatever name asked for it - qualifying only vanilla's would key the atlas twice for one png.
+     */
+    static String beside(String like, String path) {
+        String namespace = namespaceOf(like);
+        return VANILLA.equals(namespace) ? path : namespace + ":" + path;
+    }
 
     private final List<AssetPack> overlays;
     private final AssetPack base;
@@ -188,6 +239,26 @@ public final class AssetStack implements AutoCloseable {
     /** For the ready message, which is the one place a count means anything to a reader. */
     public int blockTextureCount() {
         return (int) list(BLOCK_TEXTURES).stream().filter(path -> path.endsWith(".png")).count();
+    }
+
+    /**
+     * Layers that opened cleanly and have since failed to read, as {@code name: what went wrong}. Normally empty.
+     *
+     * <p>Asked after the fact rather than thrown at the time, because a failed read is handled the same way as a
+     * missing one all the way up - it has to be, or one absent texture would take a whole capture down. That makes
+     * a pack going bad underneath invisible: everything still renders, out of the layers that still work.
+     */
+    public List<String> damage() {
+        List<String> hurt = new ArrayList<>();
+        for (AssetPack pack : overlays) {
+            if (pack.damage() != null) {
+                hurt.add(pack.name() + ": " + pack.damage());
+            }
+        }
+        if (base.damage() != null) {
+            hurt.add(base.name() + ": " + base.damage());
+        }
+        return hurt;
     }
 
     /** Named layers, base last, for a log line that says what actually got loaded. */

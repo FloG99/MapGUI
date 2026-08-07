@@ -138,12 +138,12 @@ public final class TextureAtlas implements BlockModels.TextureAlpha, Textures {
         Texture loaded = textures.get(name);
         if (loaded != null) return loaded != missing;
 
-        return stack.has("assets/minecraft/textures/" + name + ".png");
+        return stack.has(AssetStack.asset(name, "textures", ".png"));
     }
 
     private Texture load(String name) {
         try {
-            byte[] png = stack.read("assets/minecraft/textures/" + name + ".png");
+            byte[] png = stack.read(AssetStack.asset(name, "textures", ".png"));
             if (png == null) return missing;
 
             BufferedImage image = ImageIO.read(new ByteArrayInputStream(png));

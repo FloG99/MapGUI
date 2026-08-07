@@ -26,6 +26,8 @@ final class AssetPack implements AutoCloseable {
     private final Path source;
     private final ZipFile zip;
 
+    private volatile String damage;
+
     private AssetPack(Path source, ZipFile zip) {
         this.source = source;
         this.zip = zip;
@@ -59,7 +61,28 @@ final class AssetPack implements AutoCloseable {
 
         try (InputStream in = zip.getInputStream(entry)) {
             return in.readAllBytes();
+        } catch (IOException | RuntimeException failure) {
+            if (damage == null) {
+                damage = path + " - " + failure;
+            }
+            throw failure;
         }
+    }
+
+    /**
+     * The first read that failed on a zip that opened cleanly, or null for a pack behaving itself.
+     *
+     * <p>Kept because a damaged pack is indistinguishable from an absent one by the time anything acts on it:
+     * every reader here treats a failure as "not in this layer" and falls through, which is right for a pack
+     * that simply does not have the file and hides a pack that has stopped being readable. The way that happens
+     * is a file replaced while it was open - a plugin installing its own pack over the top - after which the
+     * table of contents read at open time points into bytes that have moved, and entries come back as
+     * {@code Unexpected end of ZLIB input stream}. Everything renders, from the wrong assets, silently.
+     *
+     * <p>Recorded rather than logged: this module decides and does not act. The plugin reports it.
+     */
+    String damage() {
+        return damage;
     }
 
     /** Every file directly or indirectly under a prefix, directories left out. */

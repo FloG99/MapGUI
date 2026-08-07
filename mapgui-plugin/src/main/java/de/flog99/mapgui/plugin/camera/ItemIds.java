@@ -27,10 +27,12 @@ final class ItemIds {
      * rather than nothing, which is the same rule the rest of the item path follows.
      */
     static List<String> of(ItemStack item) {
-        String material = item.getType().getKey().value();
+        // Whole keys rather than bare values: a pack's model lives under its own namespace, and an id that has
+        // lost it resolves against vanilla's assets, where it is never going to be.
+        String material = item.getType().getKey().asString();
         Key stated = item.getData(DataComponentTypes.ITEM_MODEL);
-        if (stated == null || stated.value().equals(material)) return List.of(material);
+        if (stated == null || stated.asString().equals(material)) return List.of(material);
 
-        return List.of(stated.value(), material);
+        return List.of(stated.asString(), material);
     }
 }

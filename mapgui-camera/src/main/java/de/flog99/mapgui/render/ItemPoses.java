@@ -131,13 +131,12 @@ public final class ItemPoses {
      * simply is not found, which is the answer.
      */
     private JsonObject json(String model) {
-        int colon = model.indexOf(':');
-        String named = colon < 0 ? model : model.substring(colon + 1);
-        String path = named.startsWith("block/")
-                ? AssetStack.BLOCK_MODELS + named.substring("block/".length())
-                : AssetStack.ITEM_MODELS + (named.startsWith("item/") ? named.substring("item/".length()) : named);
+        String path = AssetStack.pathOf(model);
+        if (!path.startsWith("block/") && !path.startsWith("item/")) {
+            path = "item/" + path;
+        }
 
-        return read(path + ".json");
+        return read(AssetStack.asset(AssetStack.beside(model, path), "models", ".json"));
     }
 
     /** One json by its whole path, or null for anything missing or malformed - which costs that item its pose only. */

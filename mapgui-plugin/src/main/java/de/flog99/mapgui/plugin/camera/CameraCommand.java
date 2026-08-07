@@ -75,6 +75,16 @@ public final class CameraCommand {
                 sender.sendMessage(Component.text(unavailable.fix(), NamedTextColor.YELLOW));
             }
         }
+
+        // Under the state rather than instead of it: a stack with a broken layer still reports itself ready,
+        // because the layers underneath it are fine and that is what a capture is coming out of.
+        if (assets.stack() == null) return;
+
+        for (String hurt : assets.stack().damage()) {
+            sender.sendMessage(Component.text("Damaged layer  ", NamedTextColor.RED)
+                    .append(Component.text(hurt, NamedTextColor.WHITE)));
+            sender.sendMessage(Component.text("Replaced while the server had it open. Restart to pick it up.", NamedTextColor.YELLOW));
+        }
     }
 
     /**

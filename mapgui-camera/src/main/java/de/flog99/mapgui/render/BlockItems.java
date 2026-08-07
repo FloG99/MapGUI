@@ -48,19 +48,24 @@ public final class BlockItems {
     }
 
     /**
-     * The layers this item is drawn as, at the size its model states them, or empty when it is not drawn from a block
-     * model at all.
+     * The layers this item is drawn as, at the size its model states them, or empty when its model is not a shape.
      *
      * <p>Empty is the ordinary answer for most items - an apple is a sprite - and it is also the answer for a block
      * whose model resolved to nothing, so a caller falls back to its own cube rather than drawing a hole.
+     *
+     * <p><b>Any model with elements in it, not only one under {@code block/}.</b> That used to be the test, and it is
+     * the right test for vanilla, where exactly one item model of 1271 carries geometry and it is a spyglass reached
+     * through a condition the server cannot evaluate. It is the wrong test for a resource pack, whose whole reason
+     * for adding an item model is the geometry in it - gated on {@code block/}, a pack's 3D item fell through to the
+     * sprite path and had its texture sheet extruded as if it were a 16x16 icon.
+     *
+     * <p>Costs vanilla nothing: a model with no elements bakes to nothing and falls through exactly as before.
      *
      * <p>Full size and placed at the origin, because where they go is the caller's: the same layers are hung off a
      * hand and stood on the ground, at two different scales.
      */
     List<EntitySnapshot> layers(String item, TextureAtlas atlas) {
         ItemDefinitions.Definition definition = definitions.of(item);
-        if (!definition.model().startsWith("block/")) return List.of();
-
         List<BakedElement> elements = models.shape(definition.model());
         if (elements.isEmpty()) return List.of();
 

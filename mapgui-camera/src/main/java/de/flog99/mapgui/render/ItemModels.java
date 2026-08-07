@@ -66,7 +66,7 @@ public final class ItemModels {
                     .toList();
         }
 
-        String sprite = "item/" + item;
+        String sprite = spriteOf(item);
         if (atlas.has(sprite)) {
             return List.of(snapshot(x, y, z, facing, EntityModel.itemSprite(), sprite));
         }
@@ -83,7 +83,7 @@ public final class ItemModels {
         List<EntitySnapshot> model = blocks.layers(item, atlas);
         if (!model.isEmpty()) return model;
 
-        String sprite = "item/" + item;
+        String sprite = spriteOf(item);
         if (atlas.has(sprite)) {
             return List.of(snapshot(0, 0, 0, 0, extruded(sprite), sprite));
         }
@@ -98,11 +98,16 @@ public final class ItemModels {
      */
     private String blockTexture(String item) {
         for (String suffix : BLOCK_SUFFIXES) {
-            String texture = "block/" + item + suffix;
+            String texture = AssetStack.beside(item, "block/" + AssetStack.pathOf(item) + suffix);
             if (atlas.has(texture)) return texture;
         }
 
         return null;
+    }
+
+    /** An item's own icon, under the namespace that named the item rather than always under vanilla's. */
+    private static String spriteOf(String item) {
+        return AssetStack.beside(item, "item/" + AssetStack.pathOf(item));
     }
 
     /** One icon's extrusion, built once. Reading the pixels is cheap; doing it per held item per capture is waste. */

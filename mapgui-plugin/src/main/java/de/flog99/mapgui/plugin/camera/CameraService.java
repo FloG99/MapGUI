@@ -193,6 +193,10 @@ public final class CameraService implements Camera {
             }
             long quantized = System.nanoTime();
 
+            // A capture that succeeded can still have been drawn from the wrong layers, and this is the only
+            // moment anything knows: a pack that stopped being readable reads as a pack that never had the file.
+            assets.reportDamage();
+
             CameraShot shot = new CameraShot(pixels, pixels, indices, ready.version());
             onMainThread(() -> {
                 onShot.accept(shot);

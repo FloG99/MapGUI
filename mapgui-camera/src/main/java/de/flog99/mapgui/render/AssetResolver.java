@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Works out what a camera has to draw with, from what is on disk.
@@ -61,10 +62,38 @@ public final class AssetResolver {
     private AssetResolver() {
     }
 
+    /**
+     * What to layer, which is the configured list or - when there is none - whatever is sitting in the assets
+     * directory.
+     *
+     * <p>A server that ships a resource pack has one job to get a capture that matches what its players see, and
+     * asking it to both drop the file in and name it again in config is one job too many. So an empty
+     * {@code camera.assets.packs} means "use what is there" rather than "use nothing", and naming any file at all
+     * goes back to exactly that list - a server that wants a particular order still says so, and says it once.
+     *
+     * <p>Sorted by name, because layering is order-dependent and directory order is not something to build a look
+     * on. A file that turns out to be the vanilla base is sorted out later by {@code isComplete}, so a client jar
+     * and a pack in the same directory still land the right way up whatever they are called.
+     */
+    private static List<String> packsToOpen(Request request) {
+        if (!request.packNames().isEmpty()) return request.packNames();
+
+        try (Stream<Path> found = Files.list(request.assetsDir())) {
+            return found.filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .filter(name -> name.endsWith(".zip") || name.endsWith(".jar"))
+                    .sorted()
+                    .toList();
+        } catch (IOException absent) {
+            // No directory yet, which is the ordinary state of a server that has never put anything there.
+            return List.of();
+        }
+    }
+
     public static Resolution resolve(Request request) {
         List<AssetPack> opened = new ArrayList<>();
         try {
-            for (String name : request.packNames()) {
+            for (String name : packsToOpen(request)) {
                 Path path = request.assetsDir().resolve(name);
                 if (!Files.isRegularFile(path)) {
                     return broken(opened,

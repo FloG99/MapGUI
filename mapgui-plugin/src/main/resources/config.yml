@@ -122,7 +122,11 @@ camera:
 
     # Files in plugins/MapGUI/assets/ to draw with - a client jar, a resource pack zip, or both. Layered
     # top-down the way the client stacks packs, so your own pack wins where it has a texture and vanilla
-    # fills in the rest. Leave empty to use only what MapGUI downloaded.
+    # fills in the rest.
+    #
+    # Left empty, every zip and jar in that directory is used, sorted by name. So a server that ships a
+    # resource pack only has to drop it in there for captures to match what its players see. Name files here
+    # when you want a particular order, or want some of them ignored.
     #
     # Anything here is read and never written: a file you pinned deliberately is never replaced.
     packs: []

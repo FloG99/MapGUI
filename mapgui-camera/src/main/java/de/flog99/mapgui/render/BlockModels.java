@@ -92,7 +92,7 @@ public final class BlockModels {
         Geometry geometry = new Geometry();
         // Nameless, so a stated tintindex comes back as a plain "this face is tinted" - an item states its own colour
         // in its definition, and a held pale oak leaf is untinted where the block in the world is not.
-        collectElements(stripNamespace(model), 0, 0, geometry);
+        collectElements(AssetStack.canonical(model), 0, 0, geometry);
         return List.copyOf(geometry.elements);
     }
 
@@ -327,7 +327,7 @@ public final class BlockModels {
                 elements = model.getAsJsonArray("elements");
             }
 
-            name = model.has("parent") ? stripNamespace(model.get("parent").getAsString()) : null;
+            name = model.has("parent") ? AssetStack.canonical(model.get("parent").getAsString()) : null;
         }
 
         if (elements == null) return;
@@ -499,7 +499,7 @@ public final class BlockModels {
 
         for (int depth = 0; depth < 16; depth++) {
             if (!current.startsWith("#")) {
-                return new Resolved(stripNamespace(current), forced);
+                return new Resolved(AssetStack.canonical(current), forced);
             }
 
             JsonElement value = textures.get(current.substring(1));
@@ -565,12 +565,26 @@ public final class BlockModels {
     }
 
     private JsonObject model(String name) {
-        return models.computeIfAbsent(name, key -> readJson(AssetStack.BLOCK_MODELS + strip(key) + ".json"));
+        return models.computeIfAbsent(name, key -> readJson(AssetStack.asset(qualified(key), "models", ".json")));
     }
 
     /** Model references carry a {@code block/} prefix the directory already implies. */
     private static String strip(String name) {
         return name.startsWith("block/") ? name.substring("block/".length()) : name;
+    }
+
+    /**
+     * A model id with its folder made explicit, so the path builder needs no special case.
+     *
+     * <p>A bare name is a block model, which is what every unqualified parent in vanilla's own block files means.
+     * Anything already saying {@code block/} or {@code item/} is left alone - the second is how a pack's own item
+     * model gets here at all.
+     */
+    private static String qualified(String name) {
+        String path = AssetStack.pathOf(name);
+        if (path.startsWith("block/") || path.startsWith("item/")) return name;
+
+        return AssetStack.beside(name, "block/" + path);
     }
 
     private JsonObject readJson(String path) {
