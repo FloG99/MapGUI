@@ -20,6 +20,11 @@ surface is `mapgui-api` and `mapgui-layout`.
   where the named model is one MapGUI cannot draw.
 - A capture is taken in one tick and traced off it, so it is of the instant it was asked for. See
   [camera](docs/camera.md) for what it costs and [what it does not show](docs/camera.md#not-shown).
+- **Dark and underwater captures read better.** The shadow lift reaches further up the light range, and water fog
+  carries most of the biome's own water colour rather than the near-black the client states for it - `#050533` for
+  every ocean, which on 143 colours comes out as a black rectangle rather than as being under water. Both are
+  deliberate departures from the client, for the reason the night sky already was: a map has no adapted eye behind
+  it. `LightTableTest` holds the one line the lift may not cross, which is that more light must never draw darker.
 
 - **A resource pack's own items are drawn.** Asset paths are built from the namespace an id states rather than
   always from `minecraft`, so `item_model=yourpack:whatever` resolves to the pack's model instead of falling back

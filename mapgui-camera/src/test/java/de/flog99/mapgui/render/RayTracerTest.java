@@ -25,15 +25,14 @@ class RayTracerTest {
      * What a white texture comes out as at full light on a face with the given direction factor.
      *
      * <p>Full light is not 1, and that is not a rounding slip: the client's own table finishes by pulling every entry
-     * four percent toward grey, at level 15 as much as in a cave, which leaves 0.99. The renderer's shadow lift then
-     * adds almost nothing here on purpose - it is weighted at the dark end, so full light keeps the client's number.
-     * Written as the composition rather than as the number, so that changing either end of it moves these
-     * expectations with it.
+     * four percent toward grey, at level 15 as much as in a cave, which leaves 0.99. The shadow lift then adds almost
+     * nothing here on purpose, being weighted at the dark end.
+     *
+     * <p>Read off the renderer's own table rather than re-derived here. Deriving it meant two copies of the lift
+     * arithmetic, and the copy in this file went stale the first time the weighting was retuned.
      */
     private static int shaded(double faceFactor) {
-        float client = 1f + (0.75f - 1f) * 0.04f;
-        float lifted = client + RayTracer.SHADOW_LIFT * (1 - client) * (1 - client);
-        return (int) (255 * faceFactor * lifted);
+        return (int) (255 * faceFactor * RayTracer.lightTable(0)[15]);
     }
 
     /**

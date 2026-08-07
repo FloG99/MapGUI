@@ -108,7 +108,8 @@ public final class BiomeColors {
      */
     public Tint fromClimate(float temperature, float downfall) {
         return new Tint(grassAt(temperature, downfall), foliageAt(temperature, downfall),
-                dryFoliageAt(temperature, downfall), DEFAULT_WATER, DEFAULT_WATER_FOG, DEFAULT_FOG, DEFAULT_WATER_SIGHT);
+                dryFoliageAt(temperature, downfall), DEFAULT_WATER, vivid(DEFAULT_WATER_FOG, DEFAULT_WATER),
+                DEFAULT_FOG, DEFAULT_WATER_SIGHT);
     }
 
     private Tint read(String biome) {
@@ -130,7 +131,31 @@ public final class BiomeColors {
         int fog = stated(visual, effects, "fog_color", DEFAULT_FOG);
         float sight = distance(visual, "water_fog_end_distance", DEFAULT_WATER_SIGHT);
 
-        return new Tint(grass, foliage, dry, water, waterFog, fog, sight);
+        return new Tint(grass, foliage, dry, water, vivid(waterFog, water), fog, sight);
+    }
+
+    /**
+     * How much of the water's own colour the fog carries.
+     *
+     * <p>The one place this parts company with the client on purpose, for the reason the night sky and the shadow
+     * lift already do: {@code water_fog_color} is near-black by design - #050533 for every ocean, and only eight
+     * biomes in 26.2 state anything else at all - and a map has 143 colours and a viewer whose eye is adapted to
+     * whatever else is on their screen. Faithful comes out as a black rectangle rather than as being under water.
+     *
+     * <p>Blended toward the biome's own {@code water_color} rather than toward a colour chosen here, so it stays
+     * per-biome: an ocean lands on a deep blue, a swamp still fogs green and a warm ocean still fogs cyan.
+     */
+    private static final float WATER_FOG_VIVIDNESS = 0.7f;
+
+    private static int vivid(int waterFog, int water) {
+        return mix(waterFog, water, WATER_FOG_VIVIDNESS);
+    }
+
+    private static int mix(int from, int to, float amount) {
+        int red = Math.round((from >> 16 & 0xFF) * (1 - amount) + (to >> 16 & 0xFF) * amount);
+        int green = Math.round((from >> 8 & 0xFF) * (1 - amount) + (to >> 8 & 0xFF) * amount);
+        int blue = Math.round((from & 0xFF) * (1 - amount) + (to & 0xFF) * amount);
+        return 0xFF000000 | red << 16 | green << 8 | blue;
     }
 
     /**

@@ -44,11 +44,20 @@ public final class RayTracer {
      * near-blacks and your eye adapts; a map has 143 colors and a viewer adapted to whatever else is on screen, so
      * faithfully dark reads as a hole in the picture.
      *
-     * <p>Applied as {@code (1 - light)^2} rather than as a floor, which is the whole point of the shape: a floor is
-     * affine, so raising it enough to show a cave wall flattens the picture at noon to pay for it. Weighted, it does
-     * nearly nothing above light 10 and nothing at 15.
+     * <p>Weighted by {@code (1 - light)^SHADOW_FALLOFF} rather than applied as a floor, which is the whole point of
+     * the shape: a floor is affine, so raising it enough to show a cave wall flattens the picture at noon to pay for
+     * it. This does nothing at all at light 15.
+     *
+     * <p><b>The two move together.</b> The table has to stay non-decreasing - an unlit block drawing brighter than a
+     * torchlit one is worse than either being dark - and the client's own curve is nearly flat across the bottom, so
+     * a lift the dark end can absorb is small. At the old falloff of 2 the ceiling was 0.53, and 0.55 already drew
+     * light 1 darker than light 0. Softening the falloff is what buys the headroom; at 1.5 the ceiling is near 0.7.
+     * {@code LightTableTest} holds the line.
      */
-    static final float SHADOW_LIFT = 0.5f;
+    static final float SHADOW_LIFT = 0.6f;
+
+    /** See {@link #SHADOW_LIFT}: lower spreads the lift further up the range, and too low inverts the table. */
+    private static final double SHADOW_FALLOFF = 1.5;
 
     /**
      * Light level to multiplier: the client's own table with that lift applied, sixteen entries computed once so the
@@ -65,7 +74,8 @@ public final class RayTracer {
 
     private static final float[] END_LIGHT = lightTable(0.25f);
 
-    private static float[] lightTable(float ambient) {
+    /** Package-private for {@code LightTableTest}, which is what keeps {@link #SHADOW_LIFT} tunable safely. */
+    static float[] lightTable(float ambient) {
         float[] table = new float[16];
 
         for (int level = 0; level < table.length; level++) {
@@ -78,7 +88,7 @@ public final class RayTracer {
             float lifted = 1 - (float) Math.pow(1 - curved, 4);
             float lit = curved + (lifted - curved) * GAMMA;
             float client = Math.clamp(lit + (0.75f - lit) * 0.04f, 0, 1);
-            table[level] = Math.min(1, client + SHADOW_LIFT * (1 - client) * (1 - client));
+            table[level] = Math.min(1, client + SHADOW_LIFT * (float) Math.pow(1 - client, SHADOW_FALLOFF));
         }
 
         return table;
