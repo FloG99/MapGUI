@@ -80,14 +80,13 @@ final class EntityCapture {
             List<EntitySnapshot> drawn = playerSnapshots(player, at, type, skins, assets);
             if (drawn != null) return drawn;
         } else if (entity instanceof Item dropped) {
-            List<EntitySnapshot> sprite = assets.items().dropped(
-                    dropped.getItemStack().getType().getKey().value(),
-                    at.getX(), at.getY(), at.getZ(),
-                    facingCamera(eye, at)
-            );
-            // Empty when neither a sprite nor a block model resolved, which falls through to the box below.
-            if (!sprite.isEmpty()) {
-                return sprite;
+            for (String id : ItemIds.of(dropped.getItemStack())) {
+                List<EntitySnapshot> sprite = assets.items().dropped(
+                        id, at.getX(), at.getY(), at.getZ(), facingCamera(eye, at));
+                // Empty when neither a sprite nor a block model resolved, which falls through to the box below.
+                if (!sprite.isEmpty()) {
+                    return sprite;
+                }
             }
         } else {
             List<EntitySnapshot> drawn = mobSnapshots(entity, at, type, assets);

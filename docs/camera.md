@@ -525,6 +525,12 @@ and do not.
   nothing at all. Seen face on the picture is unchanged, checked over all 796 icons for zero pixels differing in
   colour.
 
+  **What the stack says it draws as wins over what it is.** Vanilla's `item_model` component overrides the model an
+  item uses, so a stick given `item_model=minecraft:diamond_sword` is a sword to everybody looking at it, and a
+  capture that read the material would photograph a stick. The pose is read from the same id as the shape, or the
+  sword would lie flat the way a stick does. A component naming something this cannot draw falls back to the
+  material, so an unknown model is a stick rather than nothing.
+
   A block in hand is a block: its item definition names a block model, and both the pose and the shape come from
   there, so a log has its rings on top and a furnace has a front. A model is authored looking at its front from `+Z`
   while a mesh here faces `-Z`, so a block turns a half circle about Y on the way in - the same half turn the item

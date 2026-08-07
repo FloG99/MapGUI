@@ -84,15 +84,22 @@ final class MobEquipment {
                              ItemStack item, boolean rightArm) {
         if (item == null || item.isEmpty()) return;
 
-        String id = item.getType().getKey().value();
-        ItemPoses.Pose pose = assets.poses().of(id, rightArm);
-
-        // Built at the origin and then put in the hand, because where the hand is depends on the holder's own mesh.
-        for (EntitySnapshot layer : assets.items().held(id)) {
-            EntitySnapshot inHand = EntitySnapshot.held(holder, rightArm, layer, pose);
-            if (inHand != null) {
-                into.add(inHand);
+        // The pose comes from the same id as the shape, or a stick drawn as a sword would lie flat like a stick.
+        for (String id : ItemIds.of(item)) {
+            List<EntitySnapshot> layers = assets.items().held(id);
+            if (layers.isEmpty()) {
+                continue;
             }
+
+            ItemPoses.Pose pose = assets.poses().of(id, rightArm);
+            // Built at the origin and then put in the hand, since where the hand is depends on the holder's mesh.
+            for (EntitySnapshot layer : layers) {
+                EntitySnapshot inHand = EntitySnapshot.held(holder, rightArm, layer, pose);
+                if (inHand != null) {
+                    into.add(inHand);
+                }
+            }
+            return;
         }
     }
 
