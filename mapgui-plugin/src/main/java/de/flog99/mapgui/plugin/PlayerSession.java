@@ -40,8 +40,10 @@ import java.util.function.Consumer;
 /**
  * Drives one player's menu.
  *
- * <p>Head rotation is the mouse: yaw accumulates as a delta so the player can turn forever, while pitch
- * maps absolutely onto the vertical axis and is pushed back inside its range when it runs out.
+ * <p>Head rotation is the mouse. Yaw always accumulates as a delta, so the player can turn forever. Pitch does one
+ * of two things: clamped, it maps absolutely onto the vertical axis and the head is pushed back into range when it
+ * runs out; unclamped, it accumulates a delta like the yaw does, since a head free to leave the range would
+ * otherwise pin the cursor to an edge and ignore the way back.
  */
 final class PlayerSession implements Session {
 
@@ -58,8 +60,11 @@ final class PlayerSession implements Session {
     private final Deque<Screen> screens = new ArrayDeque<>();
 
     private double cursorX;
-    private int cursorY;
+    private double cursorY;
     private float lastYaw;
+
+    /** Only read while the pitch is unclamped, where the cursor follows a delta the way the yaw one does. */
+    private float lastPitch;
     private boolean suspended;
     private boolean needsPaint = true;
 
@@ -105,8 +110,9 @@ final class PlayerSession implements Session {
         this.painter = new Painter(surface, MapColors.INSTANCE, MapTextFont.INSTANCE);
 
         this.cursorX = width() / 2.0;
-        this.cursorY = height() / 2;
+        this.cursorY = height() / 2.0;
         this.lastYaw = player.getLocation().getYaw();
+        this.lastPitch = player.getLocation().getPitch();
         this.lastLocation = player.getLocation();
 
         adopt(screen);
@@ -185,7 +191,7 @@ final class PlayerSession implements Session {
 
     @Override
     public int cursorY() {
-        return cursorY;
+        return (int) cursorY;
     }
 
     @Override
@@ -210,6 +216,7 @@ final class PlayerSession implements Session {
         suspended = false;
         // Re-anchor the mouse, otherwise the rotation drift while suspended lands in one jump.
         lastYaw = player.getLocation().getYaw();
+        lastPitch = player.getLocation().getPitch();
         applyPitch(player.getLocation().getPitch());
         needsPaint = true;
         refocus();
@@ -255,6 +262,7 @@ final class PlayerSession implements Session {
         if (focused) {
             // Re-anchor the mouse, or the head movement since it was let go arrives as one jump.
             lastYaw = player.getLocation().getYaw();
+            lastPitch = player.getLocation().getPitch();
             applyPitch(player.getLocation().getPitch());
             needsPaint = true;
         } else {
@@ -484,6 +492,7 @@ final class PlayerSession implements Session {
         } else {
             // Still followed while the mouse is elsewhere, so picking the map back up does not arrive as a jump.
             lastYaw = now.getYaw();
+            lastPitch = now.getPitch();
         }
 
         ticksSinceTerrain++;
@@ -495,7 +504,7 @@ final class PlayerSession implements Session {
             needsPaint = true;
         }
 
-        if (focused && screen().cursor() && screen().cursorMoved(cursorX(), cursorY)) {
+        if (focused && screen().cursor() && screen().cursorMoved(cursorX(), cursorY())) {
             needsPaint = true;
         }
         if (screen().isDirty()) {
@@ -543,9 +552,15 @@ final class PlayerSession implements Session {
     }
 
     /**
-     * Maps pitch onto the vertical axis, pushing the head back into range on the way.
+     * Moves the cursor's vertical axis, one of two ways.
      *
-     * <p>With the clamp off nothing touches the player's rotation and the cursor stops at the edge instead.
+     * <p><b>Clamped</b>, pitch maps absolutely: the head is pushed back into range, so a given pitch is always the
+     * same row and the range is the whole screen.
+     *
+     * <p><b>Unclamped</b>, it accumulates a delta exactly as the yaw one does, because the head is free to leave the
+     * range and an absolute mapping then reads as stuck - look right up and the cursor pins to the top, and looking
+     * a little back down does nothing at all until the pitch re-enters the range. Following the delta instead means
+     * down is always down, which is what the horizontal axis has always done.
      */
     private void applyPitch(float pitch) {
         float min = plugin.config().minPitch();
@@ -559,14 +574,24 @@ final class PlayerSession implements Session {
                 plugin.rotation().setPitchKeepingYaw(player, max);
                 pitch = max;
             }
+            cursorY = clamp((pitch - min) / (max - min) * (height() - 1), 0, height() - 1);
+        } else {
+            // The same degrees-per-pixel the yaw axis uses, so both axes move at one speed.
+            double perDegree = height() / (max - min);
+            cursorY = clamp(cursorY + (pitch - lastPitch) * perDegree, 0, height() - 1);
         }
 
-        cursorY = (int) clamp((pitch - min) / (max - min) * (height() - 1), 0, height() - 1);
+        lastPitch = pitch;
     }
 
     /** The screen decides if it has an opinion, otherwise the server does. Never while the mouse is elsewhere. */
     private boolean clampPitch() {
         if (!focused || !screen().cursor()) return false;
+
+        // Only for a map the player is holding up in front of them. An offhand map is something they glance at
+        // while looking at the world - a viewfinder, a quest log, a minimap - so pushing their head into its pitch
+        // range takes over the aim they are still using. The cursor stops at the edge there instead.
+        if (display.holding(player) != EquipmentSlot.HAND) return false;
 
         Boolean wanted = screen().clampPitch();
         return wanted != null ? wanted : plugin.config().clampPitch();
@@ -615,7 +640,7 @@ final class PlayerSession implements Session {
         // A cursorless screen still hears the click, but only through Screen#clickedAnywhere: -1 means there is
         // no position, so nothing is hit-tested.
         boolean aiming = clicked.cursor();
-        if (!clicked.click(aiming ? cursorX() : -1, aiming ? cursorY : -1, with)) return;
+        if (!clicked.click(aiming ? cursorX() : -1, aiming ? cursorY() : -1, with)) return;
 
         Sound sound = clicked.clickSound();
         if (sound != null) {
@@ -630,7 +655,7 @@ final class PlayerSession implements Session {
 
     void scroll(int direction) {
         if (focused && !suspended && screen().cursor()) {
-            screen().scroll(cursorX(), cursorY, direction);
+            screen().scroll(cursorX(), cursorY(), direction);
         }
     }
 
@@ -648,7 +673,7 @@ final class PlayerSession implements Session {
         // Animations are resolved during layout, so an in-flight one needs a fresh pass each frame.
         if (screen.isDirty() || screen.animating()) {
             screen.layout(screen.font(), surface.bounds());
-            screen.cursorMoved(cursorX(), cursorY);
+            screen.cursorMoved(cursorX(), cursorY());
         }
 
         if (screen.terrain()) {
@@ -671,7 +696,7 @@ final class PlayerSession implements Session {
     private List<Marker> markers() {
         List<Marker> markers = new ArrayList<>(screen().markers());
         if (focused && !suspended && screen().cursor()) {
-            markers.add(new Marker(cursorType(), cursorX(), cursorY, (byte) 8, screen().cursorCaption()));
+            markers.add(new Marker(cursorType(), cursorX(), cursorY(), (byte) 8, screen().cursorCaption()));
         }
         return markers;
     }

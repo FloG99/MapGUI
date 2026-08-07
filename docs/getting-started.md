@@ -144,7 +144,8 @@ Anything meant to be used while moving about should turn that off and let the cu
 ```
 
 Null follows the server's `cursor.clamp-pitch`. A screen with no cursor never restricts the head whatever
-either says, and movement is never restricted in any case.
+either says, and neither does a map in the offhand - that one is glanced at while the player looks at the world,
+so their aim is left alone. Movement is never restricted in any case.
 
 ### The wheel, when nothing scrollable is under it
 

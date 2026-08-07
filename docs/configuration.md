@@ -69,7 +69,8 @@ cursor:
   # cannot look away from the map. Off leaves their head alone and just stops the cursor at the edge,
   # which means looking further only wastes movement - but nothing touches their view.
   #
-  # A screen that turns its cursor off never restricts the head either way - there is nothing to aim at.
+  # A screen that turns its cursor off never restricts the head either way - there is nothing to aim at,
+  # and neither does a map in the offhand: that one is glanced at while the player looks at the world.
   clamp-pitch: true
 
 terrain:

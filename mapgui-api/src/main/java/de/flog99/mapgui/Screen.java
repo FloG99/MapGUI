@@ -172,7 +172,9 @@ public abstract class Screen {
      * business taking over someone's aim. The cursor then simply stops at the edge instead, and
      * everything is still reachable by looking inside the range.
      *
-     * <p>Ignored when {@link #cursor()} is off, since there is nothing to aim at either way.
+     * <p>Ignored when {@link #cursor()} is off, since there is nothing to aim at either way, and <b>ignored in the
+     * offhand</b>: a map held there is glanced at while the player looks at the world, so their aim is left alone
+     * whatever this says.
      */
     @Nullable
     public Boolean clampPitch() {
