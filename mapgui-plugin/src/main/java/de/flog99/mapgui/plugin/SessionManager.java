@@ -99,8 +99,8 @@ final class SessionManager implements MapGui {
     }
 
     @Override
-    public HeldTrigger openWhileHolding(Predicate<ItemStack> item, HandOptions hand, Function<Player, Screen> factory) {
-        return plugin.heldTriggers().add(item, hand, factory);
+    public HeldTrigger openWhileHolding(Predicate<ItemStack> item, HandOptions.Focus focus, Function<Player, Screen> factory) {
+        return plugin.heldTriggers().add(item, HandOptions.offhand().focus(focus), factory);
     }
 
     @Override

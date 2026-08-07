@@ -101,7 +101,7 @@ viewfinder in the offhand, a compass with a map beside it, a wand with its own p
 ```java
 HeldTrigger camera = MapGui.get().openWhileHolding(
         stack -> stack.getType() == Material.SPYGLASS,
-        HandOptions.offhand().focus(HandOptions.Focus.ALWAYS),
+        HandOptions.Focus.ALWAYS,
         CameraScreen::new);
 ```
 
@@ -112,6 +112,16 @@ hand deliberately: a trigger found in the offhand would be a screen drawn over t
 itself while the GUI sits next to it. `Focus.ALWAYS` is what makes that GUI clickable in the offhand - it costs the
 player their attack and place clicks while the screen is up, which is the trade for a menu that does not need a
 gesture to reach.
+
+**The screen is always in the offhand, which is why this takes a `Focus` and not a whole `HandOptions`.** No other
+carry mode composes: the rest put the map in the hotbar, and a hotbar map counts as held only while its own slot is
+selected - so reaching for it means letting go of the trigger item, which closes the screen you were reaching for.
+Rather than document that and let people find out in game, the parameter simply cannot say it. The rest of
+`HandOptions` would be dead weight anyway: `slot` and `movable` are ignored for an offhand map and `offhandAllowed`
+is implied.
+
+So the only choice is focus: `ALWAYS` for a menu, `SWAP_HANDS` or `SNEAK` for one reached by a gesture, `NEVER` for
+something only ever looked at.
 
 Swept once a tick, for the reason above, so the predicate is called for one stack per player per tick - keep it to
 a material or a tag. A screen that closes itself stays closed until the item is put down and picked up again, and

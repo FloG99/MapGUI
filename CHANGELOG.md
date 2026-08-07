@@ -26,8 +26,15 @@ surface is `mapgui-api` and `mapgui-layout`.
 - `MapGui.item(gui)` mints a map item that opens a registered GUI for whoever holds it, so one found in a chest
   shows its finder their own screen.
 - `MapGui.openWhileHolding` opens a screen while a player holds an item of *yours* and closes it when they put it
-  down - a camera in the main hand with its viewfinder in the offhand. Returns a `HeldTrigger` to cancel.
+  down - a camera in the main hand with its viewfinder in the offhand. Returns a `HeldTrigger` to cancel. It takes a
+  `Focus` rather than a whole `HandOptions`, because the screen is always in the offhand: any other carry mode puts
+  the map in the hotbar, where reaching for it would mean letting go of the item that opened it.
 - Both are swept once a tick rather than listened for, since an item reaches a hand a dozen ways.
+- **A map in the offhand no longer takes over the player's aim.** The pitch clamp is for a map held up in front of
+  you, so it now applies only in the main hand - an offhand viewfinder or quest log leaves your head alone whatever
+  `cursor.clamp-pitch` and `Screen#clampPitch` say. Unclamped, the vertical axis follows the head as a delta the way
+  the horizontal one always has, so looking back down moves the cursor back down immediately instead of waiting for
+  your pitch to re-enter the range.
 
 ### Bandwidth
 

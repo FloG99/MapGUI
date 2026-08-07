@@ -70,7 +70,7 @@ public interface MapGui {
      * <pre>{@code
      * MapGui.get().openWhileHolding(
      *         stack -> stack.getType() == Material.SPYGLASS,
-     *         HandOptions.offhand().focus(HandOptions.Focus.ALWAYS),
+     *         HandOptions.Focus.ALWAYS,
      *         CameraScreen::new);
      * }</pre>
      *
@@ -81,11 +81,16 @@ public interface MapGui {
      * <p>A screen that closes itself stays closed until the item is put down and picked up again, and nothing opens
      * over a screen the player already has up.
      *
-     * @param hand    how the screen is carried. {@link HandOptions.Carry#POPUP} would claim the hotbar the trigger
-     *                item is in, so {@link HandOptions#offhand()} is the one that fits
+     * <p><b>The screen is always carried in the offhand</b>, which is why this takes a {@link HandOptions.Focus}
+     * rather than a whole {@link HandOptions}. Nothing else composes: every other carry mode puts the map in the
+     * hotbar, where it counts as held only while its own slot is selected, so reaching for it means letting go of
+     * the trigger item and closing the screen being reached for. The rest of {@code HandOptions} is meaningless for
+     * an offhand map anyway - {@code slot} and {@code movable} are ignored and {@code offhandAllowed} is implied.
+     *
+     * @param focus whether the screen takes the player's mouse, and on what gesture
      * @param factory called once per open, with whoever is holding it. Returning null opens nothing
      */
-    HeldTrigger openWhileHolding(Predicate<ItemStack> item, HandOptions hand, Function<Player, Screen> factory);
+    HeldTrigger openWhileHolding(Predicate<ItemStack> item, HandOptions.Focus focus, Function<Player, Screen> factory);
 
     void close(Player player);
 
