@@ -32,7 +32,7 @@ public final class CustomPaint extends AbstractNode<CustomPaint> {
     protected void paintContent(Painter target) {
         Rect box = contentBounds();
         Rect previous = target.pushClip(box);
-        painter.accept(new PaintContext(target, box));
+        painter.accept(new PaintContext(target, box, hovered()));
         target.popClip(previous);
     }
 }
