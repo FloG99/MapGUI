@@ -90,14 +90,18 @@ final class WallTiles {
         }
     }
 
-    /** Only the maps that changed, and only the part of each that did. */
+    /**
+     * Only the maps that changed, and only the parts of each that did.
+     *
+     * <p>Parts, plural: a map whose changes are in two places goes as two updates rather than as the box
+     * around both, whenever that is the cheaper of the two.
+     */
     void sendChanged(Player player, MapSurface surface, TileRegions frame) {
         for (int row = 0; row < layout.rows(); row++) {
             for (int col = 0; col < layout.cols(); col++) {
-                Rect changed = surface.dirtyTile(col, band(row));
-                if (changed == null) continue;
-
-                send(player, surface, col, row, changed, 0, frame);
+                for (Rect changed : surface.dirtyRegions(col, band(row))) {
+                    send(player, surface, col, row, changed, 0, frame);
+                }
             }
         }
     }

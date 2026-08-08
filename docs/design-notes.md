@@ -34,6 +34,46 @@ but that is fixed-function silicon rather than shaders and would be ffmpeg's pro
 If a pixel loop ever does profile hot, the answer is the Vector API: a solid multiple on the quantize loop
 with no native dependency and no "requires a GPU" line in the README.
 
+## One map, several rectangles
+
+A map update carries exactly one rectangle, so a map whose changes are in two places has two options: the box
+around both, most of which is unchanged pixels, or two packets for the same map id. Both are legal and which
+is cheaper is arithmetic, so `Patches` does the arithmetic instead of always picking the box.
+
+The unit of the decision is `SPLIT_COST`, currently **1024 bytes**: what a second packet has to save to be
+worth sending. A map update is a dozen bytes of header, but the header is not the price - the client uploads
+each patch to its map texture separately. So the rule is *we will resend up to 1024 unchanged bytes rather
+than send another packet*, and the crossover follows from that rather than from a guess:
+
+| what changed on one 128x128 map | packets | bytes | one box would be |
+| --- | --- | --- | --- |
+| full redraw | 1 | 16384 | 16384 |
+| one widget, 30x40 | 1 | 1200 | 1200 |
+| a line of text | 1 | 384 | 384 |
+| two 16x16 widgets, opposite corners | 2 | 512 | 16384 |
+| header and footer, full width | 2 | 2048 | 16384 |
+| header and a scrollbar down the side | 2 | 1504 | 16384 |
+| text, plus a clock in the corner | 2 | 576 | 5376 |
+| a diagonal line | 4 | 4096 | 16384 |
+
+Two full-width 8px strips merge into one packet while the gap between them is 8 rows or less (8 x 128 =
+1024, exactly the price of a packet) and split at 9. Two 4px-wide strips never split, even 100 rows apart:
+the gap costs 400 bytes, still cheaper than a packet. Width is what decides, not distance.
+
+The diagonal is the one worth understanding, because neither obvious answer is right. Every row moved and no
+two line up, so the box is the whole map and one-packet-per-row is 128 packets. Splitting it into k squares
+costs `16384 / k + 1024k`, which is least at four - and four is what comes out. Nothing special-cases it; it
+falls out of pricing packets against bytes.
+
+Rows, not a general 2D decomposition. Each row's changed span is tracked exactly, so a run of rows wastes
+nothing horizontally unless the rows themselves differ, and runs already catch what a GUI does. What rows
+cannot separate is two things side by side on the same lines - two 16x16 widgets in the top corners go as one
+128x16 strip, 2048 bytes where 512 would do. Flood-filling connected regions would find those, at a lot more
+complexity for the one case where the waste is bounded by a strip rather than by the map.
+
+`SPLIT_COST` also bounds the damage without a separate cap: N rectangles must save N times 1024, and a whole
+map is 16384, so no map ever becomes more than sixteen packets however scattered the frame.
+
 ## Ordered dithering fights the dirty rectangle
 
 The 4x4 pattern is right for a UI and wrong for video, and not for the obvious reason.

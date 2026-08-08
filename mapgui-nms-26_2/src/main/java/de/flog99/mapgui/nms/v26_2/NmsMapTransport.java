@@ -134,19 +134,31 @@ public final class NmsMapTransport implements MapTransport {
         List<MapDecoration> decorations = new ArrayList<>(markers.size());
         for (Marker marker : markers) decorations.add(decoration(marker, surface.width(), surface.height()));
 
-        MapItemSavedData.MapPatch patch = patch(surface);
-        // A marker-only update carries no pixels at all, which is most of what a moving cursor costs.
-        count(player, (patch == null ? 0 : patch.width() * patch.height()) + markers.size() * 4);
+        List<Rect> changed = surface.dirtyRegions();
+        if (changed.isEmpty()) {
+            // A marker-only update carries no pixels at all, which is most of what a moving cursor costs.
+            count(player, markers.size() * 4);
+            queue(player, update(mapId, decorations, null));
+            return;
+        }
 
-        queue(player, new ClientboundMapItemDataPacket(new MapId(mapId), (byte) 0, false, decorations, patch));
+        // The markers ride along with the first rectangle and the rest leave them alone, since the client
+        // takes its whole set from any update carrying one and sending them again would only cost bytes.
+        for (int i = 0; i < changed.size(); i++) {
+            Rect region = changed.get(i);
+            byte[] pixels = surface.region(region);
+
+            count(player, pixels.length + (i == 0 ? markers.size() * 4 : 0));
+            queue(player, update(mapId, i == 0 ? decorations : null,
+                    new MapItemSavedData.MapPatch(region.x(), region.y(), region.width(), region.height(), pixels))
+            );
+        }
     }
 
     @Override
     public void sendMap(Player player, int mapId, int x, int y, int width, int height, byte[] pixels) {
         count(player, pixels.length);
-        queue(player, new ClientboundMapItemDataPacket(new MapId(mapId), (byte) 0, false, List.of(),
-                new MapItemSavedData.MapPatch(x, y, width, height, pixels))
-        );
+        queue(player, update(mapId, null, new MapItemSavedData.MapPatch(x, y, width, height, pixels)));
     }
 
     @Override
@@ -156,8 +168,22 @@ public final class NmsMapTransport implements MapTransport {
         for (Marker marker : markers) decorations.add(decoration(marker, MapSurface.TILE, MapSurface.TILE));
 
         count(player, markers.size() * 4);
-        // A null patch is an update carrying markers and no pixels, which the client is happy with.
-        queue(player, new ClientboundMapItemDataPacket(new MapId(mapId), (byte) 0, false, decorations, null));
+        queue(player, update(mapId, decorations, null));
+    }
+
+    /**
+     * One update, in which anything left out means unchanged rather than empty.
+     *
+     * <p>Worth a method because the difference is invisible at the call site and the wrong one is quiet: an
+     * empty decoration list is not "no markers in this update", it is "this map has no markers", and the
+     * client will clear the ones it is already showing. Only leaving them out keeps them. Same for the
+     * pixels, which is how a moving cursor is sent without a frame behind it.
+     */
+    private static ClientboundMapItemDataPacket update(int mapId, @Nullable List<MapDecoration> decorations,
+                                                       @Nullable MapItemSavedData.MapPatch patch) {
+        return new ClientboundMapItemDataPacket(new MapId(mapId), (byte) 0, false,
+                Optional.ofNullable(decorations), Optional.ofNullable(patch)
+        );
     }
 
     private void count(Player player, int payload) {
@@ -278,20 +304,6 @@ public final class NmsMapTransport implements MapTransport {
         // Putting the real synchronizer back resends the inventory, which is what reveals the truth.
         ServerPlayer handle = ((CraftPlayer) player).getHandle();
         handle.inventoryMenu.setSynchronizer(handle.containerSynchronizer);
-    }
-
-    /**
-     * The changed rectangle, or null when nothing moved - which the packet reads as an update carrying
-     * markers and no pixels, and is the common case while only the pointer is moving.
-     */
-    @Nullable
-    private static MapItemSavedData.MapPatch patch(MapSurface surface) {
-        Rect changed = surface.dirtyBounds();
-        if (changed == null) return null;
-
-        return new MapItemSavedData.MapPatch(changed.x(), changed.y(), changed.width(), changed.height(),
-                surface.region(changed)
-        );
     }
 
     /**

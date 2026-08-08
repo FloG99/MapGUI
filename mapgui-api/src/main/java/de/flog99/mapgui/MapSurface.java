@@ -5,6 +5,7 @@ import de.flog99.mapgui.ui.Surface;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A plain byte-per-pixel surface.
@@ -16,6 +17,11 @@ import java.util.Arrays;
  * everything that changed anywhere: a clock in one corner of a wall and a caption in the other would span the
  * lot, and every map would go out in full for two small changes. A single-map surface has one tile and so
  * behaves exactly as it always did.
+ *
+ * <p>Within a tile it is per row, which is what {@link #dirtyRegions} needs to split one map into several
+ * rectangles. Rows cost no more to keep than the box they replace - a write touches its tile's row range and
+ * its own row's span, which is the same four comparisons the box took - and they carry enough to work out
+ * afterwards whether sending several rectangles beats sending the one box around them.
  */
 public final class MapSurface implements Surface {
 
@@ -29,11 +35,17 @@ public final class MapSurface implements Surface {
     private final int tileCols;
     private final int tileRows;
 
-    /** Bounds of what changed in each tile, in surface coordinates. Inverted when the tile is clean. */
-    private final int[] minX;
-    private final int[] minY;
-    private final int[] maxX;
-    private final int[] maxY;
+    /** First and last row of each tile that changed, in surface coordinates. Inverted when the tile is clean. */
+    private final int[] minRow;
+    private final int[] maxRow;
+
+    /**
+     * What changed in one row of one tile: an x range in surface coordinates, right exclusive, inverted when
+     * that row of that tile is clean. Indexed by {@code row * tileCols + column}, so the tiles of a wall sit
+     * beside each other and a tile is every stride'th entry.
+     */
+    private final int[] spanLeft;
+    private final int[] spanRight;
 
     public MapSurface(int width, int height) {
         this.width = width;
@@ -44,10 +56,10 @@ public final class MapSurface implements Surface {
         this.tileRows = Math.ceilDiv(height, TILE);
 
         int tiles = tileCols * tileRows;
-        this.minX = new int[tiles];
-        this.minY = new int[tiles];
-        this.maxX = new int[tiles];
-        this.maxY = new int[tiles];
+        this.minRow = new int[tiles];
+        this.maxRow = new int[tiles];
+        this.spanLeft = new int[height * tileCols];
+        this.spanRight = new int[height * tileCols];
         clearDirty();
     }
 
@@ -70,11 +82,14 @@ public final class MapSurface implements Surface {
 
         pixels[index] = color;
 
-        int tile = y / TILE * tileCols + x / TILE;
-        minX[tile] = Math.min(minX[tile], x);
-        minY[tile] = Math.min(minY[tile], y);
-        maxX[tile] = Math.max(maxX[tile], x);
-        maxY[tile] = Math.max(maxY[tile], y);
+        int col = x / TILE;
+        int tile = y / TILE * tileCols + col;
+        minRow[tile] = Math.min(minRow[tile], y);
+        maxRow[tile] = Math.max(maxRow[tile], y);
+
+        int span = y * tileCols + col;
+        spanLeft[span] = Math.min(spanLeft[span], x);
+        spanRight[span] = Math.max(spanRight[span], x + 1);
     }
 
     @Override
@@ -126,9 +141,36 @@ public final class MapSurface implements Surface {
     @Nullable
     public Rect dirtyTile(int col, int row) {
         int tile = row * tileCols + col;
-        if (minX[tile] > maxX[tile]) return null;
+        if (minRow[tile] > maxRow[tile]) return null;
 
-        return new Rect(minX[tile], minY[tile], maxX[tile] - minX[tile] + 1, maxY[tile] - minY[tile] + 1);
+        int left = width;
+        int right = -1;
+        for (int y = minRow[tile]; y <= maxRow[tile]; y++) {
+            int span = y * tileCols + col;
+            if (spanLeft[span] >= spanRight[span]) continue;
+
+            left = Math.min(left, spanLeft[span]);
+            right = Math.max(right, spanRight[span]);
+        }
+        // The tracked rows are exact, so the first and last are dirty and the height needs no searching.
+        return new Rect(left, minRow[tile], right - left, maxRow[tile] - minRow[tile] + 1);
+    }
+
+    /**
+     * The same change, as the cheapest set of rectangles to send it as rather than as the one box around it.
+     *
+     * <p>What a map update actually wants. A box is one packet whatever is in it, so a tile whose top strip
+     * and bottom strip both changed sends the whole 16 KB between them; two rectangles send the two strips.
+     * Splitting only happens where the arithmetic says it pays, so a full redraw is still one rectangle and
+     * still one packet.
+     *
+     * @return empty when the tile changed nothing
+     */
+    public List<Rect> dirtyRegions(int col, int row) {
+        int tile = row * tileCols + col;
+        if (minRow[tile] > maxRow[tile]) return List.of();
+
+        return Patches.plan(spanLeft, spanRight, tileCols, col, minRow[tile], maxRow[tile]);
     }
 
     /**
@@ -144,39 +186,85 @@ public final class MapSurface implements Surface {
         int right = -1;
         int bottom = -1;
 
-        for (int tile = 0; tile < minX.length; tile++) {
-            if (minX[tile] > maxX[tile]) continue;
+        for (int row = 0; row < tileRows; row++) {
+            for (int col = 0; col < tileCols; col++) {
+                Rect tile = dirtyTile(col, row);
+                if (tile == null) continue;
 
-            left = Math.min(left, minX[tile]);
-            top = Math.min(top, minY[tile]);
-            right = Math.max(right, maxX[tile]);
-            bottom = Math.max(bottom, maxY[tile]);
+                left = Math.min(left, tile.x());
+                top = Math.min(top, tile.y());
+                right = Math.max(right, tile.right());
+                bottom = Math.max(bottom, tile.bottom());
+            }
         }
-        return right < left ? null : new Rect(left, top, right - left + 1, bottom - top + 1);
+        return right <= left ? null : new Rect(left, top, right - left, bottom - top);
+    }
+
+    /**
+     * Everything that changed anywhere, as the cheapest set of rectangles rather than as one box.
+     *
+     * <p>The counterpart to {@link #dirtyBounds} and for the same surface: one that is one map. On anything
+     * bigger these cross tile boundaries, and a map update cannot.
+     */
+    public List<Rect> dirtyRegions() {
+        int first = height;
+        int last = -1;
+        for (int tile = 0; tile < minRow.length; tile++) {
+            if (minRow[tile] > maxRow[tile]) continue;
+
+            first = Math.min(first, minRow[tile]);
+            last = Math.max(last, maxRow[tile]);
+        }
+        if (last < first) return List.of();
+
+        // One column of spans is already the whole width of a surface that is one map wide, which is the
+        // only shape this is for; anything wider has to have its tiles put back together first.
+        if (tileCols == 1) return Patches.plan(spanLeft, spanRight, 1, 0, first, last);
+
+        int[] left = new int[height];
+        int[] right = new int[height];
+        Arrays.fill(left, width);
+        Arrays.fill(right, -1);
+
+        for (int y = first; y <= last; y++) {
+            for (int col = 0; col < tileCols; col++) {
+                int span = y * tileCols + col;
+                if (spanLeft[span] >= spanRight[span]) continue;
+
+                left[y] = Math.min(left[y], spanLeft[span]);
+                right[y] = Math.max(right[y], spanRight[span]);
+            }
+        }
+        return Patches.plan(left, right, 1, 0, first, last);
     }
 
     public boolean isDirty() {
-        for (int tile = 0; tile < minX.length; tile++) {
-            if (minX[tile] <= maxX[tile]) return true;
+        for (int tile = 0; tile < minRow.length; tile++) {
+            if (minRow[tile] <= maxRow[tile]) return true;
         }
         return false;
     }
 
     public void clearDirty() {
-        Arrays.fill(minX, width);
-        Arrays.fill(minY, height);
-        Arrays.fill(maxX, -1);
-        Arrays.fill(maxY, -1);
+        Arrays.fill(minRow, height);
+        Arrays.fill(maxRow, -1);
+        Arrays.fill(spanLeft, width);
+        Arrays.fill(spanRight, -1);
     }
 
     public void markAllDirty() {
         for (int row = 0; row < tileRows; row++) {
             for (int col = 0; col < tileCols; col++) {
                 int tile = row * tileCols + col;
-                minX[tile] = col * TILE;
-                minY[tile] = row * TILE;
-                maxX[tile] = Math.min(width, (col + 1) * TILE) - 1;
-                maxY[tile] = Math.min(height, (row + 1) * TILE) - 1;
+                minRow[tile] = row * TILE;
+                maxRow[tile] = Math.min(height, (row + 1) * TILE) - 1;
+            }
+        }
+        for (int y = 0; y < height; y++) {
+            for (int col = 0; col < tileCols; col++) {
+                int span = y * tileCols + col;
+                spanLeft[span] = col * TILE;
+                spanRight[span] = Math.min(width, (col + 1) * TILE);
             }
         }
     }

@@ -166,10 +166,13 @@ final class HeldMapDisplay {
     }
 
     void show(Session session, MapSurface surface, List<Marker> markers) {
-        Held entry = held.get(session.player().getUniqueId());
-        if (entry != null) {
-            transport.sendMap(session.player(), entry.mapId(), surface, markers);
-        }
+        Player player = session.player();
+        Held entry = held.get(player.getUniqueId());
+        if (entry == null) return;
+
+        // A frame is several packets when what changed is scattered, and a map that goes up in pieces tears
+        // for the same reason a wall does - half the new screen over half the old one.
+        transport.bundled(player, () -> transport.sendMap(player, entry.mapId(), surface, markers));
     }
 
     /** Re-issued when the top screen changes, so the item name follows the title. A real item keeps its own name. */

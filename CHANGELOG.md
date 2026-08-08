@@ -5,6 +5,20 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ## Unreleased
 
+### Sending frames
+
+- **A map whose changes are in two places is sent as two updates, not as the box around them.** A map update
+  carries one rectangle, so a header and a footer used to drag the whole 16 KB body between them onto the wire.
+  Which is cheaper is arithmetic and it is now done per map, per frame: two widgets in opposite corners cost 512
+  bytes instead of 16384, a header and a scrollbar 1504. A packet is priced at 1024 bytes, so anything changing
+  in one piece is still exactly one packet and up to 1024 unchanged bytes are still resent rather than split off.
+  See [design notes](docs/design-notes.md#one-map-several-rectangles) for the numbers.
+- Fixed: a pixel update carried an empty marker list, which does not mean "no markers in this update" but "this
+  map has none", so every frame cleared the map's markers and relied on the cursor being resent afterwards in the
+  same bundle to put them back. Updates now leave markers alone unless they carry some.
+- A held map's frame is bundled, as a wall's already was, so a screen that now takes several packets cannot be
+  drawn half-new and half-old.
+
 ### Camera
 
 - `MapGui.camera()` - a screenshot of the world onto a map. Real block textures, transparency through glass, ice,
