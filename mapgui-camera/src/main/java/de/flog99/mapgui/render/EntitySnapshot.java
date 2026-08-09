@@ -388,6 +388,29 @@ public record EntitySnapshot(
                 EntityModel.picture(MAP_HALF_WIDTH, MAP_HALF_WIDTH, -MAP_FRONT, -spin), texture);
     }
 
+    /**
+     * A map of a MapGUI wall, drawn on the face of the block it hangs on.
+     *
+     * <p>A wall puts nothing in the world - its maps and the frames holding them are sent to a viewer's client and
+     * nowhere else - so this is placed from the wall's own layout rather than found by looking at the blocks. Which
+     * is why it takes the block being hung on and pushes the picture out to its face itself, where a real frame is
+     * an entity already standing in the space in front.
+     *
+     * @param x       the middle of the block the wall map hangs on, and {@code y} and {@code z} with it
+     * @param facing  where the picture points, in the yaw convention a block model takes
+     * @param texture the wall's own pixels, published into the atlas by the caller
+     */
+    public static EntitySnapshot wallMap(double x, double y, double z, float facing, String texture) {
+        return new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
+                EntityModel.picture(MAP_HALF_WIDTH, MAP_HALF_WIDTH, WALL_FRONT, 0), texture);
+    }
+
+    /**
+     * Where a wall's map sits, in entity pixels off the middle of its block: on the block's own face, and a hair
+     * proud of it so that it does not fight whatever the block is made of.
+     */
+    private static final float WALL_FRONT = 8 + 16 / 128f;
+
     /** Half a block, since a framed map is drawn the full width of the block the frame is in. */
     private static final float MAP_HALF_WIDTH = 8;
 

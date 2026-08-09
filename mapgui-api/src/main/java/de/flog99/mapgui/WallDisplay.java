@@ -193,6 +193,35 @@ public final class WallDisplay {
         return layout;
     }
 
+    public World world() {
+        return world;
+    }
+
+    /**
+     * What this wall is showing one viewer, a map at a time, so a camera can photograph it.
+     *
+     * <p>Empty for somebody who is not watching. That is not a shortcut: a wall exists only in the clients of the
+     * people in front of it, and one who has walked out of range has been sent nothing to see - so there is nothing
+     * to put in their photograph either.
+     *
+     * <p>A copy of the pixels, since the caller reads them off the main thread while the wall goes on painting.
+     */
+    public List<WallTile> shownTo(Player viewer) {
+        if (closed || previewOnly || !sees(viewer)) return List.of();
+
+        WallView view = viewOf(viewer);
+        MapSurface surface = view.surface();
+
+        List<WallTile> shown = new ArrayList<>(layout.count());
+        for (int row = 0; row < layout.rows(); row++) {
+            for (int col = 0; col < layout.cols(); col++) {
+                shown.add(new WallTile(layout.blockX(col, row), layout.blockY(col, row), layout.blockZ(col, row),
+                        layout.facing(), surface.region(layout.surfaceX(col), layout.surfaceY(row), WallLayout.TILE, WallLayout.TILE)));
+            }
+        }
+        return List.copyOf(shown);
+    }
+
     /** Changes the frame rate of a wall that is already up, so an admin can throttle a busy server. */
     public void fps(int fps) {
         intervalMs = fps <= 0 ? 0 : 1000 / fps;

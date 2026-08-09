@@ -2,11 +2,14 @@ package de.flog99.mapgui.plugin.camera;
 
 import de.flog99.mapgui.render.EntityVariants;
 import de.flog99.mapgui.render.TextureAtlas;
+import de.flog99.mapgui.render.Tints;
+import org.bukkit.DyeColor;
 import org.bukkit.Keyed;
 import org.bukkit.entity.Creaking;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Horse;
 import org.bukkit.entity.Rabbit;
+import org.bukkit.entity.TropicalFish;
 import org.bukkit.entity.Villager;
 import org.bukkit.entity.Wolf;
 import org.bukkit.entity.ZombieVillager;
@@ -58,6 +61,12 @@ final class MobTextures {
         // A rabbit called Toast wears a coat of its own, which the assets name after it - so it is a coat like any
         // other from here down, and only the name it is picked by is a joke.
         if (entity instanceof Rabbit && MobNames.named(entity, MobNames.TOAST)) return TOAST_COAT;
+
+        // A tropical fish's variant is its pattern, and the pattern decides which of the two bodies it is drawn on
+        // rather than what it looks like - the looks are two colors painted on in {@link #painted}.
+        if (entity instanceof TropicalFish fish) {
+            return fish.getPattern() == null ? null : body(fish.getPattern());
+        }
 
         // A horse's coat is a colour plus a marking pattern rather than a variant, so the colour is taken on its own.
         if (entity instanceof Horse horse) {
@@ -188,8 +197,43 @@ final class MobTextures {
         if (entity instanceof Horse horse) {
             return marked(atlas, base, baby, horse.getStyle());
         }
+        if (entity instanceof TropicalFish fish) {
+            return patterned(atlas, base, fish);
+        }
 
         return eyed(atlas, base, entity);
+    }
+
+    /** How many patterns each of the two bodies carries, which is what splits the twelve of them in half. */
+    private static final int PATTERNS_PER_BODY = 6;
+
+    /** Which of the two fish bodies a pattern is drawn on: the first six on {@code a}, the second six on {@code b}. */
+    private static String body(TropicalFish.Pattern pattern) {
+        return pattern.ordinal() < PATTERNS_PER_BODY ? "a" : "b";
+    }
+
+    /**
+     * A tropical fish, which is two greyscale textures and two dyes rather than one of 3072 pictures: the body in its
+     * base color, and one of six patterns over it in its own.
+     *
+     * <p>Composited rather than drawn as a second layer, because the pattern shares the body's mesh exactly - two
+     * snapshots of the same geometry would fight for the pixel instead of stacking.
+     */
+    private static String patterned(TextureAtlas atlas, String base, TropicalFish fish) {
+        TropicalFish.Pattern pattern = fish.getPattern();
+        if (pattern == null) return base;
+
+        String over = base + "_pattern_" + (pattern.ordinal() % PATTERNS_PER_BODY + 1);
+        if (!atlas.has(over)) return base;
+
+        return atlas.dyed(List.of(
+                new TextureAtlas.Dyed(base, Tints.dye(dyeWord(fish.getBodyColor()))),
+                new TextureAtlas.Dyed(over, Tints.dye(dyeWord(fish.getPatternColor())))));
+    }
+
+    /** A dye as the word {@link Tints} names it by, or one that names nothing - which leaves the layer untinted. */
+    private static String dyeWord(DyeColor dye) {
+        return dye == null ? "" : dye.name().toLowerCase(Locale.ROOT);
     }
 
     /**

@@ -568,7 +568,11 @@ final class EntityMeshes {
                 .mob("cod", "entity/fish/cod", "animal.fish.CodModel")
                 .mob("salmon", "entity/fish/salmon", "animal.fish.SalmonModel")
                 .mob("pufferfish", "entity/fish/pufferfish", "animal.fish.PufferfishMidModel")
+                // Two shapes and two textures, which the assets name a and b: half the patterns are drawn on a small
+                // flat fish and half on a tall one. The word is the texture's own letter, so the coat rule reaches
+                // the second texture by swapping it - and the mesh follows the same word.
                 .mob("tropical_fish", "entity/fish/tropical_a", "animal.fish.TropicalFishSmallModel")
+                .variant("b", "animal.fish.TropicalFishLargeModel")
                 .mob("nautilus", "entity/nautilus/nautilus", "animal.nautilus.NautilusModel").baby("animal.nautilus.NautilusModel#createBabyBodyLayer")
                 .mob("zombie_nautilus", "entity/nautilus/zombie_nautilus", "animal.nautilus.NautilusModel")
 

@@ -4,6 +4,8 @@ import de.flog99.mapgui.Click;
 import de.flog99.mapgui.MapTransport;
 import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.WallDisplay;
+import de.flog99.mapgui.WallTile;
+import de.flog99.mapgui.camera.LiveWalls;
 import de.flog99.mapgui.WallServices;
 import de.flog99.mapgui.prompt.PromptRegistry;
 import org.bukkit.entity.Player;
@@ -12,6 +14,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.plugin.Plugin;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Input is claimed only for players standing in front of a wall with a menu on it, and the claim declines
  * any click they were not pointing at the wall for - so walking past one never costs you a door.
  */
-final class WallRegistry implements Listener {
+final class WallRegistry implements Listener, LiveWalls {
 
     private final Plugin plugin;
     private final WallServices services;
@@ -50,6 +53,23 @@ final class WallRegistry implements Listener {
         this.plugin = plugin;
         this.router = router;
         this.services = new WallServices(transport, prompts, task -> plugin.getServer().getScheduler().runTask(plugin, task));
+    }
+
+    /**
+     * Every map of every wall this player is being shown, for the camera.
+     *
+     * <p>Walked rather than indexed by block: a server has a handful of walls up at once, and a lookup table would
+     * have to be kept in step with walls opening, closing, moving and being resized.
+     */
+    @Override
+    public List<WallTile> shownTo(Player viewer) {
+        List<WallTile> shown = new ArrayList<>();
+        for (WallDisplay wall : open) {
+            if (wall.world().equals(viewer.getWorld())) {
+                shown.addAll(wall.shownTo(viewer));
+            }
+        }
+        return shown;
     }
 
     WallDisplay.Builder builder() {

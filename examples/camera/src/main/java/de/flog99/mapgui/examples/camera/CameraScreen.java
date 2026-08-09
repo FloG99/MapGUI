@@ -137,8 +137,14 @@ public final class CameraScreen extends Screen {
                 setting("Clouds", current.clouds() ? "on" : "off", () -> options.set(current.clouds(!current.clouds()))),
                 setting("Haze", current.fog() ? "on" : "off", () -> options.set(current.fog(!current.fog()))),
                 Spacer(),
-                Row(Button("Back").background(theme().accent()).radius(3).textColor(Color.WHITE)
-                        .onClick(() -> settings.set(false)).fillWidth()).fillWidth()
+                // Back and Close, because the viewfinder has no cursor and both of its clicks are the shutter and
+                // this panel - so without a button here there is nothing a player can point at to put the map down.
+                Row(
+                        Button("Back").background(theme().accent()).radius(3).textColor(Color.WHITE)
+                                .onClick(() -> settings.set(false)).fillWidth(),
+                        Button("Close").background(Colors.alpha(Color.BLACK, 120)).radius(3).textColor(Color.WHITE)
+                                .onClick(this::close).fillWidth()
+                ).gap(2).fillWidth()
         ).gap(2).padding(4).align(Align.STRETCH).fill();
     }
 

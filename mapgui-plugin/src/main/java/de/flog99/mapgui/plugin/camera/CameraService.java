@@ -6,7 +6,9 @@ import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.camera.CameraAssets;
 import de.flog99.mapgui.camera.CameraOptions;
 import de.flog99.mapgui.camera.CameraShot;
-import de.flog99.mapgui.map.SavedMapPixels;
+import de.flog99.mapgui.ServerBackend;
+import de.flog99.mapgui.camera.EntityAngles;
+import de.flog99.mapgui.camera.LiveWalls;
 import de.flog99.mapgui.render.BiomeColors;
 import de.flog99.mapgui.render.BlockItems;
 import de.flog99.mapgui.render.BlockModels;
@@ -62,6 +64,12 @@ public final class CameraService implements Camera {
 
     /** The pixels of a map somebody has hung on a wall, which are the world's rather than the assets'. */
     private final FramedMaps framedMaps;
+
+    /** The angles a capture reads straight off the server, which is the squid and nothing else. */
+    private final EntityAngles angles;
+
+    /** The walls MapGUI itself is showing, which are the one thing in front of a camera that is not in the world. */
+    private final LiveWalls walls;
 
     /**
      * Not part of {@link Baked}: this holds world, not assets, and a reload that swaps the textures has not changed
@@ -134,16 +142,21 @@ public final class CameraService implements Camera {
                          MobAssets mobs, FrameTracer tracer, String version) {
     }
 
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, SavedMapPixels saved, float defaultFov, int defaultDistance) {
-        this(plugin, assets, packs, saved, defaultFov, defaultDistance, 0);
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance) {
+        this(plugin, assets, packs, backend, walls, defaultFov, defaultDistance, 0);
     }
 
     /**
+     * @param backend           what this version of the server lets a capture read: the pixels behind a framed map,
+     *                          and the angles a squid is really swimming at. Null draws neither
+     * @param walls             the MapGUI walls a photographer can see, or null to leave them out of the picture
      * @param reuseChunksMillis how long a copied chunk may be served to a later capture, or 0 to copy every time
      */
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, SavedMapPixels saved, float defaultFov, int defaultDistance, int reuseChunksMillis) {
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance, int reuseChunksMillis) {
         this.plugin = plugin;
-        this.framedMaps = new FramedMaps(saved);
+        this.framedMaps = new FramedMaps(backend == null ? null : backend.savedMapPixels());
+        this.angles = backend == null ? null : backend.entityAngles();
+        this.walls = walls;
         this.assets = assets;
         this.packs = packs;
         this.defaultFov = defaultFov;
@@ -204,11 +217,14 @@ public final class CameraService implements Camera {
         // including them would fill the frame with the back of it.
         List<EntitySnapshot> entities = new ArrayList<>();
         if (options.entities()) {
-            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, options.selfie()));
+            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, angles, options.selfie()));
         }
         // Not under the entities option, whatever the trace calls these: a chest is part of the build, and turning
         // entities off asks for the world without the things standing in it rather than with holes in the walls.
         entities.addAll(BlockEntityCapture.take(eye, ready.mobs(), skins));
+        // Nor under it, for the same reason: a wall is part of the room, and a cinema with the screen left out is
+        // not the shot anybody asked for.
+        entities.addAll(WallCapture.take(player, eye, walls, ready.atlas()));
         long gathered = System.nanoTime();
         // Counted in the tick it happened in rather than when the shot comes back: a capture whose trace waits three
         // seconds for a thread still cost this tick, and a report that said otherwise would point at the wrong second.

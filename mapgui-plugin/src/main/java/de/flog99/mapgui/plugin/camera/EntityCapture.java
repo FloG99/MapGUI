@@ -1,5 +1,6 @@
 package de.flog99.mapgui.plugin.camera;
 
+import de.flog99.mapgui.camera.EntityAngles;
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.ItemPoses;
 import de.flog99.mapgui.render.Tints;
@@ -62,7 +63,7 @@ final class EntityCapture {
     private EntityCapture() {
     }
 
-    static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, FramedMaps maps, boolean includeSelf) {
+    static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, FramedMaps maps, EntityAngles angles, boolean includeSelf) {
         List<Entity> nearby = new ArrayList<>(viewer.getWorld().getNearbyEntities(eye, MAX_DISTANCE, MAX_DISTANCE, MAX_DISTANCE));
         nearby.sort((left, right) -> Double.compare(left.getLocation().distanceSquared(eye), right.getLocation().distanceSquared(eye)));
 
@@ -78,7 +79,7 @@ final class EntityCapture {
                 continue;
             }
 
-            snapshots.addAll(upended(entity, snapshotsOf(entity, skins, assets, maps)));
+            snapshots.addAll(upended(entity, snapshotsOf(entity, skins, assets, maps, angles)));
         }
 
         return snapshots;
@@ -117,7 +118,7 @@ final class EntityCapture {
      * The snapshots one entity is drawn from, nearly always one and empty for an entity that is not drawn at all.
      * More than one only for a mob wearing a second layer, since a snapshot samples one texture.
      */
-    private static List<EntitySnapshot> snapshotsOf(Entity entity, SkinCache skins, MobAssets assets, FramedMaps maps) {
+    private static List<EntitySnapshot> snapshotsOf(Entity entity, SkinCache skins, MobAssets assets, FramedMaps maps, EntityAngles angles) {
         Location at = entity.getLocation();
         String type = entity.getType().name().toLowerCase(Locale.ROOT);
 
@@ -140,7 +141,7 @@ final class EntityCapture {
                 }
             }
         } else {
-            List<EntitySnapshot> drawn = mobSnapshots(entity, at, type, assets, skins);
+            List<EntitySnapshot> drawn = mobSnapshots(entity, at, type, assets, skins, angles);
             if (drawn != null) return drawn;
         }
 
@@ -162,7 +163,7 @@ final class EntityCapture {
     }
 
     /** Null for a type with no authored shape, which is the caller's cue to fall back to a bounding box. */
-    private static List<EntitySnapshot> mobSnapshots(Entity entity, Location at, String type, MobAssets assets, SkinCache skins) {
+    private static List<EntitySnapshot> mobSnapshots(Entity entity, Location at, String type, MobAssets assets, SkinCache skins, EntityAngles angles) {
         String variant = MobTextures.variantOf(entity, type);
         float body = bodyYaw(entity);
         EntitySnapshot authored = EntitySnapshot.mob(
@@ -175,7 +176,7 @@ final class EntityCapture {
 
         String skin = MobTextures.skinOf(entity, type, variant, authored.texture(), isBaby(entity), assets);
         Arms arms = armsOf(entity, at);
-        EntitySnapshot bare = swimming(entity, hideUnworn(entity, authored.texture(skin)), type);
+        EntitySnapshot bare = swimming(entity, hideUnworn(entity, authored.texture(skin)), type, angles);
         EntitySnapshot dressed = arms == null ? bare : arms.on(bare);
 
         List<EntitySnapshot> drawn = new ArrayList<>();
@@ -520,28 +521,24 @@ final class EntityCapture {
         return turn;
     }
 
-    private static final Set<String> SQUIDS = Set.of("squid", "glow_squid");
-
-    /** Under a block a second a squid is drifting rather than swimming, and the client's angle is unknowable. */
-    private static final double SQUID_DRIFTING = 0.05;
-
     /** The client turns a squid about a point half a block up, which for a baby its own half scale takes care of. */
     private static final float SQUID_PIVOT = 8;
 
     /**
-     * The mobs the client tilts bodily. A squid points along whatever it is jetting along, by the client's own
-     * arithmetic on its velocity, and a fish out of water lies on its side.
+     * The mobs the client tilts bodily: a squid points along whatever it is jetting along, and a fish out of water
+     * lies on its side.
      *
-     * <p>One departure: the client keeps a slow average of that angle and nothing on the server carries it, so a
-     * squid that is barely moving is drawn upright rather than at whatever an unseen average happens to hold.
+     * <p>A squid's two angles are read off the animal rather than worked out from its velocity, because the client
+     * does not work them out either - it draws two fields the squid keeps for itself, easing each a tenth of the way
+     * toward where it is going per tick. So one that has stopped is still pointing wherever it last swam, which is
+     * something no amount of arithmetic on a velocity of nothing can recover.
+     *
+     * <p>Both angles run backwards here, as every X and Y rotation does in the space a mesh is kept in.
      */
-    private static EntitySnapshot swimming(Entity entity, EntitySnapshot mob, String type) {
-        if (SQUIDS.contains(type)) {
-            Vector speed = entity.getVelocity();
-            double across = Math.hypot(speed.getX(), speed.getZ());
-            if (across + Math.abs(speed.getY()) < SQUID_DRIFTING) return mob;
-
-            return mob.tilted((float) Math.atan2(across, speed.getY()), 0, SQUID_PIVOT);
+    private static EntitySnapshot swimming(Entity entity, EntitySnapshot mob, String type, EntityAngles angles) {
+        float[] swim = angles == null ? null : angles.swimming(entity);
+        if (swim != null) {
+            return mob.tilted((float) Math.toRadians(-swim[0]), (float) Math.toRadians(-swim[1]), SQUID_PIVOT);
         }
 
         if (entity instanceof Fish && !entity.isInWater()) {

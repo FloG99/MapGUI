@@ -43,6 +43,16 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **A capture shows what MapGUI's own walls are playing.** A wall is the one thing in front of a camera that is not
+  in the world - its maps and the frames holding them are sent to each viewer's client and nothing is placed - so a
+  photograph of a cinema used to come back with bare stone where the screen is. The camera now asks the walls what
+  they are showing *this photographer*, which is the same picture for everybody on a shared wall and each person's
+  own on a per-player one, and hangs it on the face of the block it is mounted to. A wall nobody is watching from
+  over here has been sent nothing and photographs nothing.
+- **A squid is drawn pointing where it is really swimming.** Its renderer does not use the yaw and pitch every other
+  mob is turned by - it reads two fields the squid keeps for itself and eases a tenth of the way toward its heading
+  each tick - so a squid that has stopped is still pointing wherever it last went. Those are read off the animal now
+  rather than guessed from its velocity, which could say nothing at all about one that is drifting.
 - **The layers a mob's renderer draws over its skin are drawn.** A stray's frost, a bogged's moss and a drowned's
   outer skin are not part of those mobs' meshes at all - each is a second copy of the body, grown by a fraction of a
   pixel, over a texture of its own. Without them the three of them stood there as a plain skeleton and a plain zombie
