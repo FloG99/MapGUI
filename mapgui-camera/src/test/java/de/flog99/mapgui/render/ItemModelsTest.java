@@ -32,7 +32,8 @@ class ItemModelsTest {
     }
 
     private EntitySnapshot sprite(float facing) {
-        return new EntitySnapshot(0.5, 0, 0.5, facing, facing, 0, 1f, EntityModel.itemSprite(), "item/diamond");
+        EntityModel model = EntityModel.heldSprite(TestWorld.halfClear(SPRITE)).onGround(0.5f);
+        return new EntitySnapshot(0.5, 0, 0.5, facing, facing, 0, 1f, model, "item/diamond");
     }
 
     private EntitySnapshot cube() {
@@ -149,8 +150,10 @@ class ItemModelsTest {
 
     /** The one layer a dropped sprite or a probed block cube comes to, or null when nothing resolved. */
     private EntitySnapshot resolve(String item, TextureAtlas atlas) {
-        BlockItems blocks = new BlockItems(new BlockModels(stack, atlas), new ItemDefinitions(stack, new BiomeColors(stack, atlas)));
-        List<EntitySnapshot> layers = new ItemModels(atlas, blocks).dropped(item, 0.5, 0, 0.5, 0);
+        BlockModels models = new BlockModels(stack, atlas);
+        ItemDefinitions definitions = new ItemDefinitions(stack, new BiomeColors(stack, atlas));
+        ItemModels items = new ItemModels(atlas, new BlockItems(models, definitions), models, new ItemPoses(stack, definitions));
+        List<EntitySnapshot> layers = items.dropped(item, 0.5, 0, 0.5, 0);
         return layers.isEmpty() ? null : layers.getFirst();
     }
 

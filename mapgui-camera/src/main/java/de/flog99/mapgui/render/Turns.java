@@ -40,6 +40,20 @@ final class Turns {
         return new float[]{cos, -sin, 0, sin, cos, 0, 0, 0, 1};
     }
 
+    /**
+     * A quaternion as a rotation matrix, in the order the assets write one: {@code x, y, z, w}.
+     *
+     * <p>Which is how an item definition states the turn it puts a shape the client draws in code through - the
+     * {@code left_rotation} and {@code right_rotation} either side of its scale.
+     */
+    static float[] quaternion(float x, float y, float z, float w) {
+        return new float[]{
+                1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
+                2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
+                2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)
+        };
+    }
+
     static float[] times(float[] left, float[] right) {
         float[] out = new float[9];
         for (int row = 0; row < 3; row++) {

@@ -27,7 +27,7 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
     private static final float HAT_GROW = 0.5f;
     private static final float OVERLAY_GROW = 0.25f;
 
-    /** The vanilla item quad is a pixel thick, and a ground item is drawn at half scale. */
+    /** Half of the pixel the vanilla item quad is thick, since the extrusion is measured either side of the middle. */
     private static final float SPRITE_THICKNESS = 0.5f;
 
     /** The box every model is authored in, item and block alike, in the sixteenths it states its own coordinates in. */
@@ -40,9 +40,7 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
      */
     private static final float MODEL_MIDDLE = MODEL_BOX / 2;
 
-    /** What the {@code ground} transform scales an item and a block to: half the model box, and a quarter of it. */
-    private static final float DROPPED_SPRITE = 8;
-
+    /** What the {@code ground} transform scales a block to, which is a quarter of the model box. */
     private static final float DROPPED_BLOCK = 4;
 
     /** Where a player's head turns from: the top of the torso, with nothing in front of it. */
@@ -177,9 +175,17 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
      * @param pivotY in entity pixels off the feet
      */
     EntityModel tilted(float xRot, float zRot, float pivotY) {
-        if (xRot == 0 && zRot == 0) return this;
+        return tilted(xRot, 0, zRot, pivotY);
+    }
 
-        return of(List.of(new MeshPart("tilt", false, 0, pivotY, 0, xRot, 0, zRot, 1, 1, 1,
+    /**
+     * The same with a turn about the vertical as well, which is what a block entity lying on one of the six faces of
+     * its block needs - a shulker box on a wall is a quarter circle over on its side and then round to face out of it.
+     */
+    EntityModel tilted(float xRot, float yRot, float zRot, float pivotY) {
+        if (xRot == 0 && yRot == 0 && zRot == 0) return this;
+
+        return of(List.of(new MeshPart("tilt", false, 0, pivotY, 0, xRot, yRot, zRot, 1, 1, 1,
                 List.of(), moved(0, -pivotY, 0))), culled);
     }
 
@@ -340,25 +346,12 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
     }
 
     /**
-     * A dropped item: the item's sprite as one flat quad, half a block across, resting on the ground - the size the
-     * client's {@code ground} transform states. The bob is left out, since a capture is one instant and its phase is
-     * not something the server hands over, so the item is drawn where it averages out.
+     * The picture at the size and place the item model states, extruded along its own outline.
      *
-     * <p>Which way the quad faces is the caller's business: its front is local -Z like every other model here.
-     */
-    static EntityModel itemSprite() {
-        return of(List.of(MeshPart.of("item", List.of(MeshCube.sprite(
-                -DROPPED_SPRITE / 2, 0, -SPRITE_THICKNESS / 2, DROPPED_SPRITE, DROPPED_SPRITE, SPRITE_THICKNESS)))), true);
-    }
-
-    /**
-     * The same picture at the size and place the item model states, extruded along its own outline, for an item in a
-     * hand. Full size rather than the dropped one, since a held item is scaled by its {@code thirdperson} transform
-     * and starting from the halved shape would apply both.
-     *
-     * <p>Built from the icon rather than from its frame - see {@link SpriteShape} - because a held item is seen edge
-     * on often enough that where its one pixel of thickness sits is something anybody notices. A dropped one is
-     * turned to face whoever is looking, so it never is, and stays the single quad it was.
+     * <p>Built from the icon rather than from its frame - see {@link SpriteShape} - because an item is seen edge on
+     * often enough that where its one pixel of thickness sits is something anybody notices. Full size, since a held
+     * item is scaled by its {@code thirdperson} transform and a dropped one by {@link #onGround}, and starting from a
+     * halved shape would apply both.
      */
     static EntityModel heldSprite(Texture icon) {
         return of(List.of(MeshPart.of("item",
@@ -398,6 +391,29 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
     }
 
     /**
+     * This block model riding in a minecart, at the place the cart's own renderer puts it.
+     *
+     * <p>Vanilla's three steps in one part: three quarters of its size, turned a quarter circle about Y, and lifted by
+     * the offset the cart states on top of the 0.375 blocks the cart itself stands at. The quarter turn is the client's
+     * own and runs backwards here for the same reason a boat's does, plus a half circle for the one a block model
+     * already carries - see {@link BlockItems} - which comes to a quarter the other way.
+     *
+     * @param offset how far up the block sits inside the cart, in entity pixels. Six for nearly every cart, and the
+     *               reason a tnt charge stands proud of the rim
+     */
+    EntityModel inCart(float offset) {
+        if (parts.isEmpty()) return this;
+
+        return of(List.of(new MeshPart("display", false, 0, CART_HEIGHT + CART_SCALE * offset, 0,
+                0, (float) -Math.PI / 2, 0, CART_SCALE, CART_SCALE, CART_SCALE, List.of(), centred())), culled);
+    }
+
+    /** What a minecart's renderer shrinks the block it carries to, and how far off the ground the cart itself sits. */
+    private static final float CART_SCALE = 0.75f;
+
+    private static final float CART_HEIGHT = 0.375f * 16;
+
+    /**
      * This shape as one part hung off a joint of another model: at the joint the pose is measured from, turned with
      * it, and centred on the box it was authored in - which is the client's convention, since every {@code display}
      * rotation in the assets turns the item about that middle rather than about a corner.
@@ -420,6 +436,45 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
                 turned[0], turned[1], turned[2],
                 pose.scale(), pose.scale(), pose.scale(),
                 List.of(), centred())), culled);
+    }
+
+    /**
+     * This mesh standing in the middle of an item model's box, so that everything drawn from an item model can carry
+     * it.
+     *
+     * <p>A mesh is built about its own middle and an item model is measured from a corner, which is the whole of the
+     * difference - and it is the client's own translation too: {@code items/player_head.json} states a transformation
+     * of half a block on both horizontal axes and nothing else.
+     */
+    EntityModel inItemBox() {
+        return of(moved(MODEL_MIDDLE, 0, MODEL_MIDDLE), culled);
+    }
+
+    /**
+     * This mesh placed inside an item's box the way that item's definition says.
+     *
+     * <p>For the shapes the client draws in code, whose definition carries a translation, a scale and a pair of
+     * quaternions rather than any geometry - see {@link ItemDefinitions.Special}. Applied to the mesh as the client
+     * built it, since that is the space the transform is stated against, and not centred on anything: where in the box
+     * it goes is the whole of what the translation is saying.
+     */
+    EntityModel placedBy(ItemDefinitions.Special special) {
+        if (parts.isEmpty()) return this;
+
+        float[] angles = Turns.angles(special.turn());
+        float[] offset = special.offset();
+        return of(List.of(new MeshPart("special", false, offset[0], offset[1], offset[2],
+                angles[0], angles[1], angles[2],
+                special.scale(), special.scale(), special.scale(), List.of(), parts)), culled);
+    }
+
+    /**
+     * The same shape turned a half circle about the middle of its model box, which is the whole difference between
+     * the frame a mesh is built in and the frame a block model is - see {@link BlockItems}.
+     */
+    EntityModel halfTurned() {
+        return of(List.of(new MeshPart("turned", false, MODEL_MIDDLE, MODEL_MIDDLE, MODEL_MIDDLE,
+                0, (float) Math.PI, 0, 1, 1, 1, List.of(), centred())), culled);
     }
 
     /** These parts shifted so the middle of the model box is the origin, which is what both transforms turn about. */

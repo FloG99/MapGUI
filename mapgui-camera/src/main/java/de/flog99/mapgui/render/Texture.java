@@ -18,40 +18,17 @@ public record Texture(int width, int height, int[] argb, BakedState.Alpha alpha,
     }
 
     /**
-     * Samples at model coordinates - sixteenths of a block, as the json states them - with the face rotation
-     * applied.
+     * Samples at model coordinates - sixteenths of a block, as the json states them.
      *
      * <p>Wrapped rather than clamped, because several vanilla models state uv outside 0 to 16 and rely on it
      * repeating.
-     */
-    int sample(float u, float v, int rotation) {
-        int x = Math.floorMod((int) (turnedU(u, v, rotation) * width / 16f), width);
-        int y = Math.floorMod((int) (turnedV(u, v, rotation) * height / 16f), height);
-        return argb[y * width + x];
-    }
-
-    /**
-     * Where a face's own {@code rotation} sends a stated coordinate: the texture turns and the face does not.
      *
-     * <p>Two scalars rather than a pair, so that {@link #sample} can apply it without allocating - it runs once per
-     * ray per face. Public to the package because an entity face carries corner UVs and no rotation to pass on, so
-     * whatever bakes one has to apply this itself, and a second copy of it is a second copy that can disagree.
+     * <p>A face's own {@code rotation} does not appear here: it turns which corner of the stated rect lands on which
+     * corner of the face, which {@link BlockModels} bakes into the rect itself.
      */
-    static float turnedU(float u, float v, int rotation) {
-        return switch (rotation) {
-            case 90 -> v;
-            case 180 -> 16 - u;
-            case 270 -> 16 - v;
-            default -> u;
-        };
-    }
-
-    static float turnedV(float u, float v, int rotation) {
-        return switch (rotation) {
-            case 90 -> 16 - u;
-            case 180 -> 16 - v;
-            case 270 -> u;
-            default -> v;
-        };
+    int sample(float u, float v) {
+        int x = Math.floorMod((int) (u * width / 16f), width);
+        int y = Math.floorMod((int) (v * height / 16f), height);
+        return argb[y * width + x];
     }
 }

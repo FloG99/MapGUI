@@ -415,7 +415,7 @@ public final class Sky {
         // puts its texture origin at the opposite corner from the one this arrives at.
         double u = (1 - across / radius) / 2;
         double v = (1 - down / radius) / 2;
-        int texel = art.sample((float) (u * 16), (float) (v * 16), 0);
+        int texel = art.sample((float) (u * 16), (float) (v * 16));
         int alpha = texel >>> 24;
         if (alpha < 8) return color;
 
@@ -455,7 +455,7 @@ public final class Sky {
 
         float u = (float) (Math.floorMod((long) (atX / CLOUD_SCALE), 256L) / 256.0 * 16);
         float v = (float) (Math.floorMod((long) (atZ / CLOUD_SCALE), 256L) / 256.0 * 16);
-        int texel = cloudSheet.sample(u, v, 0);
+        int texel = cloudSheet.sample(u, v);
         int alpha = texel >>> 24;
         if (alpha < 8) return color;
 

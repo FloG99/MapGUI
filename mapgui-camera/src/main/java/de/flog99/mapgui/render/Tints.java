@@ -60,6 +60,35 @@ public final class Tints {
     }
 
     /**
+     * A dye's own texture color, or 0 for a name that is not one - what a banner's cloth is multiplied by.
+     *
+     * <p>The client's {@code DyeColor} table, unaltered. {@link #wool} is this same table with each channel taken to
+     * three quarters and floored, which is what a sheep gets and a banner does not: dyed at the fleece's colors a
+     * banner comes out a quarter dark, and white worst of all, since that one is not even a multiple.
+     */
+    public static int dye(String name) {
+        return switch (name) {
+            case "white" -> 0xFFF9FFFE;
+            case "orange" -> 0xFFF9801D;
+            case "magenta" -> 0xFFC74EBD;
+            case "light_blue" -> 0xFF3AB3DA;
+            case "yellow" -> 0xFFFED83D;
+            case "lime" -> 0xFF80C71F;
+            case "pink" -> 0xFFF38BAA;
+            case "gray" -> 0xFF474F52;
+            case "light_gray" -> 0xFF9D9D97;
+            case "cyan" -> 0xFF169C9C;
+            case "purple" -> 0xFF8932B8;
+            case "blue" -> 0xFF3C44AA;
+            case "brown" -> 0xFF835432;
+            case "green" -> 0xFF5E7C16;
+            case "red" -> 0xFFB02E26;
+            case "black" -> 0xFF1D1D21;
+            default -> 0;
+        };
+    }
+
+    /**
      * What a sheep's fleece is multiplied by for a dye, or 0 for a name that is not one.
      *
      * <p>Here because there is one wool texture in the assets and it is white: vanilla colors the fleece per animal

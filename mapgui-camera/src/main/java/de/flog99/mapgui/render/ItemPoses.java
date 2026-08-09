@@ -80,6 +80,35 @@ public final class ItemPoses {
         return poses.computeIfAbsent(rightArm ? item : item + " (left)", key -> read(item, rightArm));
     }
 
+    /** Where a dropped pose is stated, which is the one other transform a capture can see. */
+    private static final String ON_GROUND = "ground";
+
+    /**
+     * What the {@code ground} transform shrinks this item to, for one lying on the floor.
+     *
+     * <p>Read rather than assumed. The two obvious answers - half for an icon, a quarter for a block - are what
+     * {@code item/generated} and {@code block/block} state, so they are right for nearly everything by inheritance
+     * and wrong for whatever states its own. Heavy core is one: a block that says a half, which drawn at the quarter
+     * its parent says lies on the floor at half the size the client draws it.
+     *
+     * @param fallback for an item whose chain states nothing at all, which no vanilla item does and a pack's own
+     *                 model may. The caller knows which shape it is about to draw and so which default is nearer
+     */
+    public float groundScale(String item, float fallback) {
+        float stated = grounds.computeIfAbsent(item, this::readGroundScale);
+        return Float.isNaN(stated) ? fallback : stated;
+    }
+
+    /** NaN for a model whose chain states no ground transform, which is how {@link #groundScale} knows to fall back. */
+    private float readGroundScale(String item) {
+        JsonObject display = displayOf(definitions.of(item).model(), 0);
+        if (display == null || !display.has(ON_GROUND)) return Float.NaN;
+
+        return numbers(display.getAsJsonObject(ON_GROUND), "scale", Float.NaN)[0];
+    }
+
+    private final Map<String, Float> grounds = new ConcurrentHashMap<>();
+
     private Pose read(String item, boolean rightArm) {
         JsonObject display = displayOf(definitions.of(item).model(), 0);
         if (display == null) {

@@ -20,7 +20,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class TextureAtlasTest {
 
@@ -133,7 +132,7 @@ class TextureAtlasTest {
 
         assertEquals(16, texture.width());
         assertEquals(16, texture.height());
-        assertEquals(0xFF0000FF, texture.sample(8, 8, 0), "the first frame is the blue one");
+        assertEquals(0xFF0000FF, texture.sample(8, 8), "the first frame is the blue one");
     }
 
     /** Only when a mcmeta says so - a pack is free to ship a texture that is simply not square. */
@@ -171,9 +170,9 @@ class TextureAtlasTest {
 
         Texture texture = atlas().get("block/ramp");
 
-        assertEquals(0, texture.sample(0, 0, 0) >> 16 & 0xFF);
-        assertEquals(8, texture.sample(8, 0, 0) >> 16 & 0xFF);
-        assertEquals(15, texture.sample(15.5f, 0, 0) >> 16 & 0xFF);
+        assertEquals(0, texture.sample(0, 0) >> 16 & 0xFF);
+        assertEquals(8, texture.sample(8, 0) >> 16 & 0xFF);
+        assertEquals(15, texture.sample(15.5f, 0) >> 16 & 0xFF);
     }
 
     /** Several vanilla models state uv outside 0 to 16 and rely on it repeating. */
@@ -183,27 +182,8 @@ class TextureAtlasTest {
 
         Texture texture = atlas().get("block/ramp");
 
-        assertEquals(texture.sample(3, 0, 0), texture.sample(19, 0, 0));
-        assertEquals(texture.sample(3, 0, 0), texture.sample(-13, 0, 0));
-    }
-
-    @Test
-    void faceRotationTurnsTheTextureWithoutMovingTheFace() throws IOException {
-        // Distinct in both axes, so a rotation that mixes them up is visible.
-        png("block/corner", 16, 16, (x, y) -> 0xFF000000 | x << 16 | y << 8);
-
-        Texture texture = atlas().get("block/corner");
-
-        int unrotated = texture.sample(2, 4, 0);
-        assertEquals(2, unrotated >> 16 & 0xFF);
-        assertEquals(4, unrotated >> 8 & 0xFF);
-
-        // 90 degrees puts what was at v into u.
-        int turned = texture.sample(2, 4, 90);
-        assertEquals(4, turned >> 16 & 0xFF);
-        assertNotEquals(unrotated, turned);
-
-        assertEquals(texture.sample(2, 4, 0), texture.sample(2, 4, 360 % 360));
+        assertEquals(texture.sample(3, 0), texture.sample(19, 0));
+        assertEquals(texture.sample(3, 0), texture.sample(-13, 0));
     }
 
     /**

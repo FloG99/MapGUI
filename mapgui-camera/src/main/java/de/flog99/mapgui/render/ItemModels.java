@@ -1,5 +1,6 @@
 package de.flog99.mapgui.render;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -7,18 +8,21 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * What an item is drawn as, dropped on the ground or held in a hand.
  *
- * <p>The item's own definition decides, the way it does in the client: it names a model, and a model under
- * {@code block/} is drawn as that block rather than as a picture, since a cube of one texture has bark on its end
- * grain wherever it is lying. Only once nothing states a block model is the sprite at {@code textures/item/<id>.png}
- * probed - 588 of the 1537 items in 26.2 are one, and probing also answers for a pack's items and for anything added
- * since.
+ * <p>The item's own definition decides, the way it does in the client: it names a model, and a model with geometry in
+ * it is drawn as that shape rather than as a picture, since a cube of one texture has bark on its end grain wherever
+ * it is lying. Only once nothing states a shape is the model's {@code layer0} read, which is where an icon is named -
+ * 588 of the 1537 items in 26.2 are one.
  *
  * <p>Asking in that order rather than the other way round is what keeps a pack honest: adding an item texture for a
  * block does not make the client draw a sprite, because the definition still points at the block model.
  *
- * <p>What differs between dropped and held is the picture half, because of how each is seen: a held sprite is looked
- * at from wherever its holder stands, so it is extruded along its own outline the way the client extrudes it (see
- * {@link SpriteShape}), while a dropped one is turned to face the viewer and stays a single flat quad.
+ * <p>Both dropped and held are extruded along the icon's own outline the way the client extrudes them (see
+ * {@link SpriteShape}), and differ only in size: a dropped one is shrunk by whatever its own model's {@code ground}
+ * transform states.
+ *
+ * <p>Ahead of all of it are the shapes the client draws in code - a chest, a head, a shield, a banner - whose
+ * definition names no model to read. Those come from the same mesh the block entity is drawn from, placed inside the
+ * item's box by the transform the definition itself states.
  *
  * <p>An instance rather than a static so the extrusions can be cached, tied to the atlas a reload last loaded.
  */
@@ -34,18 +38,32 @@ public final class ItemModels {
      */
     private static final List<String> BLOCK_SUFFIXES = List.of("", "_side", "_top");
 
-    /** What the client's {@code ground} transform shrinks a block to, which is a quarter of one. */
+    /** What the client's {@code ground} transform shrinks a block to and an icon to, where a model states neither. */
     private static final float GROUND_BLOCK = 0.25f;
+
+    private static final float GROUND_SPRITE = 0.5f;
 
     private final TextureAtlas atlas;
     private final BlockItems blocks;
+    private final BlockModels models;
+
+    /** For the one thing a dropped item needs out of a model's {@code display} block, which is how far it shrinks. */
+    private final ItemPoses poses;
 
     /** Keyed by texture name, since that is what the shape is built from and what a resource pack changes. */
     private final Map<String, EntityModel> extruded = new ConcurrentHashMap<>();
 
-    public ItemModels(TextureAtlas atlas, BlockItems blocks) {
+    /** The same extrusion at the size the ground transform states, since a dropped item is looked up every capture. */
+    private final Map<String, EntityModel> grounded = new ConcurrentHashMap<>();
+
+    /** And one of each shape the client draws in code, since placing a mesh in an item box copies its whole tree. */
+    private final Map<String, EntityModel> specials = new ConcurrentHashMap<>();
+
+    public ItemModels(TextureAtlas atlas, BlockItems blocks, BlockModels models, ItemPoses poses) {
         this.atlas = atlas;
         this.blocks = blocks;
+        this.models = models;
+        this.poses = poses;
     }
 
     /**
@@ -54,21 +72,34 @@ public final class ItemModels {
      * difference between a log and a cube of bark for a few pixels.
      *
      * @param item   the item id, unqualified and lowercase: {@code diamond_sword}, {@code oak_log}
-     * @param facing where the sprite should look, in Bukkit's yaw convention - a flat quad is only a picture from the
-     *               front, so this wants to be the direction of whoever is watching
+     * @param facing where the sprite should look, in Bukkit's yaw convention - an icon is a pixel thick and only a
+     *               picture from the front, so this wants to be the direction of whoever is watching
      */
     public List<EntitySnapshot> dropped(String item, double x, double y, double z, float facing) {
+        List<EntitySnapshot> drawn = special(item);
+        if (!drawn.isEmpty()) {
+            float shrunk = poses.groundScale(item, GROUND_BLOCK);
+            return drawn.stream()
+                    .map(layer -> new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
+                            layer.model().onGround(shrunk), layer.texture(), layer.tint()))
+                    .toList();
+        }
+
+        // Shrunk by what the item's own model states rather than by one number per kind of shape: heavy core is a
+        // block that says a half where the block model it inherits from says a quarter, and drawn at the inherited
+        // one it lies on the floor at half the size the client draws it.
         List<EntitySnapshot> model = blocks.layers(item, atlas);
         if (!model.isEmpty()) {
+            float shrink = poses.groundScale(item, GROUND_BLOCK);
             return model.stream()
                     .map(layer -> new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
-                            layer.model().onGround(GROUND_BLOCK), layer.texture(), layer.tint()))
+                            layer.model().onGround(shrink), layer.texture(), layer.tint()))
                     .toList();
         }
 
         String sprite = spriteOf(item);
-        if (atlas.has(sprite)) {
-            return List.of(snapshot(x, y, z, facing, EntityModel.itemSprite(), sprite));
+        if (sprite != null) {
+            return List.of(snapshot(x, y, z, facing, grounded(sprite, poses.groundScale(item, GROUND_SPRITE)), sprite));
         }
 
         String texture = blockTexture(item);
@@ -80,16 +111,132 @@ public final class ItemModels {
      * because a block model states up to seven and a snapshot samples one. Empty when nothing resolved.
      */
     public List<EntitySnapshot> held(String item) {
+        List<EntitySnapshot> drawn = special(item);
+        if (!drawn.isEmpty()) return drawn;
+
         List<EntitySnapshot> model = blocks.layers(item, atlas);
         if (!model.isEmpty()) return model;
 
         String sprite = spriteOf(item);
-        if (atlas.has(sprite)) {
+        if (sprite != null) {
             return List.of(snapshot(0, 0, 0, 0, extruded(sprite), sprite));
         }
 
         String texture = blockTexture(item);
         return texture == null ? List.of() : List.of(snapshot(0, 0, 0, 0, EntityModel.heldBlock(), texture));
+    }
+
+    /**
+     * One block state as something else is carrying it, which is what a minecart displays.
+     *
+     * <p>The block's own model rather than its item's, the way the client resolves one, and the block entity mesh for
+     * the blocks the client keeps a built-in model for - a chest has no geometry in its json at all, and a chest
+     * minecart with no chest in it is a minecart.
+     *
+     * @param state {@code BlockData#getAsString()}
+     * @param id    the block id, unqualified, for the built-in lookup
+     */
+    public List<EntitySnapshot> displayed(String state, String id) {
+        EntitySnapshot built = builtIn(id);
+        if (built != null) return List.of(built);
+
+        return blocks.stateLayers(state, atlas);
+    }
+
+    /**
+     * The block entities the client draws from a built-in model rather than from json, as the mesh and texture each
+     * wears. Only the ones something can carry are here - a banner needs data no capture carries anyway.
+     */
+    private static final Map<String, String> BUILT_IN = Map.of("chest", "entity/chest/normal");
+
+    /** One built-in block entity in the block's own box, or null for the great majority that have json geometry. */
+    private EntitySnapshot builtIn(String id) {
+        String texture = BUILT_IN.get(AssetStack.pathOf(id));
+        if (texture == null) return null;
+
+        EntityMeshes.Mob mesh = EntityMeshes.of(AssetStack.pathOf(id), null, false);
+        if (mesh == null) return null;
+
+        // Half turned, since a mesh faces the other way to a block model and everything downstream of here expects
+        // what a block model produces - see BlockItems.
+        return snapshot(0, 0, 0, 0,
+                specials.computeIfAbsent("built-in/" + id, key -> mesh.model().inItemBox().halfTurned()), texture);
+    }
+
+    /**
+     * Which mesh each shape the client draws in code is drawn from, by the name the definition calls it.
+     *
+     * <p>The names are vanilla's own {@code SpecialModelRenderers} ids. A head is the odd one: the renderer is the
+     * same for all seven and which head it is comes from the item rather than from the definition, so that one is
+     * looked up by the item's own name.
+     *
+     * <p>Missing on purpose: a decorated pot, whose mesh {@link EntityMeshes} cannot bake, and a book and an end
+     * cube, which nothing carries.
+     */
+    private static final Map<String, List<String>> SPECIAL_MESHES = Map.of(
+            "chest", List.of("chest"),
+            "shulker_box", List.of("shulker_box"),
+            "conduit", List.of("conduit"),
+            "shield", List.of("shield"),
+            "trident", List.of("trident"),
+            // A banner is two: the pole and crossbar it hangs from, and the cloth, which is the only part the dye
+            // colors and the only part a pattern is drawn on.
+            "banner", List.of("banner", "banner_flag")
+    );
+
+    /** The meshes a dye colors rather than a texture, which is the cloth of a banner and nothing else so far. */
+    private static final String DYED = "_flag";
+
+    /**
+     * One shape the client draws in code, placed inside the item's own box the way its definition says, or null for
+     * every item that is not one.
+     *
+     * <p>Read rather than tabulated. Each of these states a translation, a scale and a pair of quaternions, and it is
+     * exactly the placing that differs between them: a shulker box stands a block and a half up, a banner is two
+     * thirds size, a chest states nothing at all and sits in the box as it comes.
+     *
+     * <p>The texture is what the definition names where it names one and the mesh's own otherwise, which for a player
+     * head is only the default - whose face it wears is the stack's business, and the caller swaps it in with
+     * {@link EntitySnapshot#texture}.
+     */
+    private List<EntitySnapshot> special(String item) {
+        ItemDefinitions.Special drawn = blocks.specialOf(item);
+        if (drawn == null) return List.of();
+
+        List<String> types = drawn.type().endsWith("head")
+                ? List.of(AssetStack.pathOf(item))
+                : SPECIAL_MESHES.getOrDefault(drawn.type(), List.of());
+
+        List<EntitySnapshot> layers = new ArrayList<>(types.size());
+        for (String type : types) {
+            EntityMeshes.Mob mesh = EntityMeshes.of(type, null, false);
+            EntityModel built = EntityMeshes.asBuilt(type);
+            if (mesh == null || built == null) continue;
+
+            EntitySnapshot layer = snapshot(0, 0, 0, 0,
+                    specials.computeIfAbsent(type, key -> built.placedBy(drawn)),
+                    textureOf(drawn, mesh.texture()));
+
+            int dye = type.endsWith(DYED) && drawn.color() != null ? Tints.dye(drawn.color()) : 0;
+            layers.add(dye == 0 ? layer : layer.tint(dye));
+        }
+        return List.copyOf(layers);
+    }
+
+    /**
+     * Which texture a special wears: the one its definition names, resolved against the folder the mesh's own texture
+     * sits in, and the mesh's own where it names none.
+     *
+     * <p>{@code "texture": "minecraft:normal"} on a chest is {@code entity/chest/normal}, and the same word means
+     * nothing on its own - so the folder comes from the mesh rather than from a second table.
+     */
+    private String textureOf(ItemDefinitions.Special drawn, String authored) {
+        String named = drawn.texture();
+        if (named == null) return authored;
+
+        int slash = authored.lastIndexOf('/');
+        String beside = slash < 0 ? named : authored.substring(0, slash + 1) + named;
+        return atlas.has(beside) ? beside : authored;
     }
 
     /**
@@ -105,14 +252,29 @@ public final class ItemModels {
         return null;
     }
 
-    /** An item's own icon, under the namespace that named the item rather than always under vanilla's. */
-    private static String spriteOf(String item) {
-        return AssetStack.beside(item, "item/" + AssetStack.pathOf(item));
+    /**
+     * The icon this item draws, or null when nothing resolves.
+     *
+     * <p>The model's own {@code layer0} first, which is the only place the connection is written down: dead coral is
+     * drawn from {@code block/dead_tube_coral} and has no icon of its own at all. Only then the icon named after the
+     * item, for a pack's item that ships a png and no model.
+     */
+    private String spriteOf(String item) {
+        String stated = models.sprite(blocks.modelOf(item));
+        if (stated != null && atlas.has(stated)) return stated;
+
+        String named = AssetStack.beside(item, "item/" + AssetStack.pathOf(item));
+        return atlas.has(named) ? named : null;
     }
 
     /** One icon's extrusion, built once. Reading the pixels is cheap; doing it per held item per capture is waste. */
     private EntityModel extruded(String texture) {
         return extruded.computeIfAbsent(texture, name -> EntityModel.heldSprite(atlas.get(name)));
+    }
+
+    /** The same shape resting on the ground at whatever the {@code ground} transform shrinks it to. */
+    private EntityModel grounded(String texture, float shrink) {
+        return grounded.computeIfAbsent(texture + " " + shrink, key -> extruded(texture).onGround(shrink));
     }
 
     /** Head yaw and pitch are the body's, since neither shape has a head to turn. */

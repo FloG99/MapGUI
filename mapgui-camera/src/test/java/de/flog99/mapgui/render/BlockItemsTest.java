@@ -48,6 +48,10 @@ class BlockItemsTest {
         files.put(AssetStack.BLOCK_MODELS + name + ".json", json);
     }
 
+    private void itemModel(String name, String json) {
+        files.put(AssetStack.ITEM_MODELS + name + ".json", json);
+    }
+
     private void texture(String name) {
         files.put("assets/minecraft/textures/" + name + ".png", name);
     }
@@ -68,8 +72,8 @@ class BlockItemsTest {
 
         TextureAtlas atlas = new TextureAtlas(stack);
         BlockModels models = new BlockModels(stack, texture -> BakedState.Alpha.OPAQUE);
-        BlockItems blocks = new BlockItems(models, new ItemDefinitions(stack, new BiomeColors(stack, atlas)));
-        return new ItemModels(atlas, blocks);
+        ItemDefinitions definitions = new ItemDefinitions(stack, new BiomeColors(stack, atlas));
+        return new ItemModels(atlas, new BlockItems(models, definitions), models, new ItemPoses(stack, definitions));
     }
 
     private static EntitySnapshot layerOf(List<EntitySnapshot> layers, String texture) {
@@ -141,10 +145,13 @@ class BlockItemsTest {
     void aBlocksSidesLandOnTheMeshSidesTheHalfTurnPutsThem() throws IOException {
         blockItem("thing", "thing");
         model("thing", """
-                {"elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
-                    "down": {"texture": "block/floor"}, "up": {"texture": "block/roof"},
-                    "north": {"texture": "block/front"}, "south": {"texture": "block/back"},
-                    "west": {"texture": "block/left"}, "east": {"texture": "block/right"}
+                {"textures": {
+                    "floor": "block/floor", "roof": "block/roof", "front": "block/front",
+                    "back": "block/back", "left": "block/left", "right": "block/right"
+                }, "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+                    "down": {"texture": "#floor"}, "up": {"texture": "#roof"},
+                    "north": {"texture": "#front"}, "south": {"texture": "#back"},
+                    "west": {"texture": "#left"}, "east": {"texture": "#right"}
                 }}]}
                 """);
         for (String name : List.of("floor", "roof", "front", "back", "left", "right")) {
@@ -174,8 +181,8 @@ class BlockItemsTest {
     void aBlocksFaceIsSampledLikeASpritesPicture() throws IOException {
         blockItem("plain", "plain");
         model("plain", """
-                {"elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
-                    "south": {"texture": "block/plain"}
+                {"textures": {"all": "block/plain"}, "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+                    "south": {"texture": "#all"}
                 }}]}
                 """);
         texture("block/plain");
@@ -205,9 +212,9 @@ class BlockItemsTest {
     void aTurnedElementLandsWhereTheClientTurnsItTo() throws IOException {
         blockItem("crossed", "crossed");
         model("crossed", """
-                {"elements": [{"from": [0, 0, 8], "to": [16, 16, 8], "rotation":
+                {"textures": {"cross": "block/leaf"}, "elements": [{"from": [0, 0, 8], "to": [16, 16, 8], "rotation":
                     {"origin": [8, 8, 8], "axis": "y", "angle": 45, "rescale": true},
-                    "faces": {"north": {"texture": "block/leaf"}}
+                    "faces": {"north": {"texture": "#cross"}}
                 }]}
                 """);
         texture("block/leaf");
@@ -244,8 +251,9 @@ class BlockItemsTest {
                     "tints": [{"type": "minecraft:constant", "value": 4764952}]}}
                 """);
         model("leafy", """
-                {"elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
-                    "up": {"texture": "block/leaf", "tintindex": 0}, "down": {"texture": "block/stem"}
+                {"textures": {"leaf": "block/leaf", "stem": "block/stem"},
+                 "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+                    "up": {"texture": "#leaf", "tintindex": 0}, "down": {"texture": "#stem"}
                 }}]}
                 """);
         texture("block/leaf");
@@ -262,8 +270,8 @@ class BlockItemsTest {
     void aFaceTheDefinitionStatesNoColorForIsDrawnAsItIs() throws IOException {
         blockItem("grey", "grey");
         model("grey", """
-                {"elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
-                    "up": {"texture": "block/pale", "tintindex": 0}
+                {"textures": {"all": "block/pale"}, "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+                    "up": {"texture": "#all", "tintindex": 0}
                 }}]}
                 """);
         texture("block/pale");
@@ -282,9 +290,9 @@ class BlockItemsTest {
     void anOverlayInTheSamePlaceIsDrawnInFrontOfWhatItCovers() throws IOException {
         blockItem("turfy", "turfy");
         model("turfy", """
-                {"elements": [
-                    {"from": [0, 0, 0], "to": [16, 16, 16], "faces": {"north": {"texture": "block/soil"}}},
-                    {"from": [0, 0, 0], "to": [16, 16, 16], "faces": {"north": {"texture": "block/turf"}}}
+                {"textures": {"soil": "block/soil", "turf": "block/turf"}, "elements": [
+                    {"from": [0, 0, 0], "to": [16, 16, 16], "faces": {"north": {"texture": "#soil"}}},
+                    {"from": [0, 0, 0], "to": [16, 16, 16], "faces": {"north": {"texture": "#turf"}}}
                 ]}
                 """);
         texture("block/soil");
@@ -337,8 +345,9 @@ class BlockItemsTest {
     void aDroppedBlockIsTheSameModelAtAQuarterOfTheSize() throws IOException {
         blockItem("logged", "logged");
         model("logged", """
-                {"elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
-                    "up": {"texture": "block/rings"}, "north": {"texture": "block/bark"}
+                {"textures": {"end": "block/rings", "side": "block/bark"},
+                 "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+                    "up": {"texture": "#end"}, "north": {"texture": "#side"}
                 }}]}
                 """);
         texture("block/rings");
@@ -367,7 +376,8 @@ class BlockItemsTest {
     void aDefinitionNamingABlockModelBeatsASameNamedItemTexture() throws IOException {
         blockItem("torch_ish", "torch_ish");
         model("torch_ish", """
-                {"elements": [{"from": [7, 0, 7], "to": [9, 10, 9], "faces": {"north": {"texture": "block/torch_ish"}}}]}
+                {"textures": {"torch": "block/torch_ish"},
+                 "elements": [{"from": [7, 0, 7], "to": [9, 10, 9], "faces": {"north": {"texture": "#torch"}}}]}
                 """);
         texture("block/torch_ish");
         texture("item/torch_ish");
@@ -390,5 +400,28 @@ class BlockItemsTest {
 
         assertEquals(1, layers.size());
         assertEquals("item/sword_ish", layers.getFirst().texture());
+    }
+
+    /**
+     * The icon comes out of the model's own {@code layer0} rather than off the item's name.
+     *
+     * <p>Dead coral is the case: its model names {@code block/dead_tube_coral}, there is no
+     * {@code item/dead_tube_coral.png} anywhere, and the name rule found nothing - so it fell all the way through to
+     * the six-sided cube of one texture that a block with no model gets, and a dropped stalk of coral was a brick.
+     */
+    @Test
+    void anIconIsTheTextureTheModelNamesRatherThanOneNamedAfterTheItem() throws IOException {
+        definition("coral", """
+                {"model": {"type": "minecraft:model", "model": "minecraft:item/coral"}}
+                """);
+        itemModel("coral", """
+                {"parent": "minecraft:item/generated", "textures": {"layer0": "minecraft:block/coral"}}
+                """);
+        texture("block/coral");
+
+        List<EntitySnapshot> layers = baked().held("coral");
+
+        assertEquals(1, layers.size());
+        assertEquals("block/coral", layers.getFirst().texture());
     }
 }

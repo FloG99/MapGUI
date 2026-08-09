@@ -73,7 +73,7 @@ final class AssetRepack {
      * there, and the mob falls back to its bounding box. Which reads as the model having broken rather than as the
      * cache being old, and costs an afternoon.
      */
-    static final int SUBSET_REVISION = 13;
+    static final int SUBSET_REVISION = 16;
 
     private AssetRepack() {
     }

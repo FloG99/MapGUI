@@ -41,7 +41,7 @@ final class MeshExtractor {
      * what puts a model built downward from the neck onto the ground. The half-thousandth is vanilla's own and is
      * there to keep coincident surfaces from fighting.
      */
-    private static final float GROUND = 1.501f * 16;
+    static final float GROUND = 1.501f * 16;
 
     /** How near two coordinates have to be to count as the same plane, in entity pixels. */
     private static final float EPSILON = 1e-4f;
@@ -113,7 +113,10 @@ final class MeshExtractor {
         for (EntityMeshes.Layer layer : spec.layers()) {
             try {
                 parts.add(root(layer));
-            } catch (ReflectiveOperationException | RuntimeException e) {
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                // LinkageError as well as the rest, and it is not hypothetical: a class whose static fields reach the
+                // block registry cannot initialize outside a running game, and thrown out of here that one mesh took
+                // every other mesh in the jar down with it.
                 return List.of();
             }
         }
@@ -121,7 +124,7 @@ final class MeshExtractor {
     }
 
     private MeshPart root(EntityMeshes.Layer layer) throws ReflectiveOperationException {
-        Class<?> type = load("net.minecraft.client.model." + layer.type());
+        Class<?> type = load(qualified(layer.type()));
         Method factory = factory(type, layer.factory());
         factory.setAccessible(true);
 
@@ -160,7 +163,21 @@ final class MeshExtractor {
     }
 
     /** Where the middle of a block sits in the pixels its model is measured in. */
-    private static final float HALF_BLOCK = 8;
+    static final float HALF_BLOCK = 8;
+
+    /**
+     * The class a mesh factory lives on, which is under the model package for all but a few.
+     *
+     * <p>Vanilla keeps a handful of block entity meshes on the renderer that draws them instead - a conduit's shell
+     * and a decorated pot's sides are built by {@code ConduitRenderer} and {@code DecoratedPotRenderer}, and nowhere
+     * else. Those are named here with the {@code renderer.} they really live under; everything else keeps the short
+     * name it has always had.
+     */
+    private static String qualified(String type) {
+        return type.startsWith(RENDERERS) ? "net.minecraft.client." + type : "net.minecraft.client.model." + type;
+    }
+
+    private static final String RENDERERS = "renderer.";
 
     /**
      * The named factory, searched up the hierarchy because the shared bases are where several of them live.
@@ -213,7 +230,9 @@ final class MeshExtractor {
             } else if (types[i] == float.class) {
                 out[i] = number < numbers.length ? numbers[number++] : 0f;
             } else if (types[i] == boolean.class) {
-                out[i] = false;
+                // Off unless the table says otherwise, which is what the flag means everywhere it appears: a banner
+                // asks whether it is standing rather than hanging on a wall, and a wall banner has no pole.
+                out[i] = number < numbers.length && numbers[number++] != 0;
             } else {
                 throw new NoSuchMethodException(factory + " wants a " + types[i] + ", which this cannot supply");
             }

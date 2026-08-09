@@ -265,12 +265,40 @@ public record EntitySnapshot(
     }
 
     /**
+     * The block a minecart is carrying, riding in it - which is what tells a tnt minecart from a plain one, since the
+     * cart itself is the same shape and the same texture whichever kind it is.
+     *
+     * <p>On the cart's own position and yaw rather than placed in the world, for the reason {@link #held} is: one
+     * rotation rather than two that have to agree.
+     *
+     * @param block  one layer from {@link ItemModels#held}, already resolved to a shape and a texture
+     * @param offset how far up the cart states its block sits, in entity pixels
+     */
+    public static EntitySnapshot inCart(EntitySnapshot cart, EntitySnapshot block, int offset) {
+        if (block == null) return null;
+
+        return new EntitySnapshot(cart.x(), cart.y(), cart.z(), cart.bodyYaw(), cart.bodyYaw(), 0,
+                cart.scale(), block.model().inCart(offset), block.texture(), block.tint());
+    }
+
+    /**
      * The same mob tilted bodily, the way the client tilts the few that swim at an angle.
      *
      * @param pivotY where the tilt turns about, in entity pixels off the feet
      */
     public EntitySnapshot tilted(float xRot, float zRot, float pivotY) {
         return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.tilted(xRot, zRot, pivotY), texture, tint);
+    }
+
+    /**
+     * The same turned bodily about all three axes, for a block entity that sits on whichever of its block's six faces
+     * it was placed against.
+     *
+     * @param pivotY in entity pixels off the block's floor, which for these is its middle
+     */
+    public EntitySnapshot turned(float xRot, float yRot, float zRot, float pivotY) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale,
+                model.tilted(xRot, yRot, zRot, pivotY), texture, tint);
     }
 
     /**

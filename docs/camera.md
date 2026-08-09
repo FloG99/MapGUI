@@ -463,26 +463,30 @@ filing a bug.
 
 - **Item frames and glow item frames**, and whatever is inside them.
 - **Paintings.**
-- **Boats and chest boats**, **arrows and every other projectile**, **primed TNT**, **falling blocks**,
-  **experience orbs**, **fishing bobbers**, **leash knots**, **lightning**, **area effect clouds**, and the
-  **display and marker** entities.
+- **Arrows and every other projectile**, **primed TNT**, **falling blocks**, **experience orbs**, **fishing
+  bobbers**, **leash knots**, **lightning**, **area effect clouds**, and the **display and marker** entities.
 
 One rule behind all of those: an entity is drawn from vanilla's geometry where
-[`EntityMeshes`](../mapgui-camera/src/main/java/de/flog99/mapgui/render/EntityMeshes.java) names a mesh for it (92
-types, every mob a normal world contains, plus armor stands and end crystals), and from its bounding box where the
-assets carry a texture at `entity/<type>`. A type with neither is left out rather than drawn as a grey box or as the
-missing-texture checkerboard. Minecarts and tridents have that texture and so get a box; boats keep theirs per wood
-and do not.
+[`EntityMeshes`](../mapgui-camera/src/main/java/de/flog99/mapgui/render/EntityMeshes.java) names a mesh for it (every
+mob a normal world contains, plus armor stands, end crystals, minecarts and every kind of boat), and from its bounding
+box where the assets carry a texture at `entity/<type>`. A type with neither is left out rather than drawn as a grey
+box or as the missing-texture checkerboard.
 
-- **Shulker boxes, banners, mob heads and skulls, decorated pots, conduits and copper golem statues.** Their model
-  json carries no geometry at all, because the client draws them from a block entity renderer, so a capture shows
-  what is behind them. End portals and end gateways are the exception and get a built-in stand-in.
+- **Decorated pots and copper golem statues where they stand.** Their model json carries no geometry at all, because
+  the client draws them from a block entity renderer, so a capture shows what is behind them. End portals and end
+  gateways are the exception and get a built-in stand-in.
 
-  Chests are no longer among them: their mesh is baked out of `ChestModel` the way a mob's is, and the same route is
-  open to the rest, since all of these are `object.*` models in the client. What each still needs is its own texture
-  rule and, for a banner or a head, data a `ChunkSnapshot` does not carry.
-- **The fifty-one items the client draws in code** - a banner, a shulker box, a chest, a head - draw nothing in a
-  hand, for the same reason.
+  Chests, heads, shulker boxes, conduits, banners and bells are no longer among them: their meshes are baked out of
+  the client's own model classes the way a mob's is, and placed the way each renderer places one. A decorated pot
+  cannot bake at all, because the class that builds its mesh maps every sherd to a sprite and so reaches the item
+  registry, which does not exist outside a running game.
+
+- **The items the client draws in code** - a chest, a shulker box, a conduit, a shield, a banner, a trident, a head -
+  are drawn from the same mesh the block entity is, placed inside the item's box by the transform the item definition
+  states. A decorated pot is the one that still draws nothing, for the reason above.
+
+  A banner is drawn in its base colour. **Its patterns are not:** each is a mask tinted by its own dye and layered
+  over the last, and compositing here has no per-layer tint.
 
 **Drawn, but not fully**
 

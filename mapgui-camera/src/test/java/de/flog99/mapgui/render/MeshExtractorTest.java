@@ -353,6 +353,99 @@ class MeshExtractorTest {
     }
 
     /**
+     * Every mesh the table asks for comes back.
+     *
+     * <p>A spec that will not bake is dropped silently and its types fall back to bounding boxes, which is the right
+     * behaviour on a version that moved a class and a poor one to find out about by looking at a picture: a mistyped
+     * package or a factory that wants an argument this cannot supply reads exactly like a mob that has no model.
+     */
+    @Test
+    void everySpecTheTableAsksForBakes() throws Exception {
+        Map<String, List<MeshPart>> meshes = extract();
+
+        for (EntityMeshes.Spec spec : EntityMeshes.specs()) {
+            assertTrue(meshes.containsKey(spec.mesh()), spec.mesh() + " baked nothing");
+        }
+    }
+
+    /**
+     * A skull stands on the block it is in rather than a block and a half above it.
+     *
+     * <p>Which is the whole of what its lift is for: {@code SkullBlockRenderer} turns the model over the way a mob's
+     * renderer does and then translates it nowhere, so vanilla's 1.501 blocks of ground offset - which every extracted
+     * mesh arrives carrying - has to come straight back off.
+     */
+    @Test
+    void aSkullStandsOnItsOwnBlock() throws Exception {
+        EntityMeshes.install(extract());
+
+        assertEquals(8f, EntityMeshes.of("skeleton_skull", null, false).model().height(), 1e-3,
+                "eight pixels of head, sitting on the floor of the block");
+        assertEquals(8.25f, EntityMeshes.of("player_head", null, false).model().height(), 1e-3,
+                "and a quarter more for the hat layer, which a head off a skin wears and a mob's skull does not");
+    }
+
+    /**
+     * A shulker box fills the block it is in, top to bottom.
+     *
+     * <p>Which is the one number that says its lift is right, and it is worth an assertion because being wrong is
+     * invisible in the mesh: the shape is a closed box either way, and half a block out just sinks it into the floor.
+     * The flip its renderer applies is about the middle of the block and the lift back onto the floor comes after, so
+     * the two together are vanilla's own block and a half - not the one block the flip alone would suggest.
+     */
+    @Test
+    void aShulkerBoxFillsItsBlock() throws Exception {
+        EntityMeshes.install(extract());
+        EntityModel box = EntityMeshes.of("shulker_box", null, false).model();
+
+        assertEquals(16f, box.height(), 1e-2, "the top of the box at the top of the block");
+        assertEquals(0f, lowest(box), 1e-2, "and its floor on the block's floor");
+    }
+
+    /** The lowest point of a model, which {@link EntityModel} measures but keeps to itself. */
+    private static float lowest(EntityModel model) {
+        float[] bottom = {Float.MAX_VALUE};
+        for (MeshPart part : model.parts()) {
+            bottom(part, 0, bottom);
+        }
+        return bottom[0];
+    }
+
+    private static void bottom(MeshPart part, float atY, float[] into) {
+        float y = atY + part.y();
+        for (MeshCube cube : part.cubes()) {
+            into[0] = Math.min(into[0], y + cube.minY());
+        }
+        for (MeshPart child : part.children()) {
+            bottom(child, y, into);
+        }
+    }
+
+    /**
+     * A boat points its bow the way it is going.
+     *
+     * <p>Its model is built along X, bow at {@code +15}, and {@code AbstractBoatRenderer} turns it a quarter circle
+     * after flipping it - the one rotation neither the mesh nor the entity's yaw carries. Left off, every boat in the
+     * world is broadside on to where it is steering; turned the other way, every one of them sails backwards.
+     *
+     * <p>Local {@code -Z} is the front of everything drawn here, so that is where the bow has to land.
+     */
+    @Test
+    void aBoatPointsItsBowTheWayItIsGoing() throws Exception {
+        EntityMeshes.install(extract());
+        EntityModel boat = EntityMeshes.of("oak_boat", null, false).model();
+
+        EntityModel.Joint bow = boat.joint("front");
+        EntityModel.Joint stern = boat.joint("back");
+        assertNotNull(bow);
+        assertNotNull(stern);
+
+        assertEquals(-15f, bow.z(), 1e-3, "the bow, a pixel short of the end of a 28 pixel hull");
+        assertEquals(15f, stern.z(), 1e-3, "and the stern behind it");
+        assertEquals(0f, bow.x(), 1e-3, "neither of them off to one side");
+    }
+
+    /**
      * Every face of every cube carries texture coordinates inside its own texture, and the four of them are the
      * four corners of a rectangle.
      *

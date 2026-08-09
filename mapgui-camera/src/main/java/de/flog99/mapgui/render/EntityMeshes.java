@@ -178,14 +178,67 @@ final class EntityMeshes {
 
         Map<String, EntityModel> worn = new HashMap<>();
         EQUIPMENT.forEach((name, mesh) -> {
-            EntityModel model = model(meshes, mesh, 0);
+            EntityModel model = model(meshes, mesh, 0, 0);
             if (model != null) {
                 worn.put(name, model);
             }
         });
 
+        Map<String, EntityModel> asBuilt = new HashMap<>();
+        TABLE.types.forEach((type, entry) -> {
+            EntityModel model = unplaced(meshes, entry.mesh);
+            if (model != null) {
+                asBuilt.put(type, model);
+            }
+        });
+
         installed = Map.copyOf(mobs);
         equipment = Map.copyOf(worn);
+        unplaced = Map.copyOf(asBuilt);
+    }
+
+    /** The same geometry in the client's own model space, for the callers that place it themselves. */
+    private static volatile Map<String, EntityModel> unplaced = Map.of();
+
+    /**
+     * One type's mesh as the client built it, before anything here stood it in the world.
+     *
+     * <p>Which is the space an item definition states its own transform against - see
+     * {@link ItemDefinitions.Special}. Everything else wants {@link #of}, whose model is already where it goes.
+     */
+    static EntityModel asBuilt(String type) {
+        return unplaced.get(type);
+    }
+
+    /**
+     * The extracted parts with the standing-up undone: the ground lift off a mob mesh and the turn over with it, the
+     * half block off a block entity's corner.
+     *
+     * <p>The flip comes off as a half circle about Z laid over the top rather than by rebuilding the tree. It is the
+     * same rotation applied twice, so the geometry lands exactly back where the client had it - and only the geometry
+     * matters here, since nothing poses one of these.
+     */
+    private static EntityModel unplaced(Map<String, List<MeshPart>> meshes, String mesh) {
+        List<MeshPart> parts = meshes.get(mesh);
+        if (parts == null) return null;
+
+        Space space = spaceOf(mesh);
+        float middle = space == Space.BLOCK ? MeshExtractor.HALF_BLOCK : 0;
+        float lift = space == Space.MOB ? -MeshExtractor.GROUND : 0;
+
+        List<MeshPart> moved = new ArrayList<>(parts.size());
+        for (MeshPart part : parts) {
+            moved.add(part.moved(middle, lift, middle));
+        }
+        if (space != Space.MOB) return EntityModel.of(moved);
+
+        return EntityModel.of(List.of(new MeshPart("unflipped", false, 0, 0, 0, 0, 0, (float) Math.PI,
+                1, 1, 1, List.of(), List.copyOf(moved))));
+    }
+
+    /** Which space a mesh was built in, off the spec that named it. */
+    private static Space spaceOf(String mesh) {
+        return parse(mesh).layers().getFirst().space();
     }
 
     /**
@@ -215,25 +268,38 @@ final class EntityMeshes {
     }
 
     private static Mob mob(Map<String, List<MeshPart>> meshes, Entry entry, String mesh, String overMesh) {
-        EntityModel model = model(meshes, mesh, entry.lift);
+        EntityModel model = model(meshes, mesh, entry.lift, entry.turn);
         if (model == null) return null;
 
-        EntityModel worn = overMesh == null ? null : model(meshes, overMesh, entry.lift);
+        EntityModel worn = overMesh == null ? null : model(meshes, overMesh, entry.lift, entry.turn);
         Mob over = worn == null ? null : new Mob(worn, entry.overTexture, entry.scale, null);
         return new Mob(model, entry.texture, entry.scale, over);
     }
 
-    /** The extracted parts as a model, shifted if this entity's renderer does not stand it on the ground. */
-    private static EntityModel model(Map<String, List<MeshPart>> meshes, String mesh, float lift) {
+    /**
+     * The extracted parts as a model, shifted if this entity's renderer does not stand it on the ground and turned
+     * if it turns the whole thing by something other than the yaw.
+     *
+     * <p>The turn goes on a part above everything rather than into each root, so what is underneath keeps its own
+     * pose - and it runs the other way round to the angle the client states, since it is stated before the half turn
+     * about Z that a mesh comes out of here already carrying.
+     */
+    private static EntityModel model(Map<String, List<MeshPart>> meshes, String mesh, float lift, float turn) {
         List<MeshPart> parts = meshes.get(mesh);
         if (parts == null) return null;
-        if (lift == 0) return EntityModel.of(parts);
 
-        List<MeshPart> lifted = new ArrayList<>(parts.size());
-        for (MeshPart part : parts) {
-            lifted.add(part.moved(0, lift, 0));
+        List<MeshPart> placed = parts;
+        if (lift != 0) {
+            placed = new ArrayList<>(parts.size());
+            for (MeshPart part : parts) {
+                placed.add(part.moved(0, lift, 0));
+            }
         }
-        return EntityModel.of(lifted);
+        if (turn != 0) {
+            placed = List.of(new MeshPart("turned", false, 0, 0, 0, 0, (float) Math.toRadians(-turn), 0,
+                    1, 1, 1, List.of(), List.copyOf(placed)));
+        }
+        return EntityModel.of(placed);
     }
 
     private static String baby(String type) {
@@ -329,11 +395,10 @@ final class EntityMeshes {
      * for it, since vanilla's young meshes are drawn on smaller textures and a mesh read off the wrong size is read
      * off the wrong part.
      *
-     * <p>Where a type is missing it is missing on purpose: a mannequin has no skin to draw it with, and boats and
-     * minecarts are placed by renderers that translate them somewhere of their own.
+     * <p>Where a type is missing it is missing on purpose: a mannequin has no skin to draw it with.
      */
     private static Table table() {
-        return new Table()
+        return vehicles(new Table()
                 // The humanoid undead. Zombies and huskies share vanilla's plain humanoid mesh; the drowned has
                 // one of its own because its arms hang.
                 .mob("zombie", "entity/zombie/zombie", "HumanoidModel#createMesh@64x64!monster.zombie.ZombieModel").baby("monster.zombie.BabyZombieModel")
@@ -468,16 +533,151 @@ final class EntityMeshes {
                 .mob("pufferfish", "entity/fish/pufferfish", "animal.fish.PufferfishMidModel")
                 .mob("tropical_fish", "entity/fish/tropical_a", "animal.fish.TropicalFishSmallModel")
                 .mob("nautilus", "entity/nautilus/nautilus", "animal.nautilus.NautilusModel").baby("animal.nautilus.NautilusModel#createBabyBodyLayer")
-                .mob("zombie_nautilus", "entity/nautilus/zombie_nautilus", "animal.nautilus.NautilusModel");
+                .mob("zombie_nautilus", "entity/nautilus/zombie_nautilus", "animal.nautilus.NautilusModel")
+
+                // The heads, named as the blocks are. Block entities like a chest but flipped like a mob:
+                // SkullBlockRenderer stands one on the block it is in and does nothing else, so the whole of vanilla's
+                // ground offset comes off again.
+                //
+                // Four meshes for seven heads, and the split is the texture rather than the shape: the same
+                // eight-pixel cube read off a 32x16 sheet for the ones wearing a mob's face, and off a 64x64 one -
+                // with the hat layer a skin carries - for the two unwrapped like a player.
+                .mob("skeleton_skull", "entity/skeleton/skeleton", "object.skull.SkullModel#createMobHeadLayer").lift(SKULL_LIFT)
+                .also("wither_skeleton_skull", "entity/skeleton/wither_skeleton")
+                .also("creeper_head", "entity/creeper/creeper")
+                .mob("player_head", "entity/player/wide/steve", "object.skull.SkullModel#createHumanoidHeadLayer").lift(SKULL_LIFT)
+                .also("zombie_head", "entity/zombie/zombie")
+                .mob("piglin_head", "entity/piglin/piglin", "object.skull.PiglinHeadModel#createHeadModel@64x64").lift(SKULL_LIFT)
+                .mob("dragon_head", "entity/enderdragon/dragon", "object.skull.DragonHeadModel#createHeadLayer").lift(SKULL_LIFT)
+
+                // The rest of the block entities the client keeps a built-in model for. Every one of these is turned
+                // over by its renderer the way a mob is - {@code scale(1, -1, -1)} rather than a mob's
+                // {@code (-1, -1, 1)}, which is the same flip with a half circle about Y on top of it, so they are
+                // mob meshes with that half circle in their turn. What differs is how far up each is stood, and the
+                // shape of the block they sit in is the whole of it.
+                .mob("shulker_box", "entity/shulker/shulker", "monster.shulker.ShulkerModel#createBoxLayer")
+                .lift(BLOCK_ENTITY_LIFT).turn(BLOCK_ENTITY_TURN)
+                // A conduit is the one of these its renderer does not turn over at all - it translates half a block
+                // and spins it, and nothing else - so it is built the right way up like an end crystal.
+                .mob("conduit", "entity/conduit/base", "entity:renderer.blockentity.ConduitRenderer#createShellLayer")
+                .lift(HALF_BLOCK)
+                // A bell is the one whose renderer does nothing to it at all - no flip, no lift, not even a turn for
+                // the way the block faces - so it is a block entity in the plainest sense, measured from the block's
+                // own corner like a chest. What holds it up is the block model and is drawn already; this is the
+                // bell itself, which is what was missing from every one of them.
+                .mob("bell", "entity/bell/bell_body", "block:object.bell.BellModel")
+
+                // A decorated pot is not here, and cannot be: its mesh is built by DecoratedPotRenderer, whose static
+                // fields map every sherd item to a sprite and so reach the item registry - which does not exist
+                // outside a running game. Same wall LayerDefinitions.createRoots() runs into, for the same reason.
+
+                // A banner is a pole and a crossbar with a separate cloth hung off it, and the two are separate
+                // meshes because the cloth is the only part a dye colors and a pattern is drawn on. A wall banner has
+                // no pole, which is what the flag the factory takes is asking.
+                //
+                // Alone among these its renderer lifts it nowhere at all - it flips the mesh about the block's middle
+                // and leaves it hanging - so the whole of vanilla's ground offset comes back off, and the two thirds
+                // it is drawn at is the scale rather than anything about the mesh.
+                .mob("banner", "entity/banner/banner_base", "object.banner.BannerModel(1)")
+                .lift(SKULL_LIFT).turn(BLOCK_ENTITY_TURN).scale(BANNER_SCALE)
+                .mob("banner_flag", "entity/banner/base", "object.banner.BannerFlagModel#createFlagLayer(1)")
+                .lift(SKULL_LIFT).turn(BLOCK_ENTITY_TURN).scale(BANNER_SCALE)
+                .mob("wall_banner", "entity/banner/banner_base", "object.banner.BannerModel(0)")
+                .lift(SKULL_LIFT).turn(BLOCK_ENTITY_TURN).scale(BANNER_SCALE)
+                .mob("wall_banner_flag", "entity/banner/base", "object.banner.BannerFlagModel#createFlagLayer(0)")
+                .lift(SKULL_LIFT).turn(BLOCK_ENTITY_TURN).scale(BANNER_SCALE)
+
+                // Two the client draws in code that are items rather than blocks, and so are only ever placed by a
+                // definition's own transform - which is why neither states a lift here.
+                .mob("shield", "entity/shield/shield_base_nopattern", "object.equipment.ShieldModel#createLayer")
+                .mob("trident", "entity/trident/trident", "object.projectile.TridentModel#createLayer"));
     }
 
     /**
+     * What a skull's lift has to undo, in entity pixels: all of it. A mob is turned over and then translated 1.501
+     * blocks to stand it on the ground, and a skull is turned over and translated nowhere at all.
+     */
+    private static final float SKULL_LIFT = -1.501f * 16;
+
+    /**
+     * And what a vehicle's lift comes to. Both renderers flip the model like a mob, so the mesh arrives with that
+     * same 1.501 blocks in it, and both stand it 0.375 blocks up instead.
+     */
+    private static final float VEHICLE_LIFT = 0.375f * 16 - 1.501f * 16;
+
+    /**
+     * And what the block entities turned over by {@code scale(1, -1, -1)} come to, which is very nearly nothing.
+     *
+     * <p>Their renderers flip the mesh about the middle of the block and then lift it back to the block's floor, and
+     * the two together land it a block and a half up - the same place a mob's 1.501 puts one, bar the half-thousandth
+     * vanilla adds there to keep coincident surfaces from fighting.
+     *
+     * <p>Stated as the whole 1.5 rather than as zero because that is what it is measuring, and because getting it
+     * wrong is invisible in the shape and obvious in the picture: at one block instead of one and a half, a shulker
+     * box sits half a block into the floor. The half block is not the placing either - a turn about the block's middle
+     * says where the mesh turns and moves it nowhere.
+     */
+    private static final float BLOCK_ENTITY_LIFT = 1.5f * 16 - 1.501f * 16;
+
+    /**
+     * The half circle between the two flips. A mob's renderer turns its model over with {@code scale(-1, -1, 1)} and
+     * these use {@code scale(1, -1, -1)}, and the two differ by exactly a half turn about Y - so an extracted mesh,
+     * which arrives already carrying the first, wants the second put on top of it.
+     */
+    private static final float BLOCK_ENTITY_TURN = 180;
+
+    /** Half a block up, in entity pixels, which is where a conduit's renderer puts it and nothing else does. */
+    private static final float HALF_BLOCK = 8;
+
+    /** What a banner's renderer draws it at, which is the one of these that is a size rather than a place. */
+    private static final float BANNER_SCALE = 2 / 3f;
+
+    /**
+     * A boat is built along its side and its renderer turns it a quarter circle after flipping it, which is the one
+     * thing here that no mesh and no yaw carries.
+     */
+    private static final float BOAT_TURN = 90;
+
+    /**
+     * The boats and the minecarts, which are one shape each over a great many entity types - nine woods of boat and
+     * seven kinds of cart - so they are looped rather than written out.
+     *
+     * <p>A minecart's own texture serves every kind of it: what makes one a chest minecart is the block it displays,
+     * which the client draws from that block's own model and {@link EntityMeshes} knows nothing about.
+     */
+    private static Table vehicles(Table table) {
+        table.mob("minecart", MINECART_TEXTURE, "object.cart.MinecartModel").lift(VEHICLE_LIFT);
+        for (String kind : List.of("chest", "furnace", "tnt", "hopper", "spawner", "command_block")) {
+            table.also(kind + "_minecart", MINECART_TEXTURE);
+        }
+
+        // The nine woods a boat comes in. Bamboo is not one of them: it is a raft, which is a different shape.
+        // Written here rather than as a constant because this runs from a static initializer, and a field declared
+        // below the table it builds is still null when the table is built.
+        for (String wood : List.of("oak", "spruce", "birch", "jungle", "acacia", "cherry", "dark_oak", "pale_oak", "mangrove")) {
+            table.mob(wood + "_boat", "entity/boat/" + wood, "object.boat.BoatModel#createBoatModel")
+                    .lift(VEHICLE_LIFT).turn(BOAT_TURN)
+                    .mob(wood + "_chest_boat", "entity/chest_boat/" + wood, "object.boat.BoatModel#createChestBoatModel")
+                    .lift(VEHICLE_LIFT).turn(BOAT_TURN);
+        }
+
+        return table.mob("bamboo_raft", "entity/boat/bamboo", "object.boat.RaftModel#createRaftModel")
+                .lift(VEHICLE_LIFT).turn(BOAT_TURN)
+                .mob("bamboo_chest_raft", "entity/chest_boat/bamboo", "object.boat.RaftModel#createChestRaftModel")
+                .lift(VEHICLE_LIFT).turn(BOAT_TURN);
+    }
+
+    private static final String MINECART_TEXTURE = "entity/minecart/minecart";
+
+    /**
      * @param lift     how far off vanilla's standard ground offset this mesh sits, in entity pixels
+     * @param turn     a quarter circle or so about Y that this entity's renderer applies on top of its yaw, in
+     *                 degrees. Zero for everything but the boats, whose model is built along their side
      * @param variants a mesh per coat that is genuinely a different shape, keyed by the word the assets name it by.
      *                 Empty for the great majority, which either have no variants or wear them as colors
      */
     private record Entry(String texture, String mesh, String babyMesh, String over, String overTexture, float scale, float lift,
-                         Map<String, String> variants) {
+                         float turn, Map<String, String> variants) {
     }
 
     /** Chained rather than positional, so a line says only what is unusual about its mob. */
@@ -487,7 +687,7 @@ final class EntityMeshes {
         private String last;
 
         Table mob(String type, String texture, String mesh) {
-            types.put(type, new Entry(texture, mesh, null, null, null, 1, 0, Map.of()));
+            types.put(type, new Entry(texture, mesh, null, null, null, 1, 0, 0, Map.of()));
             last = type;
             return this;
         }
@@ -499,12 +699,12 @@ final class EntityMeshes {
          */
         Table also(String type, String texture) {
             Entry from = types.get(last);
-            types.put(type, new Entry(texture, from.mesh, from.babyMesh, from.over, from.overTexture, from.scale, from.lift, Map.of()));
+            types.put(type, new Entry(texture, from.mesh, from.babyMesh, from.over, from.overTexture, from.scale, from.lift, from.turn, Map.of()));
             return this;
         }
 
         Table baby(String mesh) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, mesh, entry.over, entry.overTexture, entry.scale, entry.lift, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, mesh, entry.over, entry.overTexture, entry.scale, entry.lift, entry.turn, entry.variants));
         }
 
         /** A coat of this species that vanilla builds a mesh of its own for. */
@@ -512,20 +712,24 @@ final class EntityMeshes {
             return replace(entry -> {
                 Map<String, String> variants = new LinkedHashMap<>(entry.variants);
                 variants.put(variant, mesh);
-                return new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, entry.lift, Map.copyOf(variants));
+                return new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, entry.lift, entry.turn, Map.copyOf(variants));
             });
         }
 
         Table over(String mesh, String texture) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, mesh, texture, entry.scale, entry.lift, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, mesh, texture, entry.scale, entry.lift, entry.turn, entry.variants));
         }
 
         Table scale(float scale) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, scale, entry.lift, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, scale, entry.lift, entry.turn, entry.variants));
         }
 
         Table lift(float pixels) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, pixels, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, pixels, entry.turn, entry.variants));
+        }
+
+        Table turn(float degrees) {
+            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, entry.lift, degrees, entry.variants));
         }
 
         private Table replace(UnaryOperator<Entry> change) {

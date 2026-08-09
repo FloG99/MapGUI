@@ -6,7 +6,8 @@ package de.flog99.mapgui.render;
  * @param texture  the resolved texture name, {@code minecraft:block/...} with the namespace already dropped
  * @param u1       texture coordinates in sixteenths, as the json states them - {@code u1 > u2} is legal and
  *                 means the face is mirrored, which several vanilla models rely on
- * @param rotation 0, 90, 180 or 270, turning the texture on the face without moving the face
+ * @param rotation 0, 90, 180 or 270, turning the texture on the face without moving the face. The rect above is
+ *                 stated with that turn already applied, so all a sampler has left to do is {@link #swapsAxes}
  * @param tint     which of the world's tint colors multiplies this face, or {@link #NO_TINT}
  * @param cull     the neighbour that hides this face when it is solid, or null for a face always drawn. Water
  *                 and glass lean on it hardest: without it every block in a pool draws all six sides and a ray
@@ -32,6 +33,25 @@ public record BakedFace(String texture, float u1, float v1, float u2, float v2, 
     /** The whole texture, unrotated and untinted, which is what a face with no {@code uv} means. */
     public static BakedFace whole(String texture) {
         return new BakedFace(texture, 0, 0, 16, 16, 0, NO_TINT, null);
+    }
+
+    /**
+     * Whether this turn reads the face's two axes the other way round, which a quarter turn does and a half one
+     * does not.
+     *
+     * <p>The client turns a face by handing its corners the stated rect's corners shifted round the square, so a
+     * quarter turn takes the texture's across from the face's down. That is a different thing from turning the
+     * coordinate afterwards, and the two only agree on a rect that is the whole texture the right way up - which is
+     * why a spore blossom, whose leaves state a mirrored rect and a quarter turn, had its east and west ones
+     * pointing inward.
+     */
+    static boolean swapsAxes(int rotation) {
+        return rotation == 90 || rotation == 270;
+    }
+
+    /** The same, for the turn this face carries. */
+    boolean swapsAxes() {
+        return swapsAxes(rotation);
     }
 
     /**

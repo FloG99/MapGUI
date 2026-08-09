@@ -579,12 +579,63 @@ class BlockModelsTest {
 
         BakedFace face = models().bake("minecraft:thing").elements().getFirst().face(Direction.UP);
 
-        assertEquals(0, face.u1());
-        assertEquals(8, face.v1());
-        assertEquals(16, face.u2());
-        assertEquals(16, face.v2());
+        // A half turn sends each corner of the rect to the far one, which on a full-block face is the rect read
+        // backwards along both axes.
+        assertEquals(16, face.u1());
+        assertEquals(16, face.v1());
+        assertEquals(0, face.u2());
+        assertEquals(8, face.v2());
         assertEquals(180, face.rotation());
+        assertFalse(face.swapsAxes(), "a half turn leaves the two axes where they were");
         assertEquals(0, face.tint());
+    }
+
+    /** Vanilla's own {@code heavy_core} names its variable without the hash, and the client adds one when it reads. */
+    @Test
+    void aFaceMayNameItsTextureVariableWithoutTheHash() throws IOException {
+        blockstate("core", """
+                {"variants": {"": {"model": "block/core"}}}
+                """);
+        model("core", """
+                {"textures": {"all": "block/planks"}, "elements": [
+                    { "from": [4, 0, 4], "to": [12, 8, 12], "faces": {"up": {"texture": "all"}}}
+                ]}
+                """);
+
+        assertEquals("block/planks", models().bake("minecraft:core").elements().getFirst().face(Direction.UP).texture());
+    }
+
+    /**
+     * A quarter turn takes the texture's across from the face's down, which is the client's own rule: it hands the
+     * face's corners the rect's corners shifted round the square rather than turning the coordinate afterwards.
+     *
+     * <p>These are spore blossom's east leaf, whose underside states a rect mirrored in v and a three quarter turn.
+     * Turned the other way round it came out radially inverted - the tip of the leaf wearing the middle of the
+     * texture - while the north and south leaves, which state no turn, were right.
+     */
+    @Test
+    void aQuarterTurnSwapsTheFaceAxes() throws IOException {
+        blockstate("leaf", """
+                {"variants": {"": {"model": "block/leaf"}}}
+                """);
+        model("leaf", """
+                {"textures": {"all": "block/grass_block_top"}, "elements": [
+                    { "from": [8, 15.7, 0], "to": [24, 15.7, 16], "faces": {
+                        "down": {"texture": "#all", "uv": [0, 16, 16, 0], "rotation": 270}
+                    }}
+                ]}
+                """);
+
+        BakedFace face = models().bake("minecraft:leaf").elements().getFirst().face(Direction.DOWN);
+
+        assertTrue(face.swapsAxes());
+        // Across comes off the face's own down span, which on an underside runs the full block.
+        assertEquals(16, face.u1());
+        assertEquals(0, face.u2());
+        // And down comes off the across span, which this leaf stretches from the middle of the block to a block
+        // beyond it - so the texture runs out at the tip rather than at the stalk.
+        assertEquals(24, face.v1());
+        assertEquals(8, face.v2());
     }
 
     @Test

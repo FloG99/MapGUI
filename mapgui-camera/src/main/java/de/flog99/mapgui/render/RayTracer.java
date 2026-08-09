@@ -929,13 +929,18 @@ public final class RayTracer {
             }
         }
 
-        double u = BakedFace.u(modelFace, mx, my, mz);
-        double v = BakedFace.v(modelFace, mx, my, mz);
+        double across = BakedFace.u(modelFace, mx, my, mz);
+        double down = BakedFace.v(modelFace, mx, my, mz);
+
+        // A quarter turn takes the texture's across from the face's down, and the rect was fitted to that span when
+        // it was baked - so the swap is the whole of what is left of the rotation here.
+        double u = drawn.swapsAxes() ? down : across;
+        double v = drawn.swapsAxes() ? across : down;
 
         // Into the rect the model states for this face, which is how a slab takes the bottom half of a texture.
         float su = (float) (drawn.u1() + u / 16 * (drawn.u2() - drawn.u1()));
         float sv = (float) (drawn.v1() + v / 16 * (drawn.v2() - drawn.v1()));
-        return atlas.get(drawn.texture()).sample(su, sv, drawn.rotation());
+        return atlas.get(drawn.texture()).sample(su, sv);
     }
 
     /**
@@ -955,7 +960,7 @@ public final class RayTracer {
 
         float u = (float) (0.5 + across * east + down * south);
         float v = (float) (0.5 + across * south - down * east);
-        return atlas.get(state.fluidFlow()).sample(u * 16, v * 16, 0);
+        return atlas.get(state.fluidFlow()).sample(u * 16, v * 16);
     }
 
     /**

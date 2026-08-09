@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -71,6 +72,9 @@ public final class BlockModels {
     /** Keyed by model name rather than by state, for the items drawn from one - see {@link #shape}. */
     private final Map<String, List<BakedElement>> shapes = new ConcurrentHashMap<>();
 
+    /** The same for the icon half of the answer. Optional because a model that draws no picture is worth caching too. */
+    private final Map<String, Optional<String>> sprites = new ConcurrentHashMap<>();
+
     public BlockModels(AssetStack stack, TextureAlpha alpha) {
         this.stack = stack;
         this.alpha = alpha;
@@ -109,6 +113,27 @@ public final class BlockModels {
      */
     public List<BakedElement> shape(String model) {
         return shapes.computeIfAbsent(model, this::resolveShape);
+    }
+
+    /**
+     * The picture a named model draws, out of its {@code layer0}, or null for one that states none.
+     *
+     * <p>The other half of {@link #shape}: a model either carries geometry or is a {@code generated} icon, and an
+     * icon's texture is a variable like any other rather than a path you can work out. Guessing
+     * {@code item/<id>} instead is right for most of vanilla and wrong wherever an item borrows a block's texture -
+     * dead coral's model names {@code block/dead_tube_coral}, there is no {@code item/dead_tube_coral.png}, and the
+     * probe fell through to the six-sided cube a block with no model gets.
+     */
+    public String sprite(String model) {
+        return sprites.computeIfAbsent(AssetStack.canonical(model), this::resolveSprite).orElse(null);
+    }
+
+    private Optional<String> resolveSprite(String model) {
+        Map<String, JsonElement> textures = new LinkedHashMap<>();
+        inherited(model, textures);
+
+        Resolved resolved = resolveTexture("#layer0", textures);
+        return Optional.ofNullable(resolved == null ? null : resolved.texture());
     }
 
     private List<BakedElement> resolveShape(String model) {
@@ -375,9 +400,11 @@ public final class BlockModels {
         return true;
     }
 
-    /** Walks the parent chain for elements and texture variables, then rotates what it finds. */
-    private void collectElements(String modelName, int rotX, int rotY, Geometry into) {
-        Map<String, JsonElement> textures = new LinkedHashMap<>();
+    /**
+     * Walks the parent chain, filling {@code textures} in with every variable declared along it and handing back the
+     * nearest {@code elements} array - or null for a model that declares none anywhere.
+     */
+    private JsonArray inherited(String modelName, Map<String, JsonElement> textures) {
         JsonArray elements = null;
 
         String name = modelName;
@@ -401,6 +428,13 @@ public final class BlockModels {
             name = model.has("parent") ? AssetStack.canonical(model.get("parent").getAsString()) : null;
         }
 
+        return elements;
+    }
+
+    /** Walks the parent chain for elements and texture variables, then rotates what it finds. */
+    private void collectElements(String modelName, int rotX, int rotY, Geometry into) {
+        Map<String, JsonElement> textures = new LinkedHashMap<>();
+        JsonArray elements = inherited(modelName, textures);
         if (elements == null) return;
 
         for (JsonElement element : elements) {
@@ -487,7 +521,7 @@ public final class BlockModels {
                            Direction side, float[] from, float[] to) {
         if (!face.has("texture")) return null;
 
-        Resolved resolved = resolveTexture(face.get("texture").getAsString(), textures);
+        Resolved resolved = resolveTexture(named(face.get("texture").getAsString()), textures);
         if (resolved == null) return null;
 
         into.forcedTranslucent |= resolved.forceTranslucent();
@@ -497,21 +531,26 @@ public final class BlockModels {
         float[] auto = autoUv(side, from, to);
         float[] uv = face.has("uv") ? quad(face.getAsJsonArray("uv")) : auto;
 
-        // Fitted to the box rather than to the block, so the tracer can go on sampling in plain block coordinates.
-        float[] across = fit(uv[0], uv[2], auto[0], auto[2]);
-        float[] down = fit(uv[1], uv[3], auto[1], auto[3]);
-        float u1 = across[0];
-        float u2 = across[1];
-        float v1 = down[0];
-        float v2 = down[1];
-
         int rotation = face.has("rotation") ? Math.floorMod(face.get("rotation").getAsInt(), 360) : 0;
+        // The turn, in the face's own frame: the two axes swap for a quarter turn, and the rect is read backwards
+        // wherever the turn sends a corner to the far end of an axis.
+        boolean swapped = BakedFace.swapsAxes(rotation);
+        boolean acrossBack = rotation == 180 || rotation == 270;
+        boolean downBack = rotation == 90 || rotation == 180;
+
+        // Fitted to the box rather than to the block, so the tracer can go on sampling in plain block coordinates -
+        // and fitted against whichever of the box's two spans the turn hands this axis.
+        float[] across = fit(uv[acrossBack ? 2 : 0], uv[acrossBack ? 0 : 2],
+                swapped ? auto[1] : auto[0], swapped ? auto[3] : auto[2]);
+        float[] down = fit(uv[downBack ? 3 : 1], uv[downBack ? 1 : 3],
+                swapped ? auto[0] : auto[1], swapped ? auto[2] : auto[3]);
+
         int tint = face.has("tintindex")
                 ? tintOf(into.blockId, face.get("tintindex").getAsInt())
                 : Tints.NONE;
         Direction cull = face.has("cullface") ? Direction.byKey(face.get("cullface").getAsString()) : null;
 
-        return new BakedFace(resolved.texture(), u1, v1, u2, v2, rotation, tint, cull);
+        return new BakedFace(resolved.texture(), across[0], down[0], across[1], down[1], rotation, tint, cull);
     }
 
     /**
@@ -552,6 +591,18 @@ public final class BlockModels {
         float scale = 16 * (high - low) / span;
         float start = low - autoLow * scale / 16;
         return new float[]{start, start + scale};
+    }
+
+    /**
+     * A face's texture reference with the {@code #} it is supposed to carry, added where the model left it off.
+     *
+     * <p>The client does this when it reads a face, so a variable named bare resolves like any other. Vanilla's own
+     * {@code heavy_core} names {@code all} rather than {@code #all}, and read literally that is a texture called
+     * {@code all}, which no pack has - so the block came out missing-texture purple and the item fell through to the
+     * six-sided cube every unresolvable block gets.
+     */
+    private static String named(String reference) {
+        return reference.startsWith("#") ? reference : "#" + reference;
     }
 
     /** A texture name and whether the model insisted it blends. */

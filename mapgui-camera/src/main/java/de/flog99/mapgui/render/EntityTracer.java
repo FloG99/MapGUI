@@ -343,7 +343,7 @@ final class EntityTracer {
         double v = mix(mix(corners[topLeft + 1], corners[topRight + 1], across), mix(corners[bottomLeft + 1], corners[bottomRight + 1], across), down);
 
         // Texture#sample works in sixteenths of its own width, and these are normalized.
-        return texture.sample((float) (u * 16), (float) (v * 16), 0);
+        return texture.sample((float) (u * 16), (float) (v * 16));
     }
 
     private static double mix(double from, double to, double by) {

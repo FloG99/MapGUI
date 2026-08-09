@@ -3,10 +3,14 @@ package de.flog99.mapgui.plugin.camera;
 import com.destroystokyo.paper.ClientOption;
 import com.destroystokyo.paper.SkinParts;
 import com.destroystokyo.paper.profile.PlayerProfile;
+import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.SkinLayers;
 import de.flog99.mapgui.render.Texture;
 import de.flog99.mapgui.render.TextureAtlas;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.SkullMeta;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -17,6 +21,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -45,7 +50,18 @@ final class SkinCache {
      * falls back, while the download happens behind it and the next capture has it.
      */
     String nameFor(Player player) {
-        URL url = skinUrl(player);
+        return nameFor(player.getPlayerProfile());
+    }
+
+    /**
+     * The same for anybody who is not here to be asked - the owner of a placed head, or of one lying on the floor.
+     *
+     * <p>Null for a profile with no skin on it as well as for one whose skin has not come down yet, which is the
+     * ordinary case for a head placed from a hand: the server resolves the owner in the background and the profile
+     * carries a name and nothing else until it does.
+     */
+    String nameFor(PlayerProfile profile) {
+        URL url = profile == null ? null : profile.getTextures().getSkin();
         if (url == null) return null;
 
         String name = PREFIX + Integer.toHexString(url.toString().hashCode());
@@ -55,6 +71,21 @@ final class SkinCache {
             Thread.ofVirtual().name("mapgui-skin").start(() -> load(name, url));
         }
         return null;
+    }
+
+    /**
+     * The same layers wearing the owner's face, for the one item whose texture is not the item's.
+     *
+     * <p>A player head is drawn from the skull mesh in whichever skin the stack names, and
+     * {@link de.flog99.mapgui.render.ItemModels} can only know the default one - whose face it is belongs to the
+     * stack. Anything that is not a head comes back untouched, and so does a head whose owner is unresolved or whose
+     * skin has not come down yet: vanilla's own default face beats no head at all.
+     */
+    List<EntitySnapshot> faced(List<EntitySnapshot> layers, ItemStack item) {
+        if (item.getType() != Material.PLAYER_HEAD || !(item.getItemMeta() instanceof SkullMeta head)) return layers;
+
+        String skin = nameFor(head.getPlayerProfile());
+        return skin == null ? layers : layers.stream().map(layer -> layer.texture(skin)).toList();
     }
 
     /** Whether this player's arms are the narrow ones, which changes the model rather than the texture. */
@@ -83,11 +114,6 @@ final class SkinCache {
     /** Hands the decoded skins to an atlas so the tracer can look them up by name like any other texture. */
     void publishTo(TextureAtlas atlas) {
         skins.forEach(atlas::put);
-    }
-
-    private static URL skinUrl(Player player) {
-        PlayerProfile profile = player.getPlayerProfile();
-        return profile.getTextures().getSkin();
     }
 
     private void load(String name, URL url) {

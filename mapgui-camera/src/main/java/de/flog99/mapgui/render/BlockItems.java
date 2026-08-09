@@ -47,6 +47,16 @@ public final class BlockItems {
         this.definitions = definitions;
     }
 
+    /** Which model this item draws from, for the caller that wants the icon half of it rather than the geometry. */
+    String modelOf(String item) {
+        return definitions.of(item).model();
+    }
+
+    /** The shape the client draws this item in code as, or null for the great majority drawn from a model. */
+    ItemDefinitions.Special specialOf(String item) {
+        return definitions.of(item).special();
+    }
+
     /**
      * The layers this item is drawn as, at the size its model states them, or empty when its model is not a shape.
      *
@@ -66,11 +76,29 @@ public final class BlockItems {
      */
     List<EntitySnapshot> layers(String item, TextureAtlas atlas) {
         ItemDefinitions.Definition definition = definitions.of(item);
-        List<BakedElement> elements = models.shape(definition.model());
+        return drawn(models.shape(definition.model()), definition.tint(), atlas);
+    }
+
+    /**
+     * The same for a block state rather than an item.
+     *
+     * <p>Because the two are not the same model and the difference shows: a hopper's block model is the funnel you
+     * see in the world and its item model is a flat icon, so a hopper minecart drawn from the item is a picture of a
+     * hopper standing in a cart. The client hands its own block state to the block model set, and so does this.
+     *
+     * <p>Untinted, since a tint is the item definition's to state and there is no item here.
+     *
+     * @param state {@code BlockData#getAsString()}, the same key {@link BlockModels#bake} is written against
+     */
+    List<EntitySnapshot> stateLayers(String state, TextureAtlas atlas) {
+        return drawn(models.bake(state).elements(), 0, atlas);
+    }
+
+    private static List<EntitySnapshot> drawn(List<BakedElement> elements, int tint, TextureAtlas atlas) {
         if (elements.isEmpty()) return List.of();
 
         List<EntitySnapshot> drawn = new ArrayList<>();
-        grouped(elements, definition.tint(), atlas).forEach((layer, parts) ->
+        grouped(elements, tint, atlas).forEach((layer, parts) ->
                 drawn.add(new EntitySnapshot(0, 0, 0, 0, 0, 0, 1f,
                         EntityModel.of(parts, true), layer.texture(), layer.tint())));
         return List.copyOf(drawn);
@@ -192,10 +220,9 @@ public final class BlockItems {
      * The four corners of one face, as the normalized UVs a mesh cube states.
      *
      * <p>Each corner is asked where it is, taken back into the block's own coordinates and put through the arithmetic
-     * a ray goes through: the block face convention, then the rect the model states for that face, then the face's own
-     * texture rotation - which has to be applied here, because a mesh cube carries no rotation to pass on. Nothing
-     * about the mapping is assumed, which is why a face the model mirrored or laid on its side needs nothing said
-     * about it.
+     * a ray goes through: the block face convention, the swap a quarter turn makes, then the rect the model states
+     * for that face. Nothing about the mapping is assumed, which is why a face the model mirrored or laid on its side
+     * needs nothing said about it.
      */
     private static float[] corners(MeshCube box, Direction side, BakedFace face) {
         Direction stated = blockSide(side);
@@ -204,15 +231,15 @@ public final class BlockItems {
         for (int across = 0; across < 2; across++) {
             for (int down = 0; down < 2; down++) {
                 float[] at = box.pointAt(side, across, down);
-                double u = BakedFace.u(stated, BOX - at[0], at[1], BOX - at[2]);
-                double v = BakedFace.v(stated, BOX - at[0], at[1], BOX - at[2]);
+                double alongU = BakedFace.u(stated, BOX - at[0], at[1], BOX - at[2]);
+                double alongV = BakedFace.v(stated, BOX - at[0], at[1], BOX - at[2]);
 
-                float su = (float) (face.u1() + u / BOX * (face.u2() - face.u1()));
-                float sv = (float) (face.v1() + v / BOX * (face.v2() - face.v1()));
+                double u = face.swapsAxes() ? alongV : alongU;
+                double v = face.swapsAxes() ? alongU : alongV;
 
                 int slot = MeshCube.corner(across == 1, down == 1) * 2;
-                corners[slot] = Texture.turnedU(su, sv, face.rotation()) / BOX;
-                corners[slot + 1] = Texture.turnedV(su, sv, face.rotation()) / BOX;
+                corners[slot] = (float) (face.u1() + u / BOX * (face.u2() - face.u1())) / BOX;
+                corners[slot + 1] = (float) (face.v1() + v / BOX * (face.v2() - face.v1())) / BOX;
             }
         }
         return corners;

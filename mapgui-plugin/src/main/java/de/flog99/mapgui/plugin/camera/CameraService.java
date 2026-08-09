@@ -184,7 +184,7 @@ public final class CameraService implements Camera {
         }
         // Not under the entities option, whatever the trace calls these: a chest is part of the build, and turning
         // entities off asks for the world without the things standing in it rather than with holes in the walls.
-        entities.addAll(BlockEntityCapture.take(eye, ready.mobs()));
+        entities.addAll(BlockEntityCapture.take(eye, ready.mobs(), skins));
         long gathered = System.nanoTime();
 
         captures.execute(() -> {
@@ -326,6 +326,8 @@ public final class CameraService implements Camera {
         // One reader of the item definitions for both the pose and the geometry, so a held block cannot be posed by one
         // model's rules and shaped by another's.
         ItemDefinitions definitions = new ItemDefinitions(assets.stack(), colors);
+        // Shared, since a dropped item wants the ground transform out of the same display block a held one reads.
+        ItemPoses poses = new ItemPoses(assets.stack(), definitions);
 
         baked = new Baked(
                 models,
@@ -334,8 +336,8 @@ public final class CameraService implements Camera {
                 new BiomeTints(colors),
                 new MobAssets(
                         atlas,
-                        new ItemPoses(assets.stack(), definitions),
-                        new ItemModels(atlas, new BlockItems(models, definitions)),
+                        poses,
+                        new ItemModels(atlas, new BlockItems(models, definitions), models, poses),
                         new EquipmentAssets(assets.stack()),
                         new EntityVariants(assets.stack())
                 ),

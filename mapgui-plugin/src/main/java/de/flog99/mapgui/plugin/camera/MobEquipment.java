@@ -45,7 +45,7 @@ final class MobEquipment {
     }
 
     /** Every layer this entity wears over {@code base}, empty for the many that wear nothing. */
-    static List<EntitySnapshot> wornBy(Entity entity, EntitySnapshot base, String type, MobAssets assets) {
+    static List<EntitySnapshot> wornBy(Entity entity, EntitySnapshot base, String type, MobAssets assets, SkinCache skins) {
         if (!(entity instanceof LivingEntity living)) return List.of();
 
         EntityEquipment worn = living.getEquipment();
@@ -68,8 +68,8 @@ final class MobEquipment {
 
         // One skeleton in twenty is left-handed, and vanilla poses a held item by the arm rather than by the hand.
         boolean rightHanded = !leftHanded(entity);
-        hold(layers, base, assets, worn.getItemInMainHand(), rightHanded);
-        hold(layers, base, assets, worn.getItemInOffHand(), !rightHanded);
+        hold(layers, base, assets, skins, worn.getItemInMainHand(), rightHanded);
+        hold(layers, base, assets, skins, worn.getItemInOffHand(), !rightHanded);
 
         wear(layers, base, assets, entity);
         contains(layers, base, assets, type, worn.getItem(EquipmentSlot.BODY));
@@ -156,7 +156,7 @@ final class MobEquipment {
      * Whatever is in one hand, drawn there. {@link ItemModels} decides what shape an item is, {@link ItemPoses} says
      * how the client holds it, and this puts the two together.
      */
-    private static void hold(List<EntitySnapshot> into, EntitySnapshot holder, MobAssets assets,
+    private static void hold(List<EntitySnapshot> into, EntitySnapshot holder, MobAssets assets, SkinCache skins,
                              ItemStack item, boolean rightArm) {
         if (item == null || item.isEmpty()) return;
 
@@ -169,7 +169,7 @@ final class MobEquipment {
 
             ItemPoses.Pose pose = assets.poses().of(id, rightArm);
             // Built at the origin and then put in the hand, since where the hand is depends on the holder's mesh.
-            for (EntitySnapshot layer : layers) {
+            for (EntitySnapshot layer : skins.faced(layers, item)) {
                 EntitySnapshot inHand = EntitySnapshot.held(holder, rightArm, layer, pose);
                 if (inHand != null) {
                     into.add(inHand);

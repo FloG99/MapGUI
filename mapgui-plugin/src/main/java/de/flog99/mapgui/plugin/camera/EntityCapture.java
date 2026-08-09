@@ -4,6 +4,7 @@ import de.flog99.mapgui.render.EntitySnapshot;
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.Location;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Ageable;
 import org.bukkit.entity.ChestedHorse;
 import org.bukkit.entity.ComplexEntityPart;
@@ -13,6 +14,7 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fish;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Sheep;
@@ -88,11 +90,11 @@ final class EntityCapture {
                         id, at.getX(), at.getY() + bob(dropped), at.getZ(), spin(dropped));
                 // Empty when neither a sprite nor a block model resolved, which falls through to the box below.
                 if (!sprite.isEmpty()) {
-                    return sprite;
+                    return skins.faced(sprite, dropped.getItemStack());
                 }
             }
         } else {
-            List<EntitySnapshot> drawn = mobSnapshots(entity, at, type, assets);
+            List<EntitySnapshot> drawn = mobSnapshots(entity, at, type, assets, skins);
             if (drawn != null) return drawn;
         }
 
@@ -109,12 +111,12 @@ final class EntityCapture {
 
         List<EntitySnapshot> drawn = new ArrayList<>();
         drawn.add(body);
-        drawn.addAll(MobEquipment.wornBy(player, body, type, assets));
+        drawn.addAll(MobEquipment.wornBy(player, body, type, assets, skins));
         return drawn;
     }
 
     /** Null for a type with no authored shape, which is the caller's cue to fall back to a bounding box. */
-    private static List<EntitySnapshot> mobSnapshots(Entity entity, Location at, String type, MobAssets assets) {
+    private static List<EntitySnapshot> mobSnapshots(Entity entity, Location at, String type, MobAssets assets, SkinCache skins) {
         String variant = MobTextures.variantOf(entity, type);
         float body = bodyYaw(entity);
         EntitySnapshot authored = EntitySnapshot.mob(
@@ -136,7 +138,32 @@ final class EntityCapture {
         if (layer != null) {
             drawn.add(layer);
         }
-        drawn.addAll(MobEquipment.wornBy(entity, dressed, type, assets));
+        drawn.addAll(MobEquipment.wornBy(entity, dressed, type, assets, skins));
+        drawn.addAll(carried(entity, dressed, assets));
+        return drawn;
+    }
+
+    /**
+     * The block a minecart is carrying, which is the whole of what makes one a chest or a tnt minecart: every kind of
+     * cart is the same mesh in the same texture, and what tells them apart is the block the cart states.
+     *
+     * <p>The block's own state rather than its item, which is how the client resolves it and not a detail: a hopper's
+     * item model is a flat icon and its block model is the funnel, and a cart carrying the first is a cart carrying a
+     * picture.
+     */
+    private static List<EntitySnapshot> carried(Entity entity, EntitySnapshot cart, MobAssets assets) {
+        if (!(entity instanceof Minecart minecart)) return List.of();
+
+        BlockData block = minecart.getDisplayBlockData();
+        if (block == null || block.getMaterial().isAir()) return List.of();
+
+        List<EntitySnapshot> drawn = new ArrayList<>();
+        for (EntitySnapshot layer : assets.items().displayed(block.getAsString(), block.getMaterial().getKey().asString())) {
+            EntitySnapshot inside = EntitySnapshot.inCart(cart, layer, minecart.getDisplayBlockOffset());
+            if (inside != null) {
+                drawn.add(inside);
+            }
+        }
         return drawn;
     }
 

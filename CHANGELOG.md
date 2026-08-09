@@ -21,6 +21,52 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **Minecarts and boats are drawn**, along with the block a minecart carries. Both were left to the bounding box
+  fallback, which found a texture for a minecart and drew the cart's sheet stretched over a coffin, and found none for
+  a boat or a chest minecart and drew nothing at all. Their renderers turn a model over like a mob's and then stand it
+  0.375 blocks up rather than vanilla's 1.501, and a boat carries a further quarter turn because its hull is built
+  along its side - so a boat now points its bow where it is going instead of sailing broadside. What makes a cart a
+  tnt or a hopper minecart is the block it displays, drawn from that block's own <i>block</i> model at three quarters
+  size the way the client draws it - a hopper's item model is a flat icon and its block model is the funnel, and a
+  cart carrying the first is a cart carrying a picture. A chest minecart gets the chest mesh, which is where the
+  client gets it too: `chest.json` has no geometry and the client keeps a built-in model for it.
+- **The shapes the client draws in code are drawn here too.** A chest, a shulker box, a conduit, a shield, a banner
+  and a trident all say `minecraft:special` in their item definition and name no model at all, so every one of them
+  drew nothing in a hand and nothing on the floor - or worse, fell through to a cube of whatever texture happened to
+  be named after the block, which is what made a dropped conduit a small brown box with gaps in it. Each is now drawn
+  from the same mesh its block entity is, placed inside the item's box by the transform the definition itself states:
+  the translation, the scale and the pair of quaternions are read rather than guessed, which is what puts a shulker
+  box a block and a half up and a banner at two thirds size without a table here saying so. A banner comes out as its
+  pole and its cloth, the cloth in the dye its definition names.
+- Fixed: a definition may reach its model through a branch a capture cannot evaluate - a shield is drawn one way while
+  its holder is blocking, a chest wears tinsel between the 24th and the 26th of December - and reading only the top
+  level left both resolving to their own name, so they had neither a shape nor the pose their model states. Each
+  branch is now read at its own default.
+- **Shulker boxes, conduits, banners and bells are drawn where they stand.** A shulker box sits on whichever of its
+  block's six faces it was placed against, turned the way `Direction#getRotation` turns it, and wears its dye. A
+  banner is its pole and its cloth, standing at whichever sixteenth of a circle it was placed at or hung flat against
+  a wall, in its base colour - **its patterns are not drawn**, since each is a mask tinted by its own dye laid over
+  the last and compositing here takes no colour per layer. A bell is the bell itself: what holds it up is in the
+  block model and was always drawn, and the thing hanging between the posts was not.
+- **Heads are drawn, placed and dropped and in a hand.** All seven, from `SkullModel` the way chests are drawn from
+  `ChestModel`, standing on the block rather than a block and a half above it and turned to whichever sixteenth of a
+  circle they were placed at - or hung a quarter block off the wall they are on. A player head wears its owner's skin,
+  fetched the same way a player's is and shared with them when it is their own face.
+- **A dropped item is the picture its model names, extruded**, rather than a texture named after the item. Dead coral
+  is drawn from `block/dead_tube_coral` and has no icon of its own, so the name rule found nothing and it fell through
+  to the six-sided cube a block with no model gets - a stalk of coral drawn as a brick. The icon now comes from the
+  model's own `layer0`, and it is extruded along its outline the way a held one already was.
+- Fixed: a dropped item is shrunk by what its own model's `ground` transform states rather than by one number per kind
+  of shape. Half for an icon and a quarter for a block are what `item/generated` and `block/block` say, so they are
+  right for nearly everything by inheritance and wrong for whatever states its own - heavy core says a half, and lay
+  on the floor at half the size the client draws it.
+- Fixed: a face may name its texture variable without the leading `#`, which vanilla's own `heavy_core` does and the
+  client allows. Read literally it is a texture nobody has, so a placed heavy core was missing-texture purple and a
+  dropped one fell back to a cube of the right texture in the wrong shape.
+- Fixed: a face's `rotation` turns which corner of the stated uv rect lands on which corner of the face, which is not
+  the same as turning the texture coordinate afterwards - the two agree only on a rect that is the whole texture the
+  right way up. Spore blossom states a mirrored rect and a quarter turn on each of its four leaves, and the east and
+  west ones came out pointing inward.
 - **Chests are drawn.** Their block json carries no geometry - the client builds them from `ChestModel` like a mob -
   so they used to be a hole you could see the wall through. The mesh is now baked out of the client the same way mob
   geometry already was, with the flip and ground lift suppressed: a block entity's model is authored the way the block
