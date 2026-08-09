@@ -521,6 +521,20 @@ class MeshExtractorTest {
         });
     }
 
+    /**
+     * A bogged's mushrooms are a part of its mesh with a name, which is what lets a capture take them off again.
+     *
+     * <p>They are built in and hidden by {@code BoggedModel} once somebody has sheared them, and the mesh here is
+     * baked unsheared - so the shearing has to happen per capture, by name, and a rename would silently leave every
+     * sheared bogged still wearing them.
+     */
+    @Test
+    void aBoggedsMushroomsAreAPartThatCanBeTakenOff() throws Exception {
+        MeshPart bogged = extract().get("monster.skeleton.BoggedModel").getFirst();
+
+        assertTrue(named(bogged, "mushrooms"), "the part a sheared bogged is drawn without");
+    }
+
     /** Whether any part of this tree answers to a name. */
     private static boolean named(MeshPart part, String name) {
         if (part.name().equals(name)) return true;

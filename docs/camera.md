@@ -318,13 +318,13 @@ Two settings decide the rate, and everything between them is spent:
 ```yaml
 camera:
   live:
-    budget-ms-per-tick: 1.0
+    max-ms-per-tick: 1.0
     max-fps: 10
 ```
 
-The **budget** is main-thread milliseconds a tick - the only kind of time a capture can take from the server, since
-the trace runs on its own threads. The **ceiling** is where a viewfinder stops looking better and only costs more. So
-with those defaults, and a frame that costs a millisecond to copy:
+`max-ms-per-tick` is the budget, in main-thread milliseconds - the only kind of time a capture can take from the
+server, since the trace runs on its own threads. `max-fps` is the ceiling, where a viewfinder stops looking better and
+only costs more. So with those defaults, and a frame that costs a millisecond to copy:
 
 | viewers | each gets | total main-thread cost |
 |---|---|---|
@@ -334,8 +334,8 @@ with those defaults, and a frame that costs a millisecond to copy:
 | 4 | 5 fps | 1.0 ms/t |
 
 One viewer does not get twenty times the frames for being alone, and the fourth to open one slows the other three
-rather than costing you a quarter more. Either setting takes `0` to mean no limit of that kind - `budget` at 0 lets
-everybody have the ceiling however many there are, `max-fps` at 0 lets one lonely viewer take the whole budget.
+rather than costing you a quarter more. Either setting takes `0` to mean no limit of that kind - `max-ms-per-tick` at
+0 lets everybody have the ceiling however many there are, `max-fps` at 0 lets one lonely viewer take the whole budget.
 
 **What a frame costs is measured, per viewer.** A 64-pixel viewfinder pointed at a wall copies a fraction of what a
 128-pixel one pointed across a valley does, so the budget is divided as *time* rather than as frames, and a view that

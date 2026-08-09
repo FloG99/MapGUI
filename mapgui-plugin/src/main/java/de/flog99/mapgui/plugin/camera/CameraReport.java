@@ -162,9 +162,9 @@ public final class CameraReport {
     }
 
     private static String settings(CaptureBudget.Live live) {
-        String budget = live.budgetMillisPerTick() <= 0
+        String budget = live.maxMillisPerTick() <= 0
                 ? "no budget"
-                : String.format("%.1fms/t", live.budgetMillisPerTick());
+                : String.format("%.1fms/t", live.maxMillisPerTick());
         String ceiling = live.fpsCeiling() <= 0 ? "no cap" : live.fpsCeiling() + " fps cap";
 
         return budget + ", " + ceiling;

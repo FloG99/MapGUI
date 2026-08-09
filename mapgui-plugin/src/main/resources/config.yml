@@ -124,7 +124,7 @@ camera:
     # is the number to turn down if the camera is what is hurting. A tick is 50ms, so 1.0 is 2% of one.
     #
     # 0 means no budget: views take whatever the ceiling allows, however many of them there are.
-    budget-ms-per-tick: 1.0
+    max-ms-per-tick: 1.0
 
     # The most frames a second any one view may take, however much budget is going spare. Past about 10 a
     # viewfinder on a map stops looking better and only costs more - a map holds 128 pixels and the palette

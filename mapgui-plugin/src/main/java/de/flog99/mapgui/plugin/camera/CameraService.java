@@ -159,12 +159,12 @@ public final class CameraService implements Camera {
      *                          and the angles a squid is really swimming at. Null draws neither
      * @param walls             the MapGUI walls a photographer can see, or null to leave them out of the picture
      * @param reuseChunksMillis how long a copied chunk may be served to a later capture, or 0 to copy every time
-     * @param liveBudgetMillis  main-thread time a tick may spend on live views, or 0 for no budget
+     * @param liveMaxMillis     main-thread time a tick may spend on live views, or 0 for no budget
      * @param liveMaxFps        the most frames a second any one live view may take, or 0 for no ceiling
      */
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance, int reuseChunksMillis, double liveBudgetMillis, int liveMaxFps) {
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance, int reuseChunksMillis, double liveMaxMillis, int liveMaxFps) {
         this.plugin = plugin;
-        this.budget = new CaptureBudget(liveBudgetMillis, liveMaxFps);
+        this.budget = new CaptureBudget(liveMaxMillis, liveMaxFps);
         this.framedMaps = new FramedMaps(backend == null ? null : backend.savedMapPixels());
         this.angles = backend == null ? null : backend.entityAngles();
         this.walls = walls;

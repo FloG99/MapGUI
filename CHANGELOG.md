@@ -8,7 +8,7 @@ surface is `mapgui-api` and `mapgui-layout`.
 ### Running a server
 
 - **A live camera view now costs the server what an admin gives it, however many people have one open.** Two settings,
-  `camera.live.budget-ms-per-tick` and `camera.live.max-fps`, and everything between them is spent: views take as many
+  `camera.live.max-ms-per-tick` and `camera.live.max-fps`, and everything between them is spent: views take as many
   frames as the budget affords and stop at the ceiling. At the defaults, and a frame costing a millisecond of
   main-thread time, one viewer gets 10 fps, two get 10 each, three get 6.7 and four get 5 - so a lone viewer does not
   get twenty times the frames for being alone, and the fourth to open one slows the other three rather than costing a
@@ -73,7 +73,8 @@ surface is `mapgui-api` and `mapgui-layout`.
   outer skin are not part of those mobs' meshes at all - each is a second copy of the body, grown by a fraction of a
   pixel, over a texture of its own. Without them the three of them stood there as a plain skeleton and a plain zombie
   in odd colours. A mob may now wear any number of these where it used to wear one, which is what the sheep's fleece
-  had been using on its own.
+  had been using on its own. Shearing a bogged takes the mushrooms off its head, which are part of its mesh rather
+  than one of these - the moss stays, because the client goes on drawing that.
 - **An idle illager folds its arms, and a pillager levels its crossbow.** The pose an illager stands in is a property
   of the individual rather than of the model - its own render state starts at neither - so it is now stated per mob and
   the client's own animation is what holds the mesh in it. An evoker, an illusioner and a vindicator stand with their

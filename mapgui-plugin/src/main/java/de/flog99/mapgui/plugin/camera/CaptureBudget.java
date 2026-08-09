@@ -54,7 +54,7 @@ final class CaptureBudget {
 
     private volatile double budgetNanosPerSecond;
     private volatile int fpsCeiling;
-    private volatile double budgetMillisPerTick;
+    private volatile double maxMillisPerTick;
 
     private long allocatedAt;
 
@@ -67,7 +67,7 @@ final class CaptureBudget {
     }
 
     /** What the live views are getting, for the report that has to explain a number somebody configured. */
-    record Live(int viewers, double slowestFps, double fastestFps, double budgetMillisPerTick, int fpsCeiling) {
+    record Live(int viewers, double slowestFps, double fastestFps, double maxMillisPerTick, int fpsCeiling) {
     }
 
     CaptureBudget(double millisPerTick, int fpsCeiling) {
@@ -84,7 +84,7 @@ final class CaptureBudget {
      * @param fpsCeiling    the most frames a second any one view may take, or 0 for no ceiling
      */
     void retune(double millisPerTick, int fpsCeiling) {
-        this.budgetMillisPerTick = millisPerTick;
+        this.maxMillisPerTick = millisPerTick;
         this.budgetNanosPerSecond = millisPerTick <= 0
                 ? Double.MAX_VALUE
                 : millisPerTick * 1_000_000 * TICKS_PER_SECOND;
@@ -152,7 +152,7 @@ final class CaptureBudget {
             fastest = Math.max(fastest, viewer.fps);
         }
 
-        return counted == 0 ? null : new Live(counted, slowest, fastest, budgetMillisPerTick, fpsCeiling);
+        return counted == 0 ? null : new Live(counted, slowest, fastest, maxMillisPerTick, fpsCeiling);
     }
 
     /**

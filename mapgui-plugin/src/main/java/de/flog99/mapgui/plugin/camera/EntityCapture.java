@@ -14,6 +14,7 @@ import org.bukkit.Location;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Ageable;
+import org.bukkit.entity.Bogged;
 import org.bukkit.entity.ChestedHorse;
 import org.bukkit.entity.ComplexEntityPart;
 import org.bukkit.entity.EnderCrystal;
@@ -396,6 +397,11 @@ final class EntityCapture {
         // four standing on the obsidian pillars do, and the entity carries the flag either way.
         if (entity instanceof EnderCrystal crystal && !crystal.isShowingBottom()) {
             return mob.without("base");
+        }
+        // The mushrooms on a bogged's head, which are built into its mesh and which BoggedModel hides once somebody
+        // has sheared them off. Its mossy overlay stays: that is a layer of its own and the client keeps drawing it.
+        if (entity instanceof Bogged bogged && bogged.isSheared()) {
+            return mob.without("mushrooms");
         }
 
         return mob;
