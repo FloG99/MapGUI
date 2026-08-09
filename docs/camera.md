@@ -461,8 +461,6 @@ filing a bug.
 
 **Left out of the frame entirely**
 
-- **Item frames and glow item frames**, and whatever is inside them.
-- **Paintings.**
 - **Arrows and every other projectile**, **primed TNT**, **falling blocks**, **experience orbs**, **fishing
   bobbers**, **leash knots**, **lightning**, **area effect clouds**, and the **display and marker** entities.
 
@@ -472,21 +470,32 @@ mob a normal world contains, plus armor stands, end crystals, minecarts and ever
 box where the assets carry a texture at `entity/<type>`. A type with neither is left out rather than drawn as a grey
 box or as the missing-texture checkerboard.
 
-- **Decorated pots and copper golem statues where they stand.** Their model json carries no geometry at all, because
-  the client draws them from a block entity renderer, so a capture shows what is behind them. End portals and end
-  gateways are the exception and get a built-in stand-in.
+Paintings and item frames are not among them. A painting is the slab the client draws, at its variant's own size,
+with the picture on the front and the planks it is nailed to around the rest. An item frame is its own block model
+with whatever is hanging in it, at the place and size the client hangs one.
 
-  Chests, heads, shulker boxes, conduits, banners and bells are no longer among them: their meshes are baked out of
-  the client's own model classes the way a mob's is, and placed the way each renderer places one. A decorated pot
-  cannot bake at all, because the class that builds its mesh maps every sherd to a sprite and so reaches the item
-  registry, which does not exist outside a running game.
+- **The picture on a framed map.** The frame is right - vanilla keeps a second model for one, with the border a map
+  fills - but a map's pixels live in the world's saved map data rather than in the assets, and nothing the trace can
+  reach carries them.
 
-- **The items the client draws in code** - a chest, a shulker box, a conduit, a shield, a banner, a trident, a head -
-  are drawn from the same mesh the block entity is, placed inside the item's box by the transform the item definition
-  states. A decorated pot is the one that still draws nothing, for the reason above.
+- **The text on a sign.** The sign itself is an ordinary block model and is drawn. Its text needs the client's font -
+  the glyph pages, the per-character widths and the layout rules - which nothing here reads yet.
 
-  A banner is drawn in its base colour. **Its patterns are not:** each is a mask tinted by its own dye and layered
-  over the last, and compositing here has no per-layer tint.
+- **The blocks the client draws from a block entity renderer** are drawn where they stand: chests, heads, shulker
+  boxes, conduits, banners, bells, decorated pots, copper golem statues, and the book over an enchanting table. Each
+  mesh is baked out of the client's own model classes the way a mob's is, and placed the way its own renderer places
+  one. End portals and end gateways get a built-in stand-in instead, since the client draws those from a shader
+  rather than from a mesh. What is standing on a shelf is drawn too, at the three places the client stands it -
+  though a shelf can be told to drop its items to the bottom instead, and that flag is on the block entity's own
+  data with nothing in Bukkit to read it, so they are always drawn centred.
+
+- **The items the client draws in code** - a chest, a shulker box, a conduit, a shield, a banner, a trident, a head, a
+  decorated pot, a copper golem statue - are drawn from the same mesh the block entity is, placed inside the item's
+  box by the transform the item definition states.
+
+  **A held or dropped one carries no data:** a banner is drawn in its base colour with no patterns, a pot with four
+  plain sides, and a statue in the standing pose whichever it really is. All three live in the stack's components,
+  which the asset layer that resolves an item model never sees. Where they stand in the world they are drawn in full.
 
 **Drawn, but not fully**
 

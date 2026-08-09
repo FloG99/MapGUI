@@ -65,14 +65,29 @@ class ItemModelsTest {
         assertEquals(TestWorld.SKY, pixel(world, sprite(0), facingNorthAt(0.4, 0.25)), "the clear half is seen through");
     }
 
-    /** Half a block across and half a block tall, which is the {@code ground} transform's half scale. */
+    /**
+     * Half a block across and half a block tall, which is the {@code ground} transform's half scale - and standing a
+     * pixel clear of the floor rather than on it, which is where {@code ItemEntityRenderer} puts one.
+     */
     @Test
     void aSpriteIsHalfABlockAcross() {
         TestWorld world = world();
 
-        assertPatch(SPRITE, pixel(world, sprite(0), facingNorthAt(0.6, 0.45)), "just under the top of the sprite");
-        assertEquals(TestWorld.SKY, pixel(world, sprite(0), facingNorthAt(0.6, 0.55)), "just over it");
+        assertPatch(SPRITE, pixel(world, sprite(0), facingNorthAt(0.6, 0.5)), "just under the top of the sprite");
+        assertEquals(TestWorld.SKY, pixel(world, sprite(0), facingNorthAt(0.6, 0.6)), "just over it");
         assertEquals(TestWorld.SKY, pixel(world, sprite(0), facingNorthAt(0.8, 0.25)), "beyond its edge");
+    }
+
+    /**
+     * And the pixel underneath it, which is the whole of what keeps a dropped item from sinking into the floor at the
+     * bottom of its bob.
+     */
+    @Test
+    void aDroppedSpriteNeverQuiteTouchesTheGround() {
+        TestWorld world = world();
+
+        assertEquals(TestWorld.SKY, pixel(world, sprite(0), facingNorthAt(0.6, 0.03)), "under the sprite's own bottom");
+        assertPatch(SPRITE, pixel(world, sprite(0), facingNorthAt(0.6, 0.1)), "and just inside it");
     }
 
     /**
@@ -162,7 +177,7 @@ class ItemModelsTest {
         EntitySnapshot dropped = resolve("diamond", atlas("item/diamond"));
 
         assertEquals("item/diamond", dropped.texture());
-        assertEquals(8f, dropped.model().height(), "the sprite is eight pixels tall");
+        assertEquals(9f, dropped.model().height(), "eight pixels of sprite, a pixel clear of the floor");
     }
 
     /** A block has no sprite of its own, so the block's texture stands in for it. */

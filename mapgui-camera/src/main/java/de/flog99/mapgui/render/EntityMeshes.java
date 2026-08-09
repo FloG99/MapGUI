@@ -567,9 +567,34 @@ final class EntityMeshes {
                 // bell itself, which is what was missing from every one of them.
                 .mob("bell", "entity/bell/bell_body", "block:object.bell.BellModel")
 
-                // A decorated pot is not here, and cannot be: its mesh is built by DecoratedPotRenderer, whose static
-                // fields map every sherd item to a sprite and so reach the item registry - which does not exist
-                // outside a running game. Same wall LayerDefinitions.createRoots() runs into, for the same reason.
+                // A decorated pot, in two meshes because it is drawn off two textures: the clay body, and the four
+                // sides, each of which wears whichever sherd was pressed into it. Measured from the block's corner
+                // like a chest, since its renderer neither flips it nor lifts it - only turns it to face.
+                //
+                // Both are built by DecoratedPotRenderer, whose static fields map every sherd item to a sprite and so
+                // reach the item registry. That is what {@link MeshExtractor#bootstrap} is for, and the only thing in
+                // this table that asks for it.
+                .mob("decorated_pot", "entity/decorated_pot/decorated_pot_base",
+                        "block:renderer.blockentity.DecoratedPotRenderer#createBaseLayer")
+                .mob("decorated_pot_sides", "entity/decorated_pot/decorated_pot_side",
+                        "block:renderer.blockentity.DecoratedPotRenderer#createSidesLayer")
+
+                // A copper golem statue, which is the golem's own mesh held in one of four poses - and the poses are
+                // four layers of vanilla's own rather than angles written here.
+                //
+                // Built the right way up by its own model class: CopperGolemStatueModel#setupAnim stands the mesh on
+                // the block floor and turns it over with a half circle about Z, which is the same turn a mob's
+                // renderer reaches with scale(-1, -1, 1). So it is stated as an entity mesh posed by that class, and
+                // the standing up comes out of the client rather than out of a lift here.
+                .mob("copper_golem_statue", "entity/copper_golem/copper_golem",
+                        "entity:animal.golem.CopperGolemModel#createBodyLayer!object.statue.CopperGolemStatueModel")
+                .variant("running", "entity:animal.golem.CopperGolemModel#createRunningPoseBodyLayer!object.statue.CopperGolemStatueModel")
+                .variant("sitting", "entity:animal.golem.CopperGolemModel#createSittingPoseBodyLayer!object.statue.CopperGolemStatueModel")
+                .variant("star", "entity:animal.golem.CopperGolemModel#createStarPoseBodyLayer!object.statue.CopperGolemStatueModel")
+
+                // The book over an enchanting table. Drawn the right way up and posed by its own model, which at rest
+                // means shut - the openness and the two page flips are all zero when nobody is standing there.
+                .mob("book", "entity/enchantment/enchanting_table_book", "entity:object.book.BookModel")
 
                 // A banner is a pole and a crossbar with a separate cloth hung off it, and the two are separate
                 // meshes because the cloth is the only part a dye colors and a pattern is drawn on. A wall banner has

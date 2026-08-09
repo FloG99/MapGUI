@@ -120,6 +120,40 @@ class ItemPosesTest {
         }
     }
 
+    /**
+     * An item in a frame faces out of it, which is the whole of what its {@code fixed} transform is for.
+     *
+     * <p>{@code item/generated} states a half turn about Y there and nothing else, and it is not decoration: an icon
+     * is a picture on one side of a one-pixel quad, so without that turn every item in every frame on the server
+     * shows you its back.
+     *
+     * <p>Asserted as a direction rather than as an angle because the pose comes back in the frame a block model
+     * arrives in - a half circle about Y from the client's own - and an angle read against the wrong one of those two
+     * looks right up until something is drawn.
+     */
+    @Test
+    void anItemInAFrameFacesOutOfIt() throws Exception {
+        Path jar = clientJar();
+        Assumptions.assumeTrue(jar != null, "no Minecraft " + VERSION + " installation to read item models from");
+
+        try (AssetPack pack = AssetPack.open(jar);
+             AssetStack stack = AssetStack.of(List.of(), pack, VERSION)) {
+
+            ItemPoses poses = new ItemPoses(stack, new ItemDefinitions(stack, new BiomeColors(stack, new TextureAtlas(stack))));
+
+            // Out of a frame is +Z here, not -Z: these are placed against a block model, which arrives a half circle
+            // about Y from where its json states it, so the way out is the opposite of a mob's face. The model's own
+            // half turn about Y is what leaves the picture pointing that way rather than into the wall.
+            ItemPoses.Pose framed = poses.stated("apple", ItemPoses.IN_FRAME);
+            assertEquals("back", nearest(turned(framed, FRONT)), "an apple in a frame shows its face out of it");
+            assertEquals(1f, framed.scale(), 1e-6f, "and at the size the model states, which for an icon is all of it");
+
+            // A block shrinks to half, and that is stated rather than assumed anywhere here.
+            assertEquals(0.5f, poses.stated("stone", ItemPoses.IN_FRAME).scale(), 1e-6f,
+                    "a block in a frame is half size");
+        }
+    }
+
     private static void assertPointing(ItemPoses poses, String item, float[] axis, String expected) {
         String found = nearest(turned(poses.of(item, true), axis));
 

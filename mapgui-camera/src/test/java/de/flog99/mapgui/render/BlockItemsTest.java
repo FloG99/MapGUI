@@ -357,8 +357,8 @@ class BlockItemsTest {
 
         assertEquals(2, dropped.size(), "one layer per texture, the same as in a hand");
         assertEquals(List.of(Direction.UP), sidesOf(layerOf(dropped, "block/rings")), "rings on top, not all round");
-        assertEquals(4f, layerOf(dropped, "block/rings").model().height(), 1e-4,
-                "a quarter of a block, which is what the ground transform states");
+        assertEquals(5f, layerOf(dropped, "block/rings").model().height(), 1e-4,
+                "a quarter of a block, which is what the ground transform states, a pixel clear of the floor");
     }
 
     /**

@@ -67,6 +67,25 @@ class TurnsTest {
     }
 
     /**
+     * The half circle a block model arrives with is a conjugation, not a mirror.
+     *
+     * <p>Which is what makes it safe to apply to an angle: a rotation carried through it is still a rotation of the
+     * same amount, about the axis that half circle moved. So a turn about Y survives untouched and the other two
+     * change sign, and doing it twice is doing nothing.
+     */
+    @Test
+    void aBlockModelsHalfCircleTurnsTheAxesAndNotTheAmount() {
+        float[] turn = Turns.part(0.3f, -0.7f, 1.2f);
+
+        assertArrayEquals(turn, Turns.halfTurned(Turns.halfTurned(turn)), 1e-6f);
+        assertArrayEquals(Turns.y(0.4), Turns.halfTurned(Turns.y(0.4)), 1e-6f, "a turn about Y is the axis itself");
+        assertArrayEquals(Turns.x(-0.4), Turns.halfTurned(Turns.x(0.4)), 1e-6f, "one about X runs the other way");
+        assertArrayEquals(Turns.z(-0.4), Turns.halfTurned(Turns.z(0.4)), 1e-6f, "and so does one about Z");
+
+        assertArrayEquals(new float[]{-1, 2, -3}, Turns.halfTurned(1, 2, 3), 1e-6f, "an offset mirrors X and Z");
+    }
+
+    /**
      * The two conventions really are different, so the conversion is not a no-op dressed up.
      *
      * <p>Same three angles, applied in the two orders the client uses in its two places - a model part and an item's

@@ -1,9 +1,15 @@
 package de.flog99.mapgui.plugin.camera;
 
 import de.flog99.mapgui.render.EntitySnapshot;
+import de.flog99.mapgui.render.ItemPoses;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
+import org.bukkit.Art;
+import org.bukkit.NamespacedKey;
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.Location;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Ageable;
 import org.bukkit.entity.ChestedHorse;
@@ -13,9 +19,11 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fish;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Mob;
+import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Sheep;
 import org.bukkit.entity.Slime;
@@ -84,6 +92,12 @@ final class EntityCapture {
         if (entity instanceof Player player) {
             List<EntitySnapshot> drawn = playerSnapshots(player, at, type, skins, assets);
             if (drawn != null) return drawn;
+        } else if (entity instanceof Painting hung) {
+            List<EntitySnapshot> drawn = painting(hung, at, assets);
+            if (!drawn.isEmpty()) return drawn;
+        } else if (entity instanceof ItemFrame frame) {
+            List<EntitySnapshot> drawn = itemFrame(frame, at, assets, skins);
+            if (!drawn.isEmpty()) return drawn;
         } else if (entity instanceof Item dropped) {
             for (String id : ItemIds.of(dropped.getItemStack())) {
                 List<EntitySnapshot> sprite = assets.items().dropped(
@@ -165,6 +179,122 @@ final class EntityCapture {
             }
         }
         return drawn;
+    }
+
+    /**
+     * A painting, at its variant's own size and wearing that variant's own picture.
+     *
+     * <p>Centred on where the entity stands, which is where the client centres it - a two-by-one painting hangs half a
+     * block either side of that point rather than starting at it.
+     *
+     * <p>The picture is looked up under the variant's name and nothing is guessed: a datapack painting whose png is
+     * not in the assets falls through to the bounding box, which is at least the right rectangle.
+     */
+    private static List<EntitySnapshot> painting(Painting hung, Location at, MobAssets assets) {
+        Art art = hung.getArt();
+        if (art == null) return List.of();
+
+        // Through the registry rather than off the constant, since the constants are on their way out and a datapack
+        // painting is not one of them anyway.
+        NamespacedKey variant = RegistryAccess.registryAccess().getRegistry(RegistryKey.PAINTING_VARIANT).getKey(art);
+        if (variant == null) return List.of();
+
+        String picture = "painting/" + variant.getKey();
+        if (!assets.atlas().has(picture) || !assets.atlas().has(PAINTING_BACK)) return List.of();
+
+        return EntitySnapshot.painting(at.getX(), at.getY(), at.getZ(), facingYaw(hung.getFacing()),
+                art.getBlockWidth(), art.getBlockHeight(), picture, PAINTING_BACK);
+    }
+
+    /** The planks every painting is nailed to, which is one texture for all of them. */
+    private static final String PAINTING_BACK = "painting/back";
+
+    /**
+     * An item frame: the frame itself, and whatever is hanging in it.
+     *
+     * <p>Its renderer pushes the whole thing 0.46875 blocks out along the face it is on, centres the frame's own
+     * block model on that point and turns it to face out - and then hangs the item at the front of the backplate, at
+     * half size, turned by whichever eighth of a circle the frame has been clicked round to.
+     *
+     * <p>A frame on a floor or a ceiling is tipped a quarter circle on top of that, and there the trace is left
+     * unturned and the tip carried in the model - which is what puts the two rotations in the client's own order,
+     * since the trace's is always outermost.
+     *
+     * <p>The yaw is a chest's rather than a painting's, because what is being placed is a block model: those arrive a
+     * half circle about Y from where their json states them, and that half circle is exactly the difference between
+     * the two conventions.
+     *
+     * <p><b>A framed map is a frame and no picture.</b> The frame is the right one - vanilla keeps a second model for
+     * it, with the border a map fills - but the pixels live in the world's saved map data rather than in the assets,
+     * and nothing in the trace can reach them.
+     */
+    private static List<EntitySnapshot> itemFrame(ItemFrame frame, Location at, MobAssets assets, SkinCache skins) {
+        BlockFace facing = frame.getFacing();
+        double x = at.getX() + facing.getModX() * FRAME_OUT;
+        double y = at.getY() + facing.getModY() * FRAME_OUT;
+        double z = at.getZ() + facing.getModZ() * FRAME_OUT;
+
+        float yaw = facingYaw(facing) - HALF_TURN;
+        float tipped = (float) Math.toRadians(-QUARTER * facing.getModY());
+
+        ItemStack held = frame.getItem();
+        boolean map = held != null && held.getType() == Material.FILLED_MAP;
+
+        List<EntitySnapshot> drawn = new ArrayList<>();
+        if (frame.isVisible()) {
+            String model = "block/" + (frame.getType() == EntityType.GLOW_ITEM_FRAME ? "glow_item_frame" : "item_frame")
+                    + (map ? "_map" : "");
+            for (EntitySnapshot layer : assets.items().modelled(model)) {
+                drawn.add(EntitySnapshot.frame(x, y, z, yaw, layer).tipped(tipped));
+            }
+        }
+        if (!map) {
+            drawn.addAll(framed(frame, held, x, y, z, yaw, tipped, assets, skins));
+        }
+        return List.copyOf(drawn);
+    }
+
+    /** How far out of its block the client pushes a frame, in blocks, and the quarter circle a flat one is tipped. */
+    private static final double FRAME_OUT = 0.46875;
+
+    private static final float QUARTER = 90;
+
+    /** The half circle a block model arrives carrying, which is the whole of what separates the two yaw rules. */
+    private static final float HALF_TURN = 180;
+
+    /** What is in the frame, or nothing at all - which is an empty frame and much the commonest. */
+    private static List<EntitySnapshot> framed(ItemFrame frame, ItemStack held, double x, double y, double z,
+                                               float yaw, float tipped, MobAssets assets, SkinCache skins) {
+        if (held == null || held.isEmpty()) return List.of();
+
+        float spin = (float) Math.toRadians(frame.getRotation().ordinal() * EIGHTH);
+        for (String id : ItemIds.of(held)) {
+            List<EntitySnapshot> layers = assets.items().held(id);
+            if (layers.isEmpty()) continue;
+
+            List<EntitySnapshot> hung = new ArrayList<>(layers.size());
+            for (EntitySnapshot layer : skins.faced(layers, held)) {
+                hung.add(EntitySnapshot.framed(x, y, z, yaw, layer,
+                        assets.items().stated(id, ItemPoses.IN_FRAME), spin).tipped(tipped));
+            }
+            return List.copyOf(hung);
+        }
+        return List.of();
+    }
+
+    /** An eighth of a circle, which is the whole range a frame can be turned to. */
+    private static final float EIGHTH = 360 / 8f;
+
+    /**
+     * The yaw that points a hung thing's front along a block face.
+     *
+     * <p>Vanilla turns a painting by {@code 180 - 90 * facing.get2DDataValue()}, which for the four horizontal faces
+     * is the facing's own yaw - and the trace turns a model by {@code -180 - yaw}, so the yaw to hand it is that
+     * facing's yaw and not the half turn a chest wants.
+     */
+    private static float facingYaw(BlockFace facing) {
+        Vector direction = facing.getDirection();
+        return (float) -Math.toDegrees(Math.atan2(direction.getX(), direction.getZ()));
     }
 
     /** The last resort, and empty for anything the assets carry no texture for at all. */
@@ -291,7 +421,14 @@ final class EntityCapture {
             "donkey", 20f,
             "mule", 20f,
             "skeleton_horse", 20f,
-            "zombie_horse", 20f
+            "zombie_horse", 20f,
+
+            // A dragon's head does not follow its head yaw at all. EnderDragonModel lays the neck and the head along
+            // the path the dragon has just flown, out of a flight history the client keeps for itself and the server
+            // never sends - so the only honest angle here is none, which draws the head straight ahead the way one
+            // flying level is drawn. Turned by the difference instead it swung most of a right angle, and the wrong
+            // way, because a dragon's body yaw is not kept in step with the yaw it carries.
+            "ender_dragon", 0f
     );
 
     static float headYaw(String type, float bodyYaw, float headYaw) {

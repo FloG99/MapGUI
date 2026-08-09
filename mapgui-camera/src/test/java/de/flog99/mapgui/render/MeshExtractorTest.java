@@ -369,6 +369,90 @@ class MeshExtractorTest {
     }
 
     /**
+     * A copper golem statue stands the right way up, on the floor of its block.
+     *
+     * <p>Worth pinning because nothing here stands it up: the mesh is the golem's own, built hanging off its neck the
+     * way every mob mesh is, and what turns it over is {@code CopperGolemStatueModel#setupAnim} - a half circle about
+     * Z and a root at zero. So this is really asking whether the client's own pose class ran, and the failure is not
+     * subtle: unposed, the statue hangs upside down through the floor.
+     *
+     * <p>The four poses are four layers of vanilla's own rather than angles applied here, so each is measured: a
+     * sitting golem is shorter than a standing one, and a mesh that came back the same height for both would mean the
+     * pose never took.
+     */
+    @Test
+    void aCopperGolemStatueStandsUpInItsOwnPose() throws Exception {
+        EntityMeshes.install(extract());
+
+        float[] standing = reach(EntityMeshes.of("copper_golem_statue", null, false).model());
+        assertEquals(0, standing[0], 0.05, "on the floor of its block, not hanging below it");
+        assertEquals(24f, standing[1], 0.05, "a block and a half of golem");
+
+        float[] sitting = reach(EntityMeshes.of("copper_golem_statue", "sitting", false).model());
+        assertEquals(0, sitting[0], 0.05, "likewise, sitting");
+        assertTrue(sitting[1] < standing[1], "and a sitting golem is shorter than a standing one");
+    }
+
+    /**
+     * The decorated pot bakes, which is the whole point of filling a registry before the second pass.
+     *
+     * <p>Its geometry is as plain as anything else here; what is not plain is reaching it. The class that builds it
+     * maps every sherd to a sprite in its static fields, so loading it at all reads the pattern registry - and an
+     * empty registry throws. Both meshes are asked for because they come off two different textures.
+     */
+    @Test
+    void theDecoratedPotBakesOnceItsPatternRegistryIsFilled() throws Exception {
+        EntityMeshes.install(extract());
+
+        float[] pot = reach(EntityMeshes.of("decorated_pot", null, false).model());
+        assertEquals(0, pot[0], 0.05, "the pot stands on the floor of its block");
+
+        float[] sides = reach(EntityMeshes.of("decorated_pot_sides", null, false).model());
+        assertEquals(0, sides[0], 0.05, "and so do its four sides");
+        assertEquals(16f, sides[1], 0.05, "which are the block's own height, since they are the body of it");
+    }
+
+    /**
+     * How high and how low a model really reaches, rotations and all.
+     *
+     * <p>Its own walk rather than {@link EntityModel#height()}, which is deliberately a loose bound: that one skips
+     * the part rotations, because for a search box a rotated part never reaches further than the corner term already
+     * allows. Here the rotations are the whole question - a mesh stood up by a half circle about Z measures as hanging
+     * below zero until you apply it.
+     *
+     * @return lowest and highest, in entity pixels
+     */
+    private static float[] reach(EntityModel model) {
+        float[] bounds = {Float.MAX_VALUE, -Float.MAX_VALUE};
+        for (MeshPart part : model.parts()) {
+            reach(part, 0, 0, 0, Turns.none(), bounds);
+        }
+        return bounds;
+    }
+
+    private static void reach(MeshPart part, float x, float y, float z, float[] turn, float[] bounds) {
+        float[] offset = Turns.apply(turn, part.x(), part.y(), part.z());
+        float atX = x + offset[0];
+        float atY = y + offset[1];
+        float atZ = z + offset[2];
+        float[] turned = Turns.times(turn, Turns.part(part.xRot(), part.yRot(), part.zRot()));
+
+        for (MeshCube cube : part.cubes()) {
+            for (int corner = 0; corner < 8; corner++) {
+                float[] at = Turns.apply(turned,
+                        (corner & 1) == 0 ? cube.minX() : cube.maxX(),
+                        (corner & 2) == 0 ? cube.minY() : cube.maxY(),
+                        (corner & 4) == 0 ? cube.minZ() : cube.maxZ());
+                bounds[0] = Math.min(bounds[0], atY + at[1]);
+                bounds[1] = Math.max(bounds[1], atY + at[1]);
+            }
+        }
+        for (MeshPart child : part.children()) {
+            reach(child, atX, atY, atZ, turned, bounds);
+        }
+    }
+
+    /**
      * A skull stands on the block it is in rather than a block and a half above it.
      *
      * <p>Which is the whole of what its lift is for: {@code SkullBlockRenderer} turns the model over the way a mob's

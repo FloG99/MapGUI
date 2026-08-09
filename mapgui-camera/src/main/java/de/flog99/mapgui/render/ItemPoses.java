@@ -109,6 +109,50 @@ public final class ItemPoses {
 
     private final Map<String, Float> grounds = new ConcurrentHashMap<>();
 
+    /** Where a frame's pose is stated, and a shelf's. Both are display contexts like the two held ones. */
+    public static final String IN_FRAME = "fixed";
+
+    public static final String ON_SHELF = "on_shelf";
+
+    /**
+     * How this item sits when something other than a hand is holding it still.
+     *
+     * <p>Read straight rather than run through the hand chain {@link #of} builds: there is no arm here and nothing to
+     * turn about one, so what comes back is the model's own transform and nothing else. That transform is not
+     * decoration - a plain item states a half turn about Y in a frame, and without it every icon in every frame faces
+     * backwards.
+     *
+     * <p>Never null. An item whose chain states nothing for this context is held square and full size, which is what
+     * the transform's own identity comes to.
+     *
+     * <p>Handed back in the frame a block model arrives in rather than the client's own - see
+     * {@link Turns#halfTurned} - since what this places is one of those.
+     *
+     * @param context {@link #IN_FRAME} or {@link #ON_SHELF}
+     */
+    public Pose stated(String item, String context) {
+        return stated.computeIfAbsent(context + " " + item, key -> read(item, context));
+    }
+
+    private final Map<String, Pose> stated = new ConcurrentHashMap<>();
+
+    private Pose read(String item, String context) {
+        JsonObject display = displayOf(definitions.of(item).model(), 0);
+        if (display == null || !display.has(context)) return SQUARE;
+
+        JsonObject placed = display.getAsJsonObject(context);
+        float[] rotation = numbers(placed, "rotation", 0);
+        float[] translation = numbers(placed, "translation", 0);
+
+        return new Pose(
+                Turns.halfTurned(translation[0], translation[1], translation[2]),
+                Turns.angles(Turns.halfTurned(Turns.display(rotation[0], rotation[1], rotation[2]))),
+                Math.max(0.01f, numbers(placed, "scale", 1)[0]));
+    }
+
+    /** The transform that does nothing, for an item whose chain states none for the context asked about. */
+    private static final Pose SQUARE = new Pose(new float[3], new float[3], 1);
+
     private Pose read(String item, boolean rightArm) {
         JsonObject display = displayOf(definitions.of(item).model(), 0);
         if (display == null) {

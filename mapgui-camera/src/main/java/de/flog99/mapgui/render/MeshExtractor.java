@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.RecordComponent;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
@@ -73,32 +74,110 @@ final class MeshExtractor {
     /**
      * Bakes every mesh {@link EntityMeshes} asks for out of a client jar.
      *
+     * <p>Twice over when the first pass leaves something out: the handful of meshes whose class reaches the game's
+     * registries need those filled first, which is expensive and so is only paid for once something has asked.
+     *
+     * @param parent the plugin's own loader, which supplies the shared libraries - see {@link #bake}
+     * @return mesh name to its root parts, in entity space, missing any entry that would not bake
+     */
+    static Map<String, List<MeshPart>> extract(Path jar, ClassLoader parent, List<EntityMeshes.Spec> specs) throws IOException, ReflectiveOperationException {
+        Map<String, List<MeshPart>> meshes = new LinkedHashMap<>();
+        List<EntityMeshes.Spec> missing = bake(jar, parent, specs, false, meshes);
+        if (!missing.isEmpty()) {
+            bake(jar, parent, missing, true, meshes);
+        }
+        return meshes;
+    }
+
+    /**
+     * One pass over a list of specs, into {@code meshes}.
+     *
      * <p>The loader is child first for {@code net.minecraft} and parent first for everything else. That is not a
      * detail: a Paper server already has {@code net.minecraft} classes of its own, and letting half of a model's
      * dependencies come from the server and half from the jar is how you get a mesh builder holding a codec that
      * disagrees with it. The libraries below - guava, fastutil, netty, gson and the rest - do come from the
      * parent, because those the server has at the matching version and the jar does not contain them at all.
      *
-     * @param parent the plugin's own loader, which is what supplies those libraries
-     * @return mesh name to its root parts, in entity space, missing any entry that would not bake
+     * <p>The loader is also why a failed mesh gets a second pass rather than a retry: a class whose initializer threw
+     * is marked erroneous for the life of the loader it was loaded by, so the only way back to it is a new one.
+     *
+     * @param registries whether to bootstrap the game before baking - see {@link #bootstrap}
+     * @return the specs this pass did not produce
      */
-    static Map<String, List<MeshPart>> extract(Path jar, ClassLoader parent, List<EntityMeshes.Spec> specs) throws IOException, ReflectiveOperationException {
+    private static List<EntityMeshes.Spec> bake(Path jar, ClassLoader parent, List<EntityMeshes.Spec> specs,
+                                                boolean registries, Map<String, List<MeshPart>> meshes) throws IOException, ReflectiveOperationException {
         URL[] classpath = {jar.toUri().toURL()};
 
         // The loader outside the extractor rather than owned by it, because a jar that is not a client jar fails
         // in the constructor - and a loader that leaked there would hold the file open, which on Windows means
         // nothing can delete it afterwards.
         try (URLClassLoader loader = new ClientLoader("mapgui-client-mesh", classpath, parent)) {
-            MeshExtractor extractor = new MeshExtractor(loader);
+            if (registries) {
+                bootstrap(loader);
+            }
 
-            Map<String, List<MeshPart>> meshes = new LinkedHashMap<>();
+            MeshExtractor extractor = new MeshExtractor(loader);
+            List<EntityMeshes.Spec> missing = new ArrayList<>();
             for (EntityMeshes.Spec spec : specs) {
                 List<MeshPart> parts = extractor.bake(spec);
-                if (!parts.isEmpty()) {
+                if (parts.isEmpty()) {
+                    missing.add(spec);
+                } else {
                     meshes.put(spec.mesh(), parts);
                 }
             }
-            return meshes;
+            return missing;
+        }
+    }
+
+    /**
+     * The registries a mesh's own class reads, as the registry field and the class that fills it.
+     *
+     * <p>A decorated pot is the only one in 26.2. Its geometry is pure data like everything else here, but it is built
+     * by {@code DecoratedPotRenderer}, whose static fields map every sherd item to a sprite - so touching the class at
+     * all runs {@code DECORATED_POT_PATTERN.getOrThrow}, and an empty registry refuses to answer. The mesh is not what
+     * needs a registry; the class it happens to live on is.
+     */
+    private static final Map<String, String> REGISTRIES = Map.of(
+            "DECORATED_POT_PATTERN", "net.minecraft.world.level.block.entity.DecoratedPotPatterns");
+
+    /**
+     * Opens the game's registries inside the jar's own loader and fills the few {@link #REGISTRIES} names, for the
+     * meshes that cannot be reached without them.
+     *
+     * <p>Not {@code Bootstrap.bootStrap()}, which is the obvious answer and the wrong one. That builds every block,
+     * item and entity type in the game: five seconds and a hundred megabytes per call, it replaces {@code System.out}
+     * and {@code System.err} for the whole JVM on its way out, and it leaves log4j holding loggers that pin the
+     * throwaway loader in memory. Running eleven extractions in one JVM was enough to exhaust a test worker's heap.
+     * What is wanted here is two dozen pot patterns.
+     *
+     * <p>So the flag that guards the registries is set directly and only the wanted ones are filled. The flag is
+     * vanilla's own order rather than a trick played on it: {@code bootStrap()} sets it before it fills anything,
+     * because filling a registry is what checks it.
+     *
+     * <p>Second pass rather than always, and best effort throughout: a jar that will not give this up loses the
+     * meshes that needed it and keeps every other one, which is the same bargain the rest of this class makes.
+     */
+    private static void bootstrap(ClassLoader loader) {
+        try {
+            Field bootstrapped = Class.forName("net.minecraft.server.Bootstrap", true, loader)
+                    .getDeclaredField("isBootstrapped");
+            bootstrapped.setAccessible(true);
+            bootstrapped.setBoolean(null, true);
+
+            Class<?> registries = Class.forName("net.minecraft.core.registries.BuiltInRegistries", true, loader);
+            Class<?> registry = Class.forName("net.minecraft.core.Registry", true, loader);
+
+            for (Map.Entry<String, String> wanted : REGISTRIES.entrySet()) {
+                Object filled = registries.getField(wanted.getKey()).get(null);
+                Class.forName(wanted.getValue(), true, loader).getMethod("bootstrap", registry).invoke(null, filled);
+
+                // Frozen as well as filled, which is not tidiness: registering an entry leaves the holder that names
+                // it unbound, and freezing is what binds them. Read back before that, every one of them throws.
+                filled.getClass().getMethod("freeze").invoke(filled);
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            // The meshes that wanted this stay missing, and their block draws from its json instead.
         }
     }
 
@@ -404,6 +483,14 @@ final class MeshExtractor {
         if (state == Float.class || state == float.class) return 0f;
         if (state == Double.class || state == double.class) return 0d;
 
+        // Or by something with no state at all, which is what a copper golem statue's Unit is saying: there is one
+        // of these and it is the one.
+        if (state.isEnum()) return resting(state);
+
+        // Or by a record of angles, which a book's openness and two page flips are. All zero is the shut book, and a
+        // record has no empty constructor to fill in afterwards - it is built whole or not at all.
+        if (state.isRecord()) return blank(state);
+
         Object made = state.getConstructor().newInstance();
 
         for (Class<?> level = state; level != null && level != Object.class; level = level.getSuperclass()) {
@@ -419,6 +506,29 @@ final class MeshExtractor {
             }
         }
         return made;
+    }
+
+    /** A record with every component at rest, through its canonical constructor since that is the only way in. */
+    private static Object blank(Class<?> record) throws ReflectiveOperationException {
+        RecordComponent[] components = record.getRecordComponents();
+        Class<?>[] types = new Class<?>[components.length];
+        Object[] values = new Object[components.length];
+
+        for (int i = 0; i < components.length; i++) {
+            types[i] = components[i].getType();
+            values[i] = still(types[i]);
+        }
+        return record.getDeclaredConstructor(types).newInstance(values);
+    }
+
+    /** What one component of such a record is when nothing is happening, which for every angle in one is zero. */
+    private static Object still(Class<?> type) {
+        if (type == float.class) return 0f;
+        if (type == double.class) return 0d;
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == boolean.class) return false;
+        return null;
     }
 
     /** The constant that means "nothing in particular", which is what a mob doing nothing in particular is in. */

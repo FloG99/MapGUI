@@ -1,5 +1,6 @@
 package de.flog99.mapgui.render;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -309,6 +310,70 @@ public record EntitySnapshot(
      */
     public EntitySnapshot posed(String part, float xRot, float yRot, float zRot) {
         return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.turned(part, xRot, yRot, zRot), texture, tint);
+    }
+
+    /**
+     * A painting, as the two layers it takes: the picture, and the planks behind and around it.
+     *
+     * <p>Both are the same slab at the same place and differ only in which sides of it draw, so nothing has to order
+     * them - a ray reaching the front never reaches the back, and one reaching the rim never reaches the picture.
+     *
+     * @param facing     where the picture points, in the yaw convention the rest of this takes
+     * @param blocksWide the variant's own size, which is what makes one painting four times another
+     */
+    public static List<EntitySnapshot> painting(double x, double y, double z, float facing,
+                                                int blocksWide, int blocksHigh, String art, String back) {
+        return List.of(
+                new EntitySnapshot(x, y, z, facing, facing, 0, 1f, EntityModel.painting(blocksWide, blocksHigh, true), art),
+                new EntitySnapshot(x, y, z, facing, facing, 0, 1f, EntityModel.painting(blocksWide, blocksHigh, false), back)
+        );
+    }
+
+    /**
+     * One layer of an item frame's own frame, centred on the block's middle the way its renderer centres it.
+     *
+     * @param layer one layer from {@link ItemModels#modelled}
+     */
+    public static EntitySnapshot frame(double x, double y, double z, float facing, EntitySnapshot layer) {
+        return new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
+                layer.model().centredInBox(), layer.texture(), layer.tint());
+    }
+
+    /**
+     * And one layer of what is in it, at the place and size the client hangs it.
+     *
+     * @param layer one layer from {@link ItemModels#held}, already resolved to a shape and a texture
+     * @param spin  how far round the frame has been turned, in radians
+     */
+    public static EntitySnapshot framed(double x, double y, double z, float facing,
+                                        EntitySnapshot layer, ItemPoses.Pose fixed, float spin) {
+        return new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
+                layer.model().inFrame(fixed, spin), layer.texture(), layer.tint());
+    }
+
+    /**
+     * One layer of an item standing on a shelf, in whichever of the three slots it is in.
+     *
+     * @param layer  one layer from {@link ItemModels#held}, already resolved to a shape and a texture
+     * @param offset where in the block the slot is, in entity pixels, in the shelf's own turned frame
+     */
+    public static EntitySnapshot onShelf(double x, double y, double z, float facing,
+                                         EntitySnapshot layer, ItemPoses.Pose shelf, float[] offset) {
+        return new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
+                layer.model().onShelf(shelf, offset), layer.texture(), layer.tint());
+    }
+
+    /**
+     * The same tipped onto its back or its front, for a frame on a floor or a ceiling.
+     *
+     * <p>Vanilla turns those about X <i>outside</i> its half circle about Y, and the trace's own turn is outside
+     * everything - so the angle stated here is the one that lands the same way round after being carried through
+     * that half circle, which reverses it.
+     *
+     * @param xRot in radians
+     */
+    public EntitySnapshot tipped(float xRot) {
+        return xRot == 0 ? this : turned(xRot, 0, 0, 0);
     }
 
     /** Anything with no mesh, drawn as its own bounding box. */

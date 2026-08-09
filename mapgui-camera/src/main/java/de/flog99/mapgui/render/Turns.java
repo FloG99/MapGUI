@@ -121,4 +121,28 @@ final class Turns {
         }
         return out;
     }
+
+    /**
+     * The same rotation seen from the frame a block model arrives in.
+     *
+     * <p>That frame is the model's own turned a half circle about Y - see {@link BlockItems}, which mirrors X and Z as
+     * it builds each box. So anything the client states against a block model's own axes has to come through the same
+     * turn before it can be applied here: an item hung in a frame is pushed along the client's +Z and this module's
+     * -Z, and turned the other way round about the axis it is pushed along.
+     *
+     * <p>The half turn is its own inverse, so this is the whole of the conversion in both directions: the four entries
+     * where exactly one of the row and the column is the Y one change sign.
+     */
+    static float[] halfTurned(float[] turn) {
+        float[] out = turn.clone();
+        for (int index : new int[]{1, 3, 5, 7}) {
+            out[index] = -out[index];
+        }
+        return out;
+    }
+
+    /** And one offset through the same turn, which is what mirroring X and Z comes to. */
+    static float[] halfTurned(float x, float y, float z) {
+        return new float[]{-x, y, -z};
+    }
 }

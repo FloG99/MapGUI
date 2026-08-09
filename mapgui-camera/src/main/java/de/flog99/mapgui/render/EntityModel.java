@@ -13,13 +13,15 @@ import java.util.Set;
  * left is the handful with no vanilla mesh: the player, whose overlay layers are per-player, and the stand-ins.
  *
  * @param height in entity pixels, for the screen rect that bounds the search
+ * @param floor  the lowest point any of its cubes reaches, in the same pixels, which is not always zero - a ghast's
+ *               tentacles hang below where it stands, and a dropped item is stood on whatever this says
  * @param radius widest horizontal reach in blocks, likewise
  * @param culled whether only the near side of a cube may draw. False for a mob, since vanilla draws entity models
  *               with culling off and several rely on it - a chicken's leg is textured on one face and its underside,
  *               so culled it is a hole with the far side showing through. True for the things vanilla draws with a
  *               culling render type, where a flat quad carries the same picture mirrored on its back
  */
-record EntityModel(List<MeshPart> parts, float height, float radius, boolean culled) {
+record EntityModel(List<MeshPart> parts, float height, float floor, float radius, boolean culled) {
 
     private static final float PIXEL = 1 / 16f;
 
@@ -211,8 +213,9 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
         // since plenty of models reach below them - a ghast's tentacles hang well under where it stands.
         float across = bounds[2] * 1.45f;
         float middle = height / 2;
-        float down = Math.max(Math.abs(height - middle), Math.abs((bounds[0] == Float.MAX_VALUE ? 0 : bounds[0]) - middle));
-        return new EntityModel(List.copyOf(parts), height, (float) Math.hypot(across, down) * PIXEL, culled);
+        float floor = bounds[0] == Float.MAX_VALUE ? 0 : bounds[0];
+        float down = Math.max(Math.abs(height - middle), Math.abs(floor - middle));
+        return new EntityModel(List.copyOf(parts), height, floor, (float) Math.hypot(across, down) * PIXEL, culled);
     }
 
     /**
@@ -346,6 +349,35 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
     }
 
     /**
+     * A painting, as the client builds one: a slab a sixteenth of a block thick, as many blocks across and up as the
+     * variant is, centred on where the entity stands.
+     *
+     * <p>Two of these make a whole painting, because the front and the back wear different textures and a snapshot
+     * samples one. The picture goes on the model's -Z side, which is the side a yaw points outward - the same
+     * convention a mob's face follows.
+     *
+     * @param front whether this is the picture or the planks behind and around it
+     */
+    static EntityModel painting(int blocksWide, int blocksHigh, boolean front) {
+        float acrossHalf = blocksWide * MODEL_MIDDLE;
+        float upHalf = blocksHigh * MODEL_MIDDLE;
+
+        float[][] faces = new float[6][];
+        for (Direction side : Direction.values()) {
+            if ((side == Direction.NORTH) == front) {
+                faces[side.ordinal()] = MeshCube.whole();
+            }
+        }
+
+        MeshCube slab = new MeshCube(-acrossHalf, -upHalf, -PAINTING_HALF_THICKNESS,
+                acrossHalf, upHalf, PAINTING_HALF_THICKNESS, faces);
+        return of(List.of(MeshPart.of("painting", List.of(slab))), true);
+    }
+
+    /** Half of vanilla's own sixteenth of a block, since the slab is measured either side of the hanging point. */
+    private static final float PAINTING_HALF_THICKNESS = 0.5f;
+
+    /**
      * The picture at the size and place the item model states, extruded along its own outline.
      *
      * <p>Built from the icon rather than from its frame - see {@link SpriteShape} - because an item is seen edge on
@@ -380,15 +412,25 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
 
     /**
      * This shape as a dropped item: shrunk about the middle of its own model box by the client's {@code ground}
-     * transform and stood on the ground. Shrinking the box rather than the geometry is what rests a partial block on
-     * the floor instead of hovering - a slab is the lower half of its box, so its own underside ends up at the bottom.
+     * transform and stood a pixel clear of the floor. Shrinking the box rather than the geometry is what rests a
+     * partial block on the floor instead of hovering - a slab is the lower half of its box, so its own underside ends
+     * up at the bottom.
+     *
+     * <p>The clearance is measured off the geometry rather than off the box, which is {@code ItemEntityRenderer}'s own
+     * arithmetic: it takes the model's bounding box after the transform, lifts by its lowest point and then adds a
+     * sixteenth. So the {@code ground} translation never has to be read - whatever it moves the shape by, this puts it
+     * back and leaves exactly the one pixel.
      */
     EntityModel onGround(float scale) {
         if (parts.isEmpty()) return this;
 
-        return of(List.of(new MeshPart("item", false, 0, MODEL_MIDDLE * scale, 0, 0, 0, 0,
+        float lift = (MODEL_MIDDLE - floor) * scale + GROUND_CLEARANCE;
+        return of(List.of(new MeshPart("item", false, 0, lift, 0, 0, 0, 0,
                 scale, scale, scale, List.of(), centred())), culled);
     }
+
+    /** The pixel {@code ItemEntityRenderer} keeps between a dropped item and the floor, so it never quite touches. */
+    private static final float GROUND_CLEARANCE = 1;
 
     /**
      * This block model riding in a minecart, at the place the cart's own renderer puts it.
@@ -467,6 +509,78 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
                 angles[0], angles[1], angles[2],
                 special.scale(), special.scale(), special.scale(), List.of(), parts)), culled);
     }
+
+    /**
+     * This block model centred on its own box, which is what {@code ItemFrameRenderer} does to the frame before it
+     * draws one: a model is measured from a corner and everything the frame is turned about is its middle.
+     */
+    EntityModel centredInBox() {
+        return of(centred(), culled);
+    }
+
+    /**
+     * This item hanging in an item frame, at the place and size the client hangs one.
+     *
+     * <p>Vanilla's chain, innermost first: the model centred on its own box, its own {@code fixed} transform, half
+     * size, turned by whichever eighth of a circle the frame was clicked round to, and pushed out to the front of the
+     * backplate. Two parts rather than four, because a part is already a scale then a rotation then a translation -
+     * which is the same order the client applies them in.
+     *
+     * <p>The push and the turn are stated the other way round from the client's, because a block model arrives here
+     * turned a half circle about Y - see {@link Turns#halfTurned}. The {@code fixed} pose has already come through
+     * that same turn.
+     *
+     * @param spin how far round the frame has been turned, in radians, in the client's own sign
+     */
+    EntityModel inFrame(ItemPoses.Pose fixed, float spin) {
+        if (parts.isEmpty()) return this;
+
+        List<MeshPart> posed = List.of(new MeshPart("fixed", false,
+                fixed.offset()[0], fixed.offset()[1], fixed.offset()[2],
+                fixed.rotation()[0], fixed.rotation()[1], fixed.rotation()[2],
+                fixed.scale(), fixed.scale(), fixed.scale(), List.of(), centred()));
+
+        return of(List.of(new MeshPart("framed", false, 0, 0, -FRAME_FRONT, 0, 0, -spin,
+                FRAMED_SCALE, FRAMED_SCALE, FRAMED_SCALE, List.of(), posed)), culled);
+    }
+
+    /** How far out of the block's middle the front of a frame's backplate is, in entity pixels. */
+    private static final float FRAME_FRONT = 0.4375f * MODEL_BOX;
+
+    /** And what the client draws a framed item at, which is the one number in that chain that is not the model's. */
+    private static final float FRAMED_SCALE = 0.5f;
+
+    /**
+     * This item standing on a shelf, at the place and size the client stands one.
+     *
+     * <p>Vanilla's chain again: the model centred on its own box, its own {@code on_shelf} transform, then lifted so
+     * that its <i>own</i> middle sits on the shelf's point - which is why the lift is measured off the posed shape
+     * rather than stated. A tall item and a flat one hang off the same point that way, which is what the client does
+     * and what a fixed offset would not.
+     *
+     * @param offset where in the block this slot is, in entity pixels, in the client's own axes - turned here for the
+     *               reason {@link #inFrame} gives
+     */
+    EntityModel onShelf(ItemPoses.Pose shelf, float[] offset) {
+        if (parts.isEmpty()) return this;
+
+        float[] slot = Turns.halfTurned(offset[0], offset[1], offset[2]);
+
+        EntityModel posed = of(List.of(new MeshPart("on_shelf", false,
+                shelf.offset()[0], shelf.offset()[1], shelf.offset()[2],
+                shelf.rotation()[0], shelf.rotation()[1], shelf.rotation()[2],
+                shelf.scale(), shelf.scale(), shelf.scale(), List.of(), centred())), culled);
+
+        float lift = -posed.floor() - (posed.height() - posed.floor()) / 2;
+        List<MeshPart> raised = List.of(new MeshPart("middle", false, 0, lift, 0, 0, 0, 0,
+                1, 1, 1, List.of(), posed.parts()));
+
+        return of(List.of(new MeshPart("slot", false, slot[0], slot[1], slot[2], 0, 0, 0,
+                SHELF_SCALE, SHELF_SCALE, SHELF_SCALE, List.of(), raised)), culled);
+    }
+
+    /** What a shelf shrinks what is standing on it to. */
+    private static final float SHELF_SCALE = 0.25f;
 
     /**
      * The same shape turned a half circle about the middle of its model box, which is the whole difference between

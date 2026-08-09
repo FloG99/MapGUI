@@ -125,9 +125,14 @@ record MeshCube(
     static MeshCube plain(float x, float y, float z, float width, float height, float depth) {
         float[][] faces = new float[6][];
         for (Direction side : Direction.values()) {
-            faces[side.ordinal()] = patch(0, 0, 1, 1, 1, 1, false);
+            faces[side.ordinal()] = whole();
         }
         return new MeshCube(x, y, z, x + width, y + height, z + depth, faces);
+    }
+
+    /** One side reading the whole texture, for a cube built a face at a time - a painting's picture and its back. */
+    static float[] whole() {
+        return patch(0, 0, 1, 1, 1, 1, false);
     }
 
     float[] face(Direction direction) {

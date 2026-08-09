@@ -21,6 +21,47 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **Item frames are drawn, and what is hanging in them.** The frame is its own block model - the glow one and the
+  map-sized one included - centred on the block's middle and pushed 0.46875 blocks out along the face it is on, and
+  the item hangs at the front of the backplate at half size, turned by whichever eighth of a circle the frame was
+  clicked round to. A frame on a floor or a ceiling is tipped a quarter circle on top of that, carried in the model
+  rather than in the yaw so that the two rotations end up in the client's own order. A framed **map** gets the frame
+  vanilla keeps for one and no picture: the pixels live in the world's saved map data rather than in the assets.
+- **What is standing on a shelf is drawn**, at the three places `ShelfRenderer` puts it - a fifth of a block either
+  side of the middle, a quarter forward, quarter size, and each item hung by its own middle so a tall one and a flat
+  one sit on the same point.
+- Both of those needed the item's `fixed` and `on_shelf` display transforms, which are now read the way the two held
+  ones already were. Not decoration: an icon is a picture on one side of a one-pixel quad, and `item/generated` states
+  the half turn that stops every item in every frame showing you its back.
+- **Decorated pots, copper golem statues, paintings and the enchanting table's book are drawn.** A pot comes out as
+  its clay body plus its four sides, each in whichever sherd was pressed into it - grouped by sherd, so a plain pot is
+  one layer and a fully decorated one is four. A statue is the golem's own mesh in whichever of vanilla's four pose
+  layers the block states, weathered to match the block it is. A painting is a slab a sixteenth of a block thick at
+  its variant's own size, the picture on the front and the planks it is nailed to around the rest. The book is shut
+  and tipped eighty degrees, which is where `EnchantTableRenderer` leaves it when nobody is standing there.
+- **Banner patterns are drawn.** Vanilla ships one white cloth and one white mask per pattern and draws each in the
+  dye that layer was made with, so the picture is not in the pngs at all - it is in the order and the colours. Those
+  layers are now composited into a texture of their own, since a snapshot carries one colour and a banner has as many
+  as it has layers. Sixteen dyes over forty-odd patterns is far too many combinations to hold as files.
+- **A decorated pot's mesh is reachable at all.** Its geometry is as plain as any other, but the class that builds it
+  maps every sherd to a sprite in its static fields, so loading it reads the pattern registry - and a registry that
+  has not been bootstrapped throws, which used to take the mesh with it. The extraction now makes a second pass for
+  whatever the first one missed, opening the registries and filling only the ones those classes read. Not
+  `Bootstrap.bootStrap()`, which builds every block, item and entity type in the game: five seconds and a hundred
+  megabytes a call, it replaces the JVM's `System.out` and `System.err` on its way out, and it leaves log4j pinning a
+  loader that was meant to be thrown away.
+- Fixed: **a dropped item rested on the floor and sank into it at the bottom of its bob.** The client measures the
+  model's box after the `ground` transform, lifts it by its lowest point and then adds a sixteenth of a block, so an
+  item never quite touches the ground however far it has bobbed down. That is now what happens here, which also means
+  the `ground` translation no longer has to be read - whatever it moves the shape by, the lift puts it back.
+- Fixed: **an ender dragon's head swung most of a right angle to the wrong side.** Its head does not follow the head
+  yaw at all: `EnderDragonModel` lays the neck and the head along the path the dragon has just flown, out of a flight
+  history the client keeps to itself. Drawn straight now, which is what one flying level looks like.
+- Fixed: a definition may state the transform that places a special on the branch above it rather than on the special
+  itself - a shield states it on the `condition` wrapping its two poses, a copper golem statue on the `select`
+  wrapping its four - and only the special's own was read, so both were placed as if they had none.
+- Fixed: a special's texture may be a whole file path rather than the one bare word a chest uses, which is how a
+  copper golem statue names its own.
 - **Minecarts and boats are drawn**, along with the block a minecart carries. Both were left to the bounding box
   fallback, which found a texture for a minecart and drew the cart's sheet stretched over a coffin, and found none for
   a boat or a chest minecart and drew nothing at all. Their renderers turn a model over like a mob's and then stand it

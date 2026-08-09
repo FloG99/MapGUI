@@ -144,6 +144,25 @@ public final class ItemModels {
     }
 
     /**
+     * One model by name, as its layers, for the shapes the client resolves by name and hangs on nothing - an item
+     * frame's own frame is {@code block/item_frame} and there is no block or item that names it.
+     *
+     * <p>Full size and at the origin, like every other layer here: where it goes is the caller's.
+     */
+    public List<EntitySnapshot> modelled(String model) {
+        return blocks.modelLayers(model, atlas);
+    }
+
+    /**
+     * How an item sits when something other than a hand is holding it still.
+     *
+     * @param context {@link ItemPoses#IN_FRAME} or {@link ItemPoses#ON_SHELF}
+     */
+    public ItemPoses.Pose stated(String item, String context) {
+        return poses.stated(item, context);
+    }
+
+    /**
      * The block entities the client draws from a built-in model rather than from json, as the mesh and texture each
      * wears. Only the ones something can carry are here - a banner needs data no capture carries anyway.
      */
@@ -170,8 +189,7 @@ public final class ItemModels {
      * same for all seven and which head it is comes from the item rather than from the definition, so that one is
      * looked up by the item's own name.
      *
-     * <p>Missing on purpose: a decorated pot, whose mesh {@link EntityMeshes} cannot bake, and a book and an end
-     * cube, which nothing carries.
+     * <p>Missing on purpose: a book and an end cube, which nothing carries.
      */
     private static final Map<String, List<String>> SPECIAL_MESHES = Map.of(
             "chest", List.of("chest"),
@@ -181,7 +199,12 @@ public final class ItemModels {
             "trident", List.of("trident"),
             // A banner is two: the pole and crossbar it hangs from, and the cloth, which is the only part the dye
             // colors and the only part a pattern is drawn on.
-            "banner", List.of("banner", "banner_flag")
+            "banner", List.of("banner", "banner_flag"),
+            // And a pot is two for the same kind of reason: the clay body and the four sides, which wear whichever
+            // sherds were pressed into them. Which sherds those are lives in the stack rather than in the assets, so
+            // an item is drawn with the four plain sides every undecorated pot has.
+            "decorated_pot", List.of("decorated_pot", "decorated_pot_sides"),
+            "copper_golem_statue", List.of("copper_golem_statue")
     );
 
     /** The meshes a dye colors rather than a texture, which is the cloth of a banner and nothing else so far. */
@@ -227,17 +250,30 @@ public final class ItemModels {
      * Which texture a special wears: the one its definition names, resolved against the folder the mesh's own texture
      * sits in, and the mesh's own where it names none.
      *
-     * <p>{@code "texture": "minecraft:normal"} on a chest is {@code entity/chest/normal}, and the same word means
-     * nothing on its own - so the folder comes from the mesh rather than from a second table.
+     * <p>Two spellings, and both are vanilla's own. A copper golem statue names the whole file,
+     * {@code minecraft:textures/entity/copper_golem/copper_golem.png}; a chest names one word,
+     * {@code minecraft:normal}, which means nothing on its own - so that one's folder comes from the mesh's own
+     * texture rather than from a second table.
      */
     private String textureOf(ItemDefinitions.Special drawn, String authored) {
         String named = drawn.texture();
         if (named == null) return authored;
 
+        String whole = named.startsWith(TEXTURES) ? named.substring(TEXTURES.length()) : named;
+        if (whole.endsWith(PNG)) {
+            whole = whole.substring(0, whole.length() - PNG.length());
+        }
+        if (atlas.has(whole)) return whole;
+
         int slash = authored.lastIndexOf('/');
-        String beside = slash < 0 ? named : authored.substring(0, slash + 1) + named;
+        String beside = slash < 0 ? whole : authored.substring(0, slash + 1) + whole;
         return atlas.has(beside) ? beside : authored;
     }
+
+    /** What a whole texture path is written with either side of the name the atlas keys it by. */
+    private static final String TEXTURES = "textures/";
+
+    private static final String PNG = ".png";
 
     /**
      * A texture named after the block, for one whose model states nothing this can draw - the six-sided cube every

@@ -94,6 +94,19 @@ public final class BlockItems {
         return drawn(models.bake(state).elements(), 0, atlas);
     }
 
+    /**
+     * And the same for a model named outright, rather than reached through an item or a block state.
+     *
+     * <p>For the few models the client resolves by name and hangs on nothing: an item frame's own frame is
+     * {@code block/item_frame}, drawn by an entity renderer, and there is no block there to bake and no item that
+     * names it.
+     *
+     * @param model a model id, {@code block/item_frame}
+     */
+    List<EntitySnapshot> modelLayers(String model, TextureAtlas atlas) {
+        return drawn(models.shape(model), 0, atlas);
+    }
+
     private static List<EntitySnapshot> drawn(List<BakedElement> elements, int tint, TextureAtlas atlas) {
         if (elements.isEmpty()) return List.of();
 

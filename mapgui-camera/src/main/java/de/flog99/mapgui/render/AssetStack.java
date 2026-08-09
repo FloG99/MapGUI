@@ -60,6 +60,12 @@ public final class AssetStack implements AutoCloseable {
     static final String ENVIRONMENT_TEXTURES = "assets/minecraft/textures/environment/";
 
     /**
+     * The paintings, which are their own folder rather than part of the entity textures - one png per variant at the
+     * variant's own size, plus the plank back every one of them is nailed to. Twenty-six files and 20 KB.
+     */
+    static final String PAINTING_TEXTURES = "assets/minecraft/textures/painting/";
+
+    /**
      * Which texture each piece of equipment wears, on which layer of which mob.
      *
      * <p>One json per material - {@code iron.json}, {@code saddle.json} - naming a texture per layer type, and the

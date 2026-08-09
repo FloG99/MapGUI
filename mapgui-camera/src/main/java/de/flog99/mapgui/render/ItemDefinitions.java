@@ -83,9 +83,10 @@ public final class ItemDefinitions {
             return plain(item);
         }
 
-        JsonObject model = chosen(definition.getAsJsonObject("model"), 0);
+        JsonObject outer = definition.getAsJsonObject("model");
+        JsonObject model = chosen(outer, 0);
         try {
-            return new Definition(named(model, item), tintOf(model), specialOf(model));
+            return new Definition(named(model, item), tintOf(model), specialOf(model, placing(outer, 0)));
         } catch (RuntimeException e) {
             // Worth catching rather than trusting the shape: one definition read as something it is not used to throw
             // out of here, and what it took down was the whole entity pass of the capture.
@@ -112,17 +113,38 @@ public final class ItemDefinitions {
         return model;
     }
 
+    /**
+     * The transform that places whatever this branch resolves to, which is not always written on the branch itself.
+     *
+     * <p>A shield states it on the {@code condition} wrapping its two poses and a copper golem statue on the
+     * {@code select} wrapping its four, because the transform is the same whichever way the branch goes and vanilla
+     * writes it once. So the walk down keeps the innermost one it finds and falls back to an outer one - which is the
+     * difference between a shield the right way up and a shield hanging by its boss.
+     *
+     * @return the transformation object, or an empty one for a definition that states none
+     */
+    private static JsonObject placing(JsonObject model, int depth) {
+        if (depth <= 8) {
+            for (String branch : List.of("fallback", "on_false")) {
+                if (model.has(branch) && model.get(branch).isJsonObject()) {
+                    JsonObject inner = placing(model.getAsJsonObject(branch), depth + 1);
+                    if (!inner.isEmpty()) return inner;
+                }
+            }
+        }
+
+        return model.has("transformation") && model.get("transformation").isJsonObject()
+                ? model.getAsJsonObject("transformation")
+                : new JsonObject();
+    }
+
     /** The special this definition names, or null for the great majority that name a model. */
-    private static Special specialOf(JsonObject model) {
+    private static Special specialOf(JsonObject model, JsonObject placed) {
         if (!SPECIAL.equals(typeOf(model)) || !model.has("model") || !model.get("model").isJsonObject()) return null;
 
         JsonObject drawn = model.getAsJsonObject("model");
         String type = typeOf(drawn);
         if (type == null) return null;
-
-        JsonObject placed = model.has("transformation") && model.get("transformation").isJsonObject()
-                ? model.getAsJsonObject("transformation")
-                : new JsonObject();
 
         float[] scale = triple(placed, "scale", 1);
         // Uniform in every one vanilla states, and the signs are a turn rather than a size: a scale of (1, -1, -1) is

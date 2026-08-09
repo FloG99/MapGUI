@@ -88,6 +88,59 @@ public final class TextureAtlas implements BlockModels.TextureAlpha, Textures {
         return name;
     }
 
+    /**
+     * One layer of {@link #dyed}: a texture and the colour it is multiplied by before being painted on.
+     *
+     * @param color {@code 0xFFRRGGBB}, or 0 for a layer painted as it is
+     */
+    public record Dyed(String texture, int color) {
+    }
+
+    /**
+     * The same, with each layer multiplied by a colour of its own before it goes on.
+     *
+     * <p>What a banner is. Vanilla ships one white cloth and one white mask per pattern and draws each in the dye the
+     * layer was made with, so the picture is not in the pngs at all - it is in the order and the colours. Sixteen dyes
+     * over forty-odd patterns is far too many combinations to hold as files, and the same reason it cannot be a tint
+     * on the snapshot: a snapshot carries one colour and a banner has as many as it has layers.
+     *
+     * <p>Cached under everything it is made of, so a room full of the same flag composites once.
+     *
+     * @param layers bottom first, the base cloth included
+     * @return the name to draw with, or null when there is nothing to draw
+     */
+    public String dyed(List<Dyed> layers) {
+        if (layers.isEmpty()) return null;
+
+        StringBuilder name = new StringBuilder();
+        for (Dyed layer : layers) {
+            name.append(name.isEmpty() ? "" : "+").append(layer.texture()).append('@').append(Integer.toHexString(layer.color()));
+        }
+
+        String key = name.toString();
+        if (textures.containsKey(key)) return key;
+
+        // Fetched before the map is written to, for the reason {@link #layered} says.
+        List<Texture> painted = layers.stream().map(layer -> multiplied(get(layer.texture()), layer.color())).toList();
+        textures.putIfAbsent(key, composite(painted.getFirst(), painted.subList(1, painted.size())));
+        return key;
+    }
+
+    /** Every texel times a colour, keeping its alpha - which is what makes a white mask a coloured stripe. */
+    private static Texture multiplied(Texture texture, int color) {
+        if (color == 0) return texture;
+
+        int[] argb = new int[texture.argb().length];
+        for (int i = 0; i < argb.length; i++) {
+            int texel = texture.argb()[i];
+            argb[i] = texel & 0xFF000000
+                    | (texel >> 16 & 0xFF) * (color >> 16 & 0xFF) / 255 << 16
+                    | (texel >> 8 & 0xFF) * (color >> 8 & 0xFF) / 255 << 8
+                    | (texel & 0xFF) * (color & 0xFF) / 255;
+        }
+        return new Texture(texture.width(), texture.height(), argb, alphaOf(argb), average(argb));
+    }
+
     private static Texture composite(Texture bottom, List<Texture> over) {
         int[] argb = bottom.argb().clone();
 
