@@ -226,15 +226,16 @@ final class MobEquipment {
      * captain's head like a standard rather than flat on top of it.
      *
      * <p>The item's translation comes through the layer's own five eighths, since the layer scales before the item
-     * places itself; its scale multiplies. Neither axis changes sign: a mob's front is its {@code -Z} here - measured
-     * off an illager's own nose, which its mesh builds sticking out of the head at exactly that - so a banner's seven
-     * sixteenths of forward is what stands one behind the head.
+     * places itself; its scale multiplies. Its depth changes sign: measured by drawing a pillager from above, a
+     * banner's seven sixteenths of stated forward lands it north of a mob facing north, so what the assets call
+     * forward is behind here. Its height does not - the layer's own flip turns the frame the right way up and
+     * reverses only the depth.
      *
      * @param stated {@code {x, y, z, scale}} from the item's own {@code head} transform
      */
     private static ItemPoses.Pose onHead(float[] stated) {
         return new ItemPoses.Pose(
-                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, stated[2] * ON_HEAD_SCALE},
+                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, -stated[2] * ON_HEAD_SCALE},
                 new float[]{0, (float) Math.PI, 0},
                 ON_HEAD_SCALE * stated[3]);
     }
