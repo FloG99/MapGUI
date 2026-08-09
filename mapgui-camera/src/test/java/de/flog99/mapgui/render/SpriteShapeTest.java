@@ -101,19 +101,21 @@ class SpriteShapeTest {
     /**
      * Each box reads its own rectangle of the icon, which is what stops the picture being scrambled.
      *
-     * <p>A box covering the top left texel has to read the top left of the texture and not the whole of it shrunk.
-     * Its rectangle is that texel inset by half a texel at each edge, which for a box one texel wide leaves every
-     * corner on the texel's own middle - the only coordinate that can only ever floor to this texel and no other.
+     * <p>Checked against the whole-frame quad, since the two have to agree wherever they overlap: a box covering the
+     * top left texel has to read the top left of the texture and not the whole of it shrunk. The corners sit a hair
+     * inside the texel rather than exactly on it - close enough that the picture is not measurably moved, far enough
+     * that neither end floors onto the texel next door.
      */
     @Test
     void aBoxReadsItsOwnCornerOfThePicture() {
         MeshCube corner = shapeOf(icon(row("#"))).getFirst();
         float[] front = corner.face(Direction.NORTH);
 
-        for (int slot = 0; slot < 4; slot++) {
-            assertEquals(0.5f / 16, front[slot * 2], 1e-5, "u of corner " + slot);
-            assertEquals(0.5f / 16, front[slot * 2 + 1], 1e-5, "v of corner " + slot);
-        }
+        // Texel (0, 0) is one sixteenth of the texture at the low end of u and v. Across zero takes the high u.
+        assertEquals(1 / 16f, front[MeshCube.corner(false, false) * 2], 1e-3, "u at across zero");
+        assertEquals(0f, front[MeshCube.corner(true, false) * 2], 1e-3, "u at across one");
+        assertEquals(0f, front[MeshCube.corner(false, false) * 2 + 1], 1e-3, "v at down zero");
+        assertEquals(1 / 16f, front[MeshCube.corner(false, true) * 2 + 1], 1e-3, "v at down one");
     }
 
     /** An icon with nothing in it is still drawn as something, which is what the whole-frame quad is left for. */

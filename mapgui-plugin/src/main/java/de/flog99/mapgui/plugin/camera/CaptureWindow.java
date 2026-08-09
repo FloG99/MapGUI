@@ -21,6 +21,9 @@ final class CaptureWindow {
     /** The current second is still filling, so it is left out of every average and never divides one. */
     private static final int COUNTED_SECONDS = WINDOW_SECONDS - 1;
 
+    /** Ticks in a second, for reporting a per-second figure in the unit a server is actually read in. */
+    private static final int WINDOW_TICKS = 20;
+
     private final long[] second = new long[WINDOW_SECONDS];
     private final int[] captures = new int[WINDOW_SECONDS];
     private final long[] mainNanos = new long[WINDOW_SECONDS];
@@ -120,6 +123,14 @@ final class CaptureWindow {
 
         boolean idle() {
             return captures == 0 && failed == 0;
+        }
+
+        /**
+         * The same time per tick rather than per second, which is the unit a Minecraft server is read in - and the
+         * unit {@code camera.live.max-ms-per-tick} is written in, so the two can be held against each other.
+         */
+        long mainNanosPerTick() {
+            return mainNanosPerSecond / WINDOW_TICKS;
         }
 
         /** Share of the main thread, where a tick is 50 ms and there are 20 of them in a second. */

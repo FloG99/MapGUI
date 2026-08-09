@@ -16,7 +16,7 @@ import java.util.StringJoiner;
  *
  * <p>The trace, the palette, the chunk and section counts are all missing on purpose. They are the numbers for
  * deciding whether the renderer could be faster, not for deciding whether a server is in trouble, and they are still
- * a command away under {@code timings follow}.
+ * a command away under {@code performance follow}.
  *
  * <p>Bandwidth is missing for a different reason: a capture sends nothing. What reaches a client is the map frame a
  * screen paints it into, which {@code /mapgui performance} already counts - a second figure here would be the same
@@ -44,7 +44,7 @@ public final class CameraReport {
     private CameraReport() {
     }
 
-    /** The whole of it, for {@code /mapgui camera timings}. */
+    /** The whole of it, for {@code /mapgui camera performance}. */
     public static List<Component> lines(CameraService camera) {
         CaptureLoad load = camera.load();
         CaptureWindow.Load now = load.read();
@@ -67,7 +67,7 @@ public final class CameraReport {
                     .append(Component.text("   " + by(load), NamedTextColor.DARK_GRAY)));
 
             lines.add(Component.text("Main thread  ", NamedTextColor.GRAY)
-                    .append(Component.text(CaptureTimings.millis(now.mainNanosPerSecond()) + "/s", tickColor(now.tickPercent())))
+                    .append(Component.text(perTick(now.mainNanosPerTick()), tickColor(now.tickPercent())))
                     .append(Component.text(String.format("  %.1f%% of a tick", now.tickPercent()), NamedTextColor.DARK_GRAY))
                     .append(Component.text("   worst single ", NamedTextColor.GRAY))
                     .append(Component.text(CaptureTimings.millis(now.worstMainNanos()), spikeColor(now.worstMainNanos()))));
@@ -106,8 +106,8 @@ public final class CameraReport {
 
         return Component.text("  camera  ", NamedTextColor.WHITE)
                 .append(Component.text(rate(now.perSecond()) + "  ", NamedTextColor.DARK_GRAY))
-                .append(Component.text(CaptureTimings.millis(now.mainNanosPerSecond()) + "/s", tickColor(now.tickPercent())))
-                .append(Component.text(" on the main thread  - see /mapgui camera timings", NamedTextColor.DARK_GRAY));
+                .append(Component.text(perTick(now.mainNanosPerTick()), tickColor(now.tickPercent())))
+                .append(Component.text(" on the main thread  - see /mapgui camera performance", NamedTextColor.DARK_GRAY));
     }
 
     /**
@@ -161,11 +161,16 @@ public final class CameraReport {
                 .append(Component.text("   " + settings(live), NamedTextColor.DARK_GRAY)));
     }
 
+    /**
+     * What the rates handed out add up to, against what they were allowed - the two numbers together are what say
+     * which of the two settings is the binding one, and so which of them is worth changing.
+     */
     private static String settings(CaptureBudget.Live live) {
+        String used = String.format("%.2f", live.usedMillisPerTick());
         String budget = live.maxMillisPerTick() <= 0
-                ? "no budget"
-                : String.format("%.1fms/t", live.maxMillisPerTick());
-        String ceiling = live.fpsCeiling() <= 0 ? "no cap" : live.fpsCeiling() + " fps cap";
+                ? used + "ms/t, no limit"
+                : used + " of " + String.format("%.1f", live.maxMillisPerTick()) + "ms/t";
+        String ceiling = live.fpsCeiling() <= 0 ? "no fps cap" : live.fpsCeiling() + " fps cap";
 
         return budget + ", " + ceiling;
     }
@@ -181,6 +186,16 @@ public final class CameraReport {
 
     private static String rate(double perSecond) {
         return perSecond >= 1 ? String.format("%.1f/s", perSecond) : String.format("%.2f/s", perSecond);
+    }
+
+    /**
+     * Per tick rather than per second, since that is the unit a Minecraft server is read in and the unit
+     * {@code camera.live.max-ms-per-tick} is written in. Two decimals under a millisecond, where one would round a
+     * real cost to nought.
+     */
+    private static String perTick(long nanos) {
+        double millis = nanos / 1_000_000.0;
+        return millis >= 1 ? String.format("%.1fms/t", millis) : String.format("%.2fms/t", millis);
     }
 
     private static String reason(String thrown) {

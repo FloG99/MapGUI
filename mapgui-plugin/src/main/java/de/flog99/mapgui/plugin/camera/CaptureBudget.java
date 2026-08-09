@@ -66,8 +66,14 @@ final class CaptureBudget {
         private double fps;
     }
 
-    /** What the live views are getting, for the report that has to explain a number somebody configured. */
-    record Live(int viewers, double slowestFps, double fastestFps, double maxMillisPerTick, int fpsCeiling) {
+    /**
+     * What the live views are getting, for the report that has to explain a number somebody configured.
+     *
+     * @param usedMillisPerTick what the rates handed out add up to, which is the figure {@link #maxMillisPerTick}
+     *                          only means anything against - well under it means the ceiling is what is binding
+     */
+    record Live(int viewers, double slowestFps, double fastestFps, double usedMillisPerTick, double maxMillisPerTick,
+                int fpsCeiling) {
     }
 
     CaptureBudget(double millisPerTick, int fpsCeiling) {
@@ -142,6 +148,7 @@ final class CaptureBudget {
 
         double slowest = Double.MAX_VALUE;
         double fastest = 0;
+        double nanosPerSecond = 0;
         int counted = 0;
 
         for (Viewer viewer : viewers.values()) {
@@ -150,9 +157,13 @@ final class CaptureBudget {
             counted++;
             slowest = Math.min(slowest, viewer.fps);
             fastest = Math.max(fastest, viewer.fps);
+            // What the rate handed out will cost, rather than what it has cost: this is the allocation explaining
+            // itself, and a viewer that has just been slowed down has not spent the new number yet.
+            nanosPerSecond += viewer.fps * viewer.costNanos;
         }
 
-        return counted == 0 ? null : new Live(counted, slowest, fastest, maxMillisPerTick, fpsCeiling);
+        double perTick = nanosPerSecond / TICKS_PER_SECOND / 1_000_000;
+        return counted == 0 ? null : new Live(counted, slowest, fastest, perTick, maxMillisPerTick, fpsCeiling);
     }
 
     /**

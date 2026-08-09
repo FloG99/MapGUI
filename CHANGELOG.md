@@ -18,7 +18,7 @@ surface is `mapgui-api` and `mapgui-layout`.
   nothing to open, nothing to close, and a screen that stops asking stops being divided by. Advisory rather than
   enforced - it is the admin's tick either way, and `/mapgui camera timings` names whoever is spending it. See
   [live views](docs/camera.md#live-views).
-- **`/mapgui camera timings` now reports what every capture on the server cost, whoever asked for it.** It used to be
+- **`/mapgui camera performance` now reports what every capture on the server cost, whoever asked for it.** It used to be
   a per-player switch that pushed three lines of chat after each capture taken from *that* player's eye, which only
   describes the one camera the sample plugin has - somebody aims and clicks. A plugin capturing on a timer, for a live
   view, or for a player who is not the one asking either flooded a chat or reported nothing at all, and an admin had
@@ -27,9 +27,16 @@ surface is `mapgui-api` and `mapgui-layout`.
   API parameter; **what they took off the main thread**, as a share of the 1000 ms a second there is to take, since
   that is the only part that can cost a tick; **the worst single one**, because one 40 ms copy is a stutter an average
   hides; and **how many are queued** when the trace pool is behind, which is the line that says over capacity rather
-  than busy. The four-stage per-capture tail is still there as `/mapgui camera timings follow`, now at most one line a
-  second with the ones left out counted rather than dropped silently. See
+  than busy. The four-stage per-capture tail is still there as `/mapgui camera performance follow`, now at most one line a
+  second with the ones left out counted rather than dropped silently. It was `timings`, which named the four-stage
+  tail rather than the question an admin has, and the answer is in the same currency as `/mapgui performance`. Costs
+  read in **ms per tick** rather than per second, since that is the unit a server is read in and the unit the budget
+  is written in, with the configured limit printed beside what is being used. See
   [what to watch](docs/camera.md#what-to-watch).
+- **`/mapgui camera status` says only what an admin can act on**: whether captures will draw, the packs they are
+  drawn with by name, and for anything wrong what is wrong and what to do. Gone are the block-texture count, the
+  download percentage and the directory the followed packs live in - things this code knows rather than things
+  anybody can do something about, and a percentage that sits at nought reads as broken.
 - **A capture that throws is no longer invisible.** It went to the console and nowhere else, so a camera failing every
   time looked from outside exactly like a camera nothing was using. Failures are counted with everything else, and
   `/mapgui status` names the plugin and how long ago.
@@ -99,8 +106,11 @@ surface is `mapgui-api` and `mapgui-layout`.
   into a box per run of opaque texels, and each box's rim is a single line of the texture - so which line it lands on
   comes from one coordinate. A texture is sampled by flooring, so a rectangle's far edge names the texel *past* it,
   and the right and bottom rim of every box read whatever was next door. On a bow's diagonal string, where every box
-  is one texel, next door is nothing. The rim now sits half a texel inside its own rectangle, where it can only land
-  on the box's own picture. A sprite seen edge on is its own rim now rather than nothing at all.
+  is one texel, next door is nothing. Every face of a box is now read a hair inside its own rectangle, where it can
+  only land on that box's own picture - a hair rather than the half texel that first suggests itself, since the
+  picture is stretched linearly across a face and pulling both ends to the middle of their texels would leave the
+  outermost texel of every run covering half the width it should. A sprite seen edge on is its own rim now rather
+  than nothing at all.
 - Fixed: **the overworld's haze started in the middle of the shot.** It faded over the far 45% of the view, which on
   a 96 block capture began going white at 53 blocks. The client fades over the last `clamp(distance / 10, 4, 64)`
   blocks and leaves everything nearer alone - the overworld's own fog runs to a thousand blocks and is nothing a

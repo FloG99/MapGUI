@@ -17,7 +17,7 @@ groups, and each takes the same three verbs.
 | `/mapgui wall remove [name]` | `mapgui.command.wall` | the nearest within 32 blocks, or one by name |
 | `/mapgui wall list` | `mapgui.command.wall` | every saved wall, with coordinates you can click to teleport |
 | `/mapgui camera status` | `mapgui.command.camera` | what state the capture textures are in, and for anything wrong, what to do about it |
-| `/mapgui camera timings` | `mapgui.command.camera` | what captures are costing the server and which plugin is asking - see [camera](camera.md#what-to-watch) |
+| `/mapgui camera performance` | `mapgui.command.camera` | what captures are costing the server and which plugin is asking - see [camera](camera.md#what-to-watch) |
 | `/mapgui camera fetch-assets` | `mapgui.command.camera` | downloads the client jar the textures come out of |
 | `/mapgui camera reload` | `mapgui.command.camera` | re-reads the packs on disk without a restart |
 | `/mapgui status` | `mapgui.command.status` | how many are in hand, how many saved walls are actually showing, and anything that is failing |

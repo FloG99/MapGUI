@@ -90,8 +90,7 @@ final class SpriteShape {
 
         float x = size * (1 - u2);
         float y = size * (1 - v2);
-        return MeshCube.sprite(x, y, z, size * (u2 - u1), size * (v2 - v1), thickness,
-                u1, v1, u2, v2, 0.5f / width, 0.5f / height);
+        return MeshCube.sprite(x, y, z, size * (u2 - u1), size * (v2 - v1), thickness, u1, v1, u2, v2);
     }
 
     /**

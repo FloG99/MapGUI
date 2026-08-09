@@ -84,7 +84,7 @@ public interface Camera {
      * for being alone, and a fifth one joining slows everybody a fifth rather than costing the server a fifth more.
      *
      * <p><b>Advisory.</b> Nothing stops a plugin capturing without asking - it is the admin's tick either way, and
-     * `/mapgui camera timings` will name whoever is spending it. Asking is also what makes you a viewer: a screen
+     * `/mapgui camera performance` will name whoever is spending it. Asking is also what makes you a viewer: a screen
      * that asks once a second is one that wanted one frame a second and is divided by as one, and a screen that
      * stops asking stops being divided by at all, so there is nothing to open and nothing to close.
      *

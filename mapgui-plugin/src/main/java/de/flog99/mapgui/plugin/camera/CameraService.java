@@ -80,7 +80,7 @@ public final class CameraService implements Camera {
     private final SnapshotCache snapshots;
 
     /**
-     * What every capture cost, whoever asked for it, for {@code /mapgui camera timings}.
+     * What every capture cost, whoever asked for it, for {@code /mapgui camera performance}.
      *
      * <p>Always on, since it is six numbers a second and the question it answers - "is this costing my server
      * anything" - is asked after the trouble rather than before it. Cleared by a reload, which builds a new service.
@@ -96,7 +96,7 @@ public final class CameraService implements Camera {
     private final CaptureBudget budget;
 
     /**
-     * Players following their own captures line by line, from {@code /mapgui camera timings follow}.
+     * Players following their own captures line by line, from {@code /mapgui camera performance follow}.
      *
      * <p>Per player rather than a config switch, because the question it answers is "why was that slow just now"
      * and the person asking is standing in the world.
@@ -329,7 +329,7 @@ public final class CameraService implements Camera {
      *
      * @return the state it is now in
      */
-    public boolean toggleTimings(UUID player) {
+    public boolean toggleFollow(UUID player) {
         if (followed.remove(player) != null) return false;
 
         followed.put(player, new Follow());

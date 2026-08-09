@@ -344,7 +344,7 @@ the budget rather than merely respect it. The first frame or two of a new view a
 real measurements replace within a second.
 
 It is **advisory**. Nothing stops a plugin capturing without asking - it is the admin's tick either way, and
-[`/mapgui camera timings`](#what-to-watch) names whoever is spending it. That report also carries a `Live views` line
+[`/mapgui camera performance`](#what-to-watch) names whoever is spending it. That report also carries a `Live views` line
 with what the viewers are getting and the two settings that decided it, since 6.7 fps means one thing when the budget
 ran out and quite another when the ceiling is 6.
 
@@ -418,7 +418,7 @@ travelling **just above the ground** stays inside cells that hold the ground, so
 maximum height per cell rather than a flag, and measuring every column to get one is main-thread work in the tick
 this is trying to keep cheap.
 
-To see it on your own server rather than in this table, run **`/mapgui camera timings follow`** and take a picture. It
+To see it on your own server rather than in this table, run **`/mapgui camera performance follow`** and take a picture. It
 reports the four stages and their total: the copy, with how many **chunks** it took and how many of their **sections**
 held anything; the entity gather, with how many were in frame; the trace; and the palette. A section is the 16x16x16
 subchunk Minecraft divides a chunk into, and the filled count is the interesting half of it - a snapshot costs nothing
@@ -500,19 +500,24 @@ Two limits worth knowing:
 
 ### What to watch
 
-Everything above is for deciding whether the renderer could be faster. **`/mapgui camera timings`** is for deciding
+Everything above is for deciding whether the renderer could be faster. **`/mapgui camera performance`** is for deciding
 whether a server is in trouble, which is a much shorter question, so it answers four things and nothing else:
 
 ```
 Camera - what captures are costing, over the last few seconds
 Captures  3.2/s   PhotoBooth 3.0/s, Surveillance 0.2/s
-Main thread  6.8ms/s  0.7% of a tick   worst single 4.1ms
+Main thread  0.34ms/t  0.7% of a tick   worst single 4.1ms
+Live views  3 viewers at 6.7 fps   0.92 of 1.0ms/t, 10 fps cap
 ```
 
 - **Captures, and by whom.** Rate is the multiplier on everything else, and the plugin names are the actionable half
   of it - a camera is always somebody's, and turning one down means turning down whatever asked for it.
-- **Main thread.** The only number that can cost TPS. A second holds 20 ticks of 50 ms, so 1000 ms of tick, and this
-  is what the camera took out of it. Under 1% is nothing, 5% is a server you can feel.
+- **Main thread.** The only number that can cost TPS, and the one to watch. Per **tick** rather than per second,
+  since that is the unit a server is read in and the unit `camera.live.max-ms-per-tick` is written in, so the two can
+  be held against each other directly. A tick is 50 ms: under 1% of it is nothing, 5% is a server you can feel.
+- **Live views**, when any are open: what they are getting, and what the rates handed out add up to against what
+  they were allowed. The pair is what says *which* of the two settings is binding - well under the budget means the
+  fps cap is what is holding them, and the budget is not the number to change.
 - **Worst single.** An average of 2 ms with one 40 ms copy in it is a stutter a player saw, and the average hides it.
   This is the same `copy` a `follow` line reports, kept because one long tick is a different problem from a busy one.
 - **Waiting**, when anything is. Captures are traced one at a time off an unbounded queue - the trace itself is what

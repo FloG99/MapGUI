@@ -195,19 +195,12 @@ class BlockItemsTest {
         java.util.Arrays.fill(opaque, 0xFF808080);
 
         assertEquals(1, layers.size());
-        float[] sprite = faceOf(EntityModel.heldSprite(Texture.opaqueOf(16, 16, opaque)), Direction.NORTH);
-        float[] block = faceOf(layers.getFirst().model(), Direction.NORTH);
-
-        // The same frame, contracted by half a texel at each edge: a sprite's picture is inset so that its corners
-        // cannot floor onto the texel past its own rectangle, and a block face takes the texture as it comes.
-        for (int corner = 0; corner < sprite.length; corner++) {
-            assertEquals(MIDDLE + (block[corner] - MIDDLE) * (1 - 1 / 16f), sprite[corner], 1e-5f,
-                    "a whole-texture block face and the sprite's picture read the same corner " + corner);
-        }
+        // Within a hair, which is all a sprite's picture is pulled inside its own rectangle by so that neither end
+        // floors onto the texel past it.
+        assertArrayEquals(faceOf(EntityModel.heldSprite(Texture.opaqueOf(16, 16, opaque)), Direction.NORTH),
+                faceOf(layers.getFirst().model(), Direction.NORTH), 1e-3f,
+                "a whole-texture block face and the sprite's picture read the same four corners");
     }
-
-    /** Halfway across the texture, which is what the sprite's inset contracts toward. */
-    private static final float MIDDLE = 0.5f;
 
     /**
      * A turned element where the client turns it, checked against the client's own order rather than against numbers

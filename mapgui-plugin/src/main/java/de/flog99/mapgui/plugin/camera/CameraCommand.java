@@ -48,7 +48,7 @@ public final class CameraCommand {
                             status(context.getSource().getSender(), plugin);
                             return Command.SINGLE_SUCCESS;
                         }))
-                .then(Commands.literal("timings")
+                .then(Commands.literal("performance")
                         .executes(context -> {
                             for (Component line : CameraReport.lines(plugin.camera())) {
                                 context.getSource().getSender().sendMessage(line);
@@ -63,18 +63,26 @@ public final class CameraCommand {
     }
 
     /**
-     * What state the textures are in, and for anything wrong, both what is wrong and what to do - the same two
-     * lines the console gets, because the person reading this is the person who can fix it.
+     * Whether captures will draw, what is drawing them, and for anything wrong both what is wrong and what to do.
+     *
+     * <p>Three questions and no more. What it used to add - a count of block textures, a percentage, the directory
+     * the followed packs are kept in - are things this code knows rather than things anybody can act on. The count
+     * changes nothing, the directory is the same directory every time, and an admin who wants to know how much of a
+     * download is left is better served by watching the console it logs to.
+     *
+     * <p>Packs are named rather than counted, since "2 extra packs" and "your server pack is in the picture" are
+     * different answers and only the second one is the question being asked.
      */
     private static void status(CommandSender sender, MapGuiPlugin plugin) {
         CameraAssetStore assets = plugin.cameraAssets();
         switch (assets.state()) {
             case CameraAssets.Ready ready -> sender.sendMessage(Component.text("Camera  ", NamedTextColor.GOLD)
                     .append(Component.text("ready", NamedTextColor.GREEN))
-                    .append(Component.text("  Minecraft " + ready.minecraftVersion() + ", " + ready.blockTextures() + " block textures", NamedTextColor.WHITE)));
+                    .append(Component.text("  Minecraft " + ready.minecraftVersion(), NamedTextColor.WHITE)));
 
-            case CameraAssets.Loading loading -> sender.sendMessage(Component.text("Camera  ", NamedTextColor.GOLD)
-                    .append(Component.text("downloading textures, " + loading.percent() + "%", NamedTextColor.YELLOW)));
+            case CameraAssets.Loading ignored -> sender.sendMessage(Component.text("Camera  ", NamedTextColor.GOLD)
+                    .append(Component.text("downloading textures", NamedTextColor.YELLOW))
+                    .append(Component.text("  captures will draw when it lands", NamedTextColor.DARK_GRAY)));
 
             case CameraAssets.Unavailable unavailable -> {
                 sender.sendMessage(Component.text("Camera  ", NamedTextColor.GOLD)
@@ -85,23 +93,17 @@ public final class CameraCommand {
             }
         }
 
-        // The layers by name, because "ready" says nothing about whether the server's own pack made it in - which
-        // is the question anybody following one is actually asking.
-        if (assets.stack() != null) {
-            sender.sendMessage(Component.text("Layers  ", NamedTextColor.GOLD)
-                    .append(Component.text(String.join(" over ", assets.stack().layerNames()), NamedTextColor.WHITE)));
-        }
-
-        sender.sendMessage(Component.text("Extra packs  ", NamedTextColor.GOLD)
-                .append(Component.text(plugin.serverPacks().followed().size()
-                        + " kept in cache/camera/packs/", NamedTextColor.WHITE)));
-
         // Under the state rather than instead of it: a stack with a broken layer still reports itself ready,
         // because the layers underneath it are fine and that is what a capture is coming out of.
         if (assets.stack() == null) return;
 
+        // Named, top first, because "ready" says nothing about whether the server's own pack made it in - which is
+        // the one question an admin who set one up actually has.
+        sender.sendMessage(Component.text("Drawing with  ", NamedTextColor.GOLD)
+                .append(Component.text(String.join(" over ", assets.stack().layerNames()), NamedTextColor.WHITE)));
+
         for (String hurt : assets.stack().damage()) {
-            sender.sendMessage(Component.text("Damaged layer  ", NamedTextColor.RED)
+            sender.sendMessage(Component.text("Damaged  ", NamedTextColor.RED)
                     .append(Component.text(hurt, NamedTextColor.WHITE)));
             sender.sendMessage(Component.text("Replaced while the server had it open. Restart to pick it up.", NamedTextColor.YELLOW));
         }
@@ -110,7 +112,7 @@ public final class CameraCommand {
     /**
      * Turns the per-capture, four-stage tail on or off for whoever asked.
      *
-     * <p>For working out why a capture is slow rather than whether it is costing anything - {@code timings} on its own
+     * <p>For working out why a capture is slow rather than whether it is costing anything - {@code performance} on its own
      * answers that, for every capture on the server, whoever asked for it. This one only reports captures taken from
      * <i>this</i> player's eye, so a plugin that captures on a timer or for somebody else shows up in the first and
      * not in this.
@@ -118,11 +120,11 @@ public final class CameraCommand {
     private static void follow(CommandSender sender, MapGuiPlugin plugin) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage(Component.text("Only a player can follow captures, since it reports the ones taken from their own eye.", NamedTextColor.RED));
-            sender.sendMessage(Component.text("Run /mapgui camera timings for what every capture on the server is costing.", NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("Run /mapgui camera performance for what every capture on the server is costing.", NamedTextColor.YELLOW));
             return;
         }
 
-        if (plugin.camera().toggleTimings(player.getUniqueId())) {
+        if (plugin.camera().toggleFollow(player.getUniqueId())) {
             player.sendMessage(Component.text("Following your captures, at most one line a second. Run it again to stop.", NamedTextColor.GREEN));
             return;
         }
