@@ -19,6 +19,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.map.MapCursor;
 
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.List;
 
 import static de.flog99.mapgui.ui.Ui.Button;
@@ -26,6 +27,7 @@ import static de.flog99.mapgui.ui.Ui.Column;
 import static de.flog99.mapgui.ui.Ui.Draw;
 import static de.flog99.mapgui.ui.Ui.Row;
 import static de.flog99.mapgui.ui.Ui.Spacer;
+import static de.flog99.mapgui.ui.Ui.Spinner;
 import static de.flog99.mapgui.ui.Ui.Text;
 
 /**
@@ -118,11 +120,22 @@ public final class CameraScreen extends Screen {
 
     private Node viewfinder() {
         CameraShot taken = shot.get();
+        if (taken != null) {
+            return Draw(context -> new VideoPlayer(taken).fit(VideoPlayer.Fit.COVER).paint(context.painter(), context.bounds(), 0)).fill();
+        }
 
-        return taken == null
-                ? Row(Text(this::placeholder).color(new Color(190, 190, 190)).shadow())
-                        .justify(Justify.CENTER).align(Align.CENTER).fill()
-                : Draw(context -> new VideoPlayer(taken).fit(VideoPlayer.Fit.COVER).paint(context.painter(), context.bounds(), 0)).fill();
+        List<Node> waiting = new ArrayList<>();
+        if (working()) {
+            waiting.add(Spinner().color(new Color(190, 190, 190)));
+        }
+        waiting.add(Text(this::placeholder).color(new Color(190, 190, 190)).shadow());
+
+        return Column(waiting).gap(3).justify(Justify.CENTER).align(Align.CENTER).fill();
+    }
+
+    /** Whether something is happening that will finish on its own, which is the only thing worth a spinner. */
+    private boolean working() {
+        return capturing.get() || MapGui.get().camera().assets() instanceof CameraAssets.Loading;
     }
 
     private Node settingsPanel() {
@@ -167,11 +180,14 @@ public final class CameraScreen extends Screen {
      */
     private String placeholder() {
         if (notice.get() != null) return notice.get();
-        if (capturing.get()) return "Capturing...";
+        if (capturing.get()) return "Capturing";
 
         return switch (MapGui.get().camera().assets()) {
             case CameraAssets.Ready ignored -> "Aim and left-click";
-            case CameraAssets.Loading loading -> "Textures " + loading.percent() + "%";
+            // No percentage. It is a 39 MB download that spends its first stretch at nought, and a number that
+            // does not move reads as broken where a spinner reads as busy. The figure is in /mapgui camera status,
+            // which is where somebody who wants one goes.
+            case CameraAssets.Loading ignored -> "Loading textures";
             case CameraAssets.Unavailable ignored -> "No textures yet";
         };
     }

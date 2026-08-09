@@ -38,6 +38,18 @@ surface is `mapgui-api` and `mapgui-layout`.
   the map frame a screen paints the shot into, and those are already counted under whatever wall or player received
   them.
 
+### Widgets
+
+- **`Spinner()`**, a ring of dots with a bright one travelling round it, for work that is happening but cannot say
+  how far along it is - which is most work: a progress bar needs a total, and a download whose length nobody was told
+  cannot give one. It steps from dot to dot rather than sliding, since on a 128-pixel map of 61 colours a smooth fade
+  lands on the same few indices anyway, so snapping is crisper *and* cheaper to send. `size`, `dots`, `period` and
+  `color`; a screen with animation turned off draws it standing still rather than repainting forever. See
+  [widgets](docs/widgets.md#waiting).
+- The camera example's viewfinder uses it, and no longer says **`Textures 0%`** while the assets download. That is a
+  39 MB fetch that spends its first stretch at nought, and a number that does not move reads as broken where a
+  spinner reads as busy. The figure is still in `/mapgui camera status`, where somebody who wants one goes.
+
 ### Sending frames
 
 - **A map whose changes are in two places is sent as two updates, not as the box around them.** A map update
@@ -83,6 +95,10 @@ surface is `mapgui-api` and `mapgui-layout`.
   combinations, so the client ships two greyscale bodies and six greyscale patterns and colours them per fish - which
   is exactly what happens here now, composited into one texture. Every one of them used to be the same plain
   `tropical_a`.
+- Fixed: **the overworld's haze started in the middle of the shot.** It faded over the far 45% of the view, which on
+  a 96 block capture began going white at 53 blocks. The client fades over the last `clamp(distance / 10, 4, 64)`
+  blocks and leaves everything nearer alone - the overworld's own fog runs to a thousand blocks and is nothing a
+  photograph reaches, so this haze is not weather, it is the edge of what has been drawn being hidden.
 - **A raid captain wears its banner.** A banner carries no `equippable` component whatever slot it is in, so the
   armour path resolved nothing for one and a captain went bare-headed. It is drawn as the client draws anything that
   is not a skull on a head - the item's own shape, a quarter of a block down and at five eighths - with its cloth

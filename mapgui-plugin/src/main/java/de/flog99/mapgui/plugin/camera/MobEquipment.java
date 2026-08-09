@@ -195,15 +195,17 @@ final class MobEquipment {
     private static void hoist(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets, ItemStack head) {
         if (head == null || head.isEmpty() || !head.getType().name().endsWith(BANNER)) return;
 
+        String id = head.getType().getKey().asString();
         DyeColor color = dyeOf(head.getType().name());
         List<Pattern> patterns = head.getItemMeta() instanceof BannerMeta meta ? meta.getPatterns() : List.of();
         String woven = assets.atlas().dyed(BannerCloth.layersOf(color, patterns, assets));
 
-        for (EntitySnapshot layer : assets.items().held(head.getType().getKey().asString())) {
+        ItemPoses.Pose pose = onHead(assets.poses().displayed(id, ON_HEAD_CONTEXT));
+        for (EntitySnapshot layer : assets.items().held(id)) {
             // Two meshes come back - the pole and crossbar, and the cloth - and only the cloth is dyed and patterned.
             EntitySnapshot cloth = woven != null && BannerCloth.BASE.equals(layer.texture()) ? layer.texture(woven) : layer;
 
-            EntitySnapshot flown = EntitySnapshot.onHead(base, cloth, ON_HEAD);
+            EntitySnapshot flown = EntitySnapshot.onHead(base, cloth, pose);
             if (flown != null) {
                 into.add(flown);
             }
@@ -211,6 +213,35 @@ final class MobEquipment {
     }
 
     private static final String BANNER = "_BANNER";
+
+    /** Where an item states how it is worn, which is a display context like the two held ones. */
+    private static final String ON_HEAD_CONTEXT = "head";
+
+    /**
+     * The whole head chain: what {@code CustomHeadLayer} does, and then what the item's own model asks for.
+     *
+     * <p>The layer drops the item a quarter of a block down the head, turns it about and draws it at five eighths -
+     * and everything after that is the item's business. A banner's is not decoration: it asks to be lifted a whole
+     * block and pushed seven sixteenths back, at half again the size, which is exactly what puts one behind a raid
+     * captain's head like a standard rather than flat on top of it.
+     *
+     * <p>The item's translation comes through the layer's own five eighths, since the layer scales before the item
+     * places itself; its scale multiplies. Neither axis changes sign on the way here - by the time the item's
+     * transform applies, the layer has already turned the frame the right way up.
+     *
+     * @param stated {@code {x, y, z, scale}} from the item's own {@code head} transform
+     */
+    private static ItemPoses.Pose onHead(float[] stated) {
+        return new ItemPoses.Pose(
+                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, stated[2] * ON_HEAD_SCALE},
+                new float[]{0, (float) Math.PI, 0},
+                ON_HEAD_SCALE * stated[3]);
+    }
+
+    /** A quarter of a block down the head, in entity pixels, and the five eighths the layer draws at. */
+    private static final float HEAD_DROP = 4;
+
+    private static final float ON_HEAD_SCALE = 0.625f;
 
     /** {@code WHITE_BANNER} to {@code WHITE}, since a banner's base colour is the item and not a component. */
     private static DyeColor dyeOf(String material) {
@@ -220,13 +251,6 @@ final class MobEquipment {
             return null;
         }
     }
-
-    /**
-     * Where {@code CustomHeadLayer} puts anything that is not a skull: a quarter of a block down the head, turned to
-     * face back the way the head does, at five eighths. The client's own numbers, in the units a pose is stated in.
-     */
-    private static final ItemPoses.Pose ON_HEAD =
-            new ItemPoses.Pose(new float[]{0, 4, 0}, new float[]{0, (float) Math.PI, 0}, 0.625f);
 
     /**
      * The three mushrooms growing on a mooshroom, which are three copies of the mushroom's own block model rather

@@ -127,6 +127,26 @@ public final class RayTracer {
     private static final double WATER_FOG_START = -8;
 
     /**
+     * How far back from the far edge the haze reaches, in blocks, and vanilla's own arithmetic:
+     * {@code FogRenderer} fades over {@code clamp(renderDistance / 10, 4, 64)} blocks and leaves everything nearer
+     * alone.
+     *
+     * <p>A tenth rather than a share of the view is the whole point. The overworld's own fog runs to a thousand
+     * blocks and is nothing a photograph reaches, so the only haze there is this one - it is not weather, it is the
+     * edge of what has been drawn being hidden. Faded over the far half instead, as it was, a 96 block capture
+     * starts going white at 53 blocks, which is the middle of the shot.
+     */
+    private static double taperOf(int maxDistance) {
+        return Math.clamp(maxDistance / TAPER_SHARE, TAPER_MIN, TAPER_MAX);
+    }
+
+    private static final double TAPER_SHARE = 10;
+
+    private static final double TAPER_MIN = 4;
+
+    private static final double TAPER_MAX = 64;
+
+    /**
      * The client's own three numbers for a dimension whose air is thick: {@code FogRenderer} runs its terrain fog from
      * a twentieth of the render distance to half of it, with the distance capped at 192 blocks first.
      */
@@ -227,8 +247,8 @@ public final class RayTracer {
                        int width, int height, int[] out, int fromRow, int toRow) {
 
         fog = view.fog();
-        // Only the far half fades, so nearby detail is untouched and the distance cap stops reading as a wall.
-        fogStart = view.maxDistance() * 0.55;
+        // Only the last stretch fades, which is what turns the distance cap into a haze instead of a wall.
+        fogStart = view.maxDistance() - taperOf(view.maxDistance());
         fogEnd = view.maxDistance();
 
         // The Nether's air hides distance on its own. Always on rather than optional: terrain drawn sharp to the

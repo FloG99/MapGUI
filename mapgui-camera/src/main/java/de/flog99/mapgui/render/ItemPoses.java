@@ -184,6 +184,23 @@ public final class ItemPoses {
                 Math.max(0.01f, stated.scale()));
     }
 
+    /**
+     * The translation and scale an item's own model states for a display context, as
+     * {@code {x, y, z, scale}} - the translation in entity pixels, as the assets write it.
+     *
+     * <p>For a caller that has worked out the rest of the chain itself and needs only what the item adds. A banner
+     * worn on a head is the one of these: its {@code head} transform lifts it a block and pushes it seven sixteenths
+     * back, which is the whole of why one sits behind a raid captain's head rather than on top of it.
+     *
+     * <p>All zeros and a scale of one for an item whose chain states nothing for that context, which is what the
+     * identity transform comes to.
+     */
+    public float[] displayed(String item, String context) {
+        Stated stated = displays.computeIfAbsent(context + " " + item, key -> written(item, context));
+
+        return new float[]{stated.translation()[0], stated.translation()[1], stated.translation()[2], stated.scale()};
+    }
+
     /** One display transform as the assets write it: a translation in entity pixels, degrees, and a scale. */
     private record Stated(float[] translation, float[] rotation, float scale) {
     }

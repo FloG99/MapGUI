@@ -88,6 +88,11 @@ public final class Ui {
         return new Spacer();
     }
 
+    /** A ring of dots that turns, for waiting on something that cannot say how far along it is. */
+    public static Spinner Spinner() {
+        return new Spinner();
+    }
+
     public static Panel Divider(Color color) {
         return Row().fillWidth().height(1).background(color);
     }

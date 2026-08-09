@@ -1,6 +1,6 @@
 # Widgets and styling
 
-`Row` `Column` `Overlay` `Scroll` · `Text` `Button` `Toggle` `Field` · `Spacer` `Divider` `Box` · `Draw`
+`Row` `Column` `Overlay` `Scroll` · `Text` `Button` `Toggle` `Field` · `Spacer` `Divider` `Box` `Spinner` · `Draw`
 
 All of them come from one static import:
 
@@ -123,6 +123,30 @@ position rather than the row:
 ```java
 Column(each(tasks, Task::id, this::taskRow))
 ```
+
+## Waiting
+
+`Spinner()` is a ring of dots with a bright one travelling round it, for work that is happening but cannot say how
+far along it is:
+
+```java
+Column(Spinner().color(theme().muted()), Text("Loading textures"))
+        .gap(3).justify(Justify.CENTER).align(Align.CENTER).fill()
+```
+
+Which is most work, honestly. A progress bar needs a total, and the things a screen waits on - a download whose
+length nobody was told, a capture, a query - usually cannot give one. **A percentage that sits at zero for twenty
+seconds reads as broken; a spinner reads as busy**, which is the truth. Keep the number for a command, where a
+reader wanting one can go and ask.
+
+`size`, `dots`, `period` and `color` are the knobs, and the defaults are a 13-pixel ring of eight, one turn a
+second. It steps from dot to dot rather than sliding between them: on a 128-pixel map of 61 colours a smooth fade
+lands on the same few indices anyway, so snapping is crisper to look at *and* cheaper to send.
+
+**It never finishes by itself**, so it costs frames for as long as it is on screen - see
+[animation](animation.md#frame-limits). That is fine at a dozen pixels square and is not fine across a whole
+canvas, which is 16 KB a frame. Take it off screen when the thing it was waiting for arrives. A screen with
+animation turned off draws it standing still rather than repainting forever.
 
 ## Themes
 
