@@ -6,6 +6,7 @@ import org.bukkit.Keyed;
 import org.bukkit.entity.Creaking;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Horse;
+import org.bukkit.entity.Rabbit;
 import org.bukkit.entity.Villager;
 import org.bukkit.entity.Wolf;
 import org.bukkit.entity.ZombieVillager;
@@ -38,6 +39,9 @@ final class MobTextures {
             "the_killer_bunny", "caerbannog"
     );
 
+    /** What the assets call the Toast rabbit's coat, which is a texture like the other seven and not a special case. */
+    private static final String TOAST_COAT = "toast";
+
     private MobTextures() {
     }
 
@@ -51,6 +55,10 @@ final class MobTextures {
      * entity id rather than tabulated. Asking only for the first drew every cat as a tabby.
      */
     static String variantOf(Entity entity, String type) {
+        // A rabbit called Toast wears a coat of its own, which the assets name after it - so it is a coat like any
+        // other from here down, and only the name it is picked by is a joke.
+        if (entity instanceof Rabbit && MobNames.named(entity, MobNames.TOAST)) return TOAST_COAT;
+
         // A horse's coat is a colour plus a marking pattern rather than a variant, so the colour is taken on its own.
         if (entity instanceof Horse horse) {
             return horse.getColor() == null ? null : assetWord(horse.getColor().name());

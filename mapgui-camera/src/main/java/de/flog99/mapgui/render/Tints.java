@@ -121,4 +121,40 @@ public final class Tints {
             default -> 0;
         };
     }
+
+    /** The sixteen dyes in the client's own order, which is the order a jeb_ sheep cycles them in. */
+    private static final String[] DYES = {
+            "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
+            "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"
+    };
+
+    /** How long a jeb_ sheep spends on each dye before it starts sliding into the next, in ticks. */
+    private static final int RAINBOW_TICKS = 25;
+
+    /**
+     * What a sheep called jeb_ is wearing at this moment: the sixteen fleece colors above, a colour every twenty-five
+     * ticks, blended straight across in between.
+     *
+     * <p>The client's own {@code ColorLerper}, including the blend - which is a plain per-channel interpolation of the
+     * two colors rather than anything gamma-aware, so the halfway point really is the arithmetic mean.
+     *
+     * @param age the sheep's age in ticks
+     */
+    public static int rainbow(float age) {
+        int tick = (int) Math.floor(age);
+        int step = Math.floorDiv(tick, RAINBOW_TICKS);
+
+        int from = wool(DYES[Math.floorMod(step, DYES.length)]);
+        int to = wool(DYES[Math.floorMod(step + 1, DYES.length)]);
+        float part = (Math.floorMod(tick, RAINBOW_TICKS) + age - tick) / RAINBOW_TICKS;
+
+        return 0xFF000000 | between(part, from, to, 16) | between(part, from, to, 8) | between(part, from, to, 0);
+    }
+
+    /** One channel of the blend, floored the way the client floors it. */
+    private static int between(float part, int from, int to, int shift) {
+        int start = from >> shift & 0xFF;
+        int end = to >> shift & 0xFF;
+        return (start + (int) Math.floor(part * (end - start))) << shift;
+    }
 }

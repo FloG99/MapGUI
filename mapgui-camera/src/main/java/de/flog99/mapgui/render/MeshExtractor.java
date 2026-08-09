@@ -467,11 +467,53 @@ final class MeshExtractor {
             if (setup == null) return false;
 
             setup.setAccessible(true);
-            setup.invoke(instance, standingStill(setup.getParameterTypes()[0]));
+            Object state = standingStill(setup.getParameterTypes()[0]);
+            stated(state, layer.state());
+            setup.invoke(instance, state);
             return true;
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             return false;
         }
+    }
+
+    /**
+     * The fields {@link EntityMeshes} states for this mesh, set on the render state before the client poses it.
+     *
+     * <p>For the poses that belong to the individual rather than to the species. An illager's model builds a crossed
+     * pair of arms and two loose ones and reads {@code armPose} to decide which to draw, and the render state's own
+     * default is neither of the two an idle illager stands in - so left unstated, every evoker in the world stands
+     * there with its arms hanging.
+     *
+     * <p>Enums only, since every such field is one. A name this version does not have throws out of here and leaves
+     * the mesh in the pose the state came with, which is the same bargain the rest of this class makes.
+     */
+    private static void stated(Object state, Map<String, String> fields) throws ReflectiveOperationException {
+        for (Map.Entry<String, String> field : fields.entrySet()) {
+            Field declared = field(state.getClass(), field.getKey());
+            declared.setAccessible(true);
+            declared.set(state, constant(declared.getType(), field.getValue()));
+        }
+    }
+
+    /** The named constant of an enum this cannot name the type of, since the type is whatever the client declared. */
+    private static Object constant(Class<?> type, String name) {
+        Object[] constants = type.getEnumConstants();
+        for (Object constant : constants == null ? new Object[0] : constants) {
+            if (((Enum<?>) constant).name().equals(name)) return constant;
+        }
+        throw new IllegalArgumentException(type.getName() + " has no " + name);
+    }
+
+    /** A field of this state or of anything it inherits from, since a render state is a shallow hierarchy. */
+    private static Field field(Class<?> state, String name) throws NoSuchFieldException {
+        for (Class<?> level = state; level != null; level = level.getSuperclass()) {
+            try {
+                return level.getDeclaredField(name);
+            } catch (NoSuchFieldException missing) {
+                // Declared further up, which is where the loop is going.
+            }
+        }
+        throw new NoSuchFieldException(state.getName() + "." + name);
     }
 
     /**

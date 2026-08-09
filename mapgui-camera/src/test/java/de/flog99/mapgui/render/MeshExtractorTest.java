@@ -20,6 +20,7 @@ import java.util.TreeSet;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -250,12 +251,12 @@ class MeshExtractorTest {
      */
     private static final EntityMeshes.Spec HUMANOID_MESH = new EntityMeshes.Spec(
             "HumanoidModel#createMesh@64x64",
-            List.of(new EntityMeshes.Layer("HumanoidModel", "createMesh", 64, 64, new float[]{}, 0, null, null, EntityMeshes.Space.MOB)));
+            List.of(new EntityMeshes.Layer("HumanoidModel", "createMesh", 64, 64, new float[]{}, 0, null, null, EntityMeshes.Space.MOB, Map.of())));
 
     /** The player mesh, which is not in the table - the player is authored, so nothing asks the client for its shape. */
     private static final EntityMeshes.Spec PLAYER_MESH = new EntityMeshes.Spec(
             "player.PlayerModel#createMesh@64x64",
-            List.of(new EntityMeshes.Layer("player.PlayerModel", "createMesh", 64, 64, new float[]{}, 0, null, null, EntityMeshes.Space.MOB)));
+            List.of(new EntityMeshes.Layer("player.PlayerModel", "createMesh", 64, 64, new float[]{}, 0, null, null, EntityMeshes.Space.MOB, Map.of())));
 
     /**
      * Every patch a subtree reads, as text, so two sets of them can be compared and named. A subtree rather than a
@@ -458,16 +459,46 @@ class MeshExtractorTest {
      * <p>{@code IllagerModel} builds a crossed pair of arms <i>and</i> two separate ones, and hides whichever set the
      * pose does not want. Baked without asking, an evoker comes out with a spare arm on its side.
      *
-     * <p>Which set survives is the client's own answer rather than one chosen here: an illager's render state starts
-     * at {@code NEUTRAL}, so the separate arms are the ones it draws and the crossed pair is the one hidden.
+     * <p>Which set survives is the client's own answer to the pose the table states, rather than one chosen here: an
+     * evoker stands with its arms folded and a pillager with its crossbow levelled, and each hides the other's arms.
      */
     @Test
     void aModelThatHidesAPartIsBakedWithoutIt() throws Exception {
-        MeshPart illager = extract().get("monster.illager.IllagerModel*0.9375").getFirst();
+        Map<String, List<MeshPart>> meshes = extract();
 
-        assertTrue(named(illager, "right_arm"), "the pose the client starts an illager in has two separate arms");
-        assertTrue(named(illager, "left_arm"), "both of them");
-        assertFalse(named(illager, "arms"), "and not the crossed pair as well, which is the spare arm on its side");
+        MeshPart folded = meshes.get("monster.illager.IllagerModel*0.9375{armPose=CROSSED}").getFirst();
+        assertTrue(named(folded, "arms"), "an evoker's arms are the crossed pair");
+        assertFalse(named(folded, "right_arm"), "and not a loose one as well, which is the spare arm on its side");
+        assertFalse(named(folded, "left_arm"), "nor the other");
+
+        MeshPart levelled = meshes.get("monster.illager.IllagerModel*0.9375{armPose=CROSSBOW_HOLD}").getFirst();
+        assertTrue(named(levelled, "right_arm"), "a pillager holds its crossbow in two separate arms");
+        assertTrue(named(levelled, "left_arm"), "both of them");
+        assertFalse(named(levelled, "arms"), "and folds neither");
+    }
+
+    /**
+     * The layers a mob's renderer adds over its skin are baked and are wider than the skin, which is what puts them
+     * in front of it: each is the body mesh grown by the amount the client grows it.
+     *
+     * <p>Three mobs that looked naked without them - a stray's frost, a bogged's moss and a drowned's outer skin.
+     */
+    @Test
+    void aMobWearingALayerOverItsSkinIsBakedWithOneThatCoversIt() throws Exception {
+        EntityMeshes.install(extract());
+
+        // Against the plain body each layer is grown from, rather than against the mob's own: a bogged is taller than
+        // the moss over it, because the mushrooms on its head are part of its mesh and not part of the layer.
+        Map<String, String> plain = Map.of("stray", "skeleton", "bogged", "skeleton", "drowned", "drowned");
+        plain.forEach((type, bare) -> {
+            EntityMeshes.Mob mob = EntityMeshes.of(type, null, false);
+            assertEquals(1, mob.over().size(), type + " wears one layer");
+
+            EntityMeshes.Mob worn = mob.over().getFirst();
+            assertNotEquals(mob.texture(), worn.texture(), "off a texture of its own, or it would be the same mesh");
+            assertTrue(worn.model().height() > EntityMeshes.of(bare, null, false).model().height(),
+                    "and grown, or it would be inside the " + type + " rather than over it");
+        });
     }
 
     /** Whether any part of this tree answers to a name. */

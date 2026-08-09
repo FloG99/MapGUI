@@ -9,9 +9,11 @@ import de.flog99.mapgui.render.ItemModels;
 import de.flog99.mapgui.render.ItemPoses;
 import de.flog99.mapgui.render.TextureAtlas;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Fox;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Snowman;
+import org.bukkit.entity.TraderLlama;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EntityEquipment;
@@ -64,7 +66,9 @@ final class MobEquipment {
         // The animals, whose layer is named after the animal rather than after its shape: a pig saddle is not a horse
         // saddle and neither is drawn from the other mesh.
         add(layers, base, atlas, equipment, saddleMesh(type), type + "_saddle", worn.getItem(EquipmentSlot.SADDLE), false);
-        add(layers, base, atlas, equipment, bodyMesh(type), type + "_body", worn.getItem(EquipmentSlot.BODY), false);
+        // Body armor names its layer after the shape rather than after the animal, which is the same answer for all
+        // but the three that borrow another's mesh: a trader llama's carpet is a llama's, on a llama's body.
+        add(layers, base, atlas, equipment, bodyMesh(type), bodyMesh(type), worn.getItem(EquipmentSlot.BODY), false);
 
         // One skeleton in twenty is left-handed, and vanilla poses a held item by the arm rather than by the hand.
         boolean rightHanded = !leftHanded(entity);
@@ -72,9 +76,85 @@ final class MobEquipment {
         hold(layers, base, assets, skins, worn.getItemInOffHand(), !rightHanded);
 
         wear(layers, base, assets, entity);
+        carry(layers, base, assets, skins, entity, worn.getItemInMainHand());
+        decorate(layers, base, atlas, equipment, entity);
         contains(layers, base, assets, type, worn.getItem(EquipmentSlot.BODY));
         return layers;
     }
+
+    /**
+     * A trader llama's own decoration, which is the one piece of equipment nothing is wearing: {@code LlamaDecorLayer}
+     * draws it off an empty stack, from an asset named in the client rather than on any item.
+     *
+     * <p>Only when the llama has no carpet on. A trader llama somebody has dressed wears the carpet instead, which is
+     * the ordinary body slot and drawn above.
+     */
+    private static void decorate(List<EntitySnapshot> into, EntitySnapshot base, TextureAtlas atlas,
+                                 EquipmentAssets equipment, Entity entity) {
+        if (!(entity instanceof TraderLlama llama) || asset(llama.getEquipment().getItem(EquipmentSlot.BODY)) != null) return;
+
+        put(into, base, atlas, equipment, LLAMA_BODY, LLAMA_BODY, TRADER_LLAMA, null, false);
+    }
+
+    /** The asset the client names for it, which is a piece of equipment with no item behind it. */
+    private static final String TRADER_LLAMA = "trader_llama";
+
+    /**
+     * Whatever a fox has in its mouth, which is a held item drawn on the head rather than in a hand.
+     *
+     * <p>{@code FoxHeldItemLayer}'s own chain: to the head, along it, a quarter circle over, and the item drawn at the
+     * transform it would be lying on the ground at. A sleeping fox turns it a further quarter circle, and a cub is
+     * three quarters of the size and holds it further forward.
+     */
+    private static void carry(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets, SkinCache skins,
+                              Entity entity, ItemStack item) {
+        if (!(entity instanceof Fox fox) || item == null || item.isEmpty()) return;
+
+        boolean baby = !fox.isAdult();
+        boolean asleep = fox.isSleeping();
+        float small = baby ? CUB_SCALE : 1;
+
+        float[] mouth = asleep ? (baby ? CUB_ASLEEP : FOX_ASLEEP) : (baby ? CUB_MOUTH : FOX_MOUTH);
+        float[] shift = {mouth[0] * small, mouth[1] * small, mouth[2] * small};
+        float[] turn = asleep ? MOUTH_ASLEEP_TURN : MOUTH_TURN;
+
+        for (String id : ItemIds.of(item)) {
+            List<EntitySnapshot> layers = assets.items().held(id);
+            if (layers.isEmpty()) continue;
+
+            ItemPoses.Pose pose = assets.poses().carried(id, ItemPoses.ON_GROUND, shift, turn);
+            ItemPoses.Pose sized = baby
+                    ? new ItemPoses.Pose(pose.offset(), pose.rotation(), pose.scale() * CUB_SCALE)
+                    : pose;
+
+            for (EntitySnapshot layer : skins.faced(layers, item)) {
+                EntitySnapshot held = EntitySnapshot.on(base, FOX_HEAD, layer, sized, true);
+                if (held != null) {
+                    into.add(held);
+                }
+            }
+            return;
+        }
+    }
+
+    /** The part a fox's renderer hangs what it is carrying off, and the only name it looks one up by. */
+    private static final String FOX_HEAD = "head";
+
+    /** The client's own four offsets, in blocks: awake and asleep, grown and cub. */
+    private static final float[] FOX_MOUTH = {0.06f, 0.27f, -0.5f};
+
+    private static final float[] FOX_ASLEEP = {0.46f, 0.26f, 0.22f};
+
+    private static final float[] CUB_MOUTH = {0.06f, 0.26f, -0.5f};
+
+    private static final float[] CUB_ASLEEP = {0.4f, 0.26f, 0.15f};
+
+    /** A quarter circle over, so the item lies flat in the jaws, and a second one for a fox lying on its side. */
+    private static final float[] MOUTH_TURN = {90, 0, 0};
+
+    private static final float[] MOUTH_ASLEEP_TURN = {90, 0, 90};
+
+    private static final float CUB_SCALE = 0.75f;
 
     /**
      * The carved pumpkin a snow golem wears, which is not equipment and is not in any slot.
@@ -189,6 +269,13 @@ final class MobEquipment {
         String asset = asset(item);
         if (asset == null) return;
 
+        put(into, base, atlas, equipment, mesh, layer, asset, item, crouching);
+    }
+
+    /** The same for a piece named outright, which is the trader llama's - there is no item behind that one. */
+    private static void put(List<EntitySnapshot> into, EntitySnapshot base, TextureAtlas atlas,
+                            EquipmentAssets equipment, String mesh, String layer, String asset,
+                            ItemStack item, boolean crouching) {
         for (EquipmentAssets.Pass pass : equipment.of(asset, layer)) {
             if (!atlas.has(pass.texture())) continue;
 
@@ -231,7 +318,11 @@ final class MobEquipment {
     private static String bodyMesh(String type) {
         return switch (type) {
             case "skeleton_horse", "zombie_horse" -> "horse_body";
+            case "trader_llama" -> LLAMA_BODY;
             default -> type + "_body";
         };
     }
+
+    /** The mesh and the layer a llama's carpet is drawn from, which a trader llama shares and is not named after. */
+    private static final String LLAMA_BODY = "llama_body";
 }

@@ -5,6 +5,28 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ## Unreleased
 
+### Running a server
+
+- **`/mapgui camera timings` now reports what every capture on the server cost, whoever asked for it.** It used to be
+  a per-player switch that pushed three lines of chat after each capture taken from *that* player's eye, which only
+  describes the one camera the sample plugin has - somebody aims and clicks. A plugin capturing on a timer, for a live
+  view, or for a player who is not the one asking either flooded a chat or reported nothing at all, and an admin had
+  no way to tell which. It is counted whether anybody is watching or not, over a rolling few seconds, and reports four
+  things: **how many captures a second and which plugin is asking**, worked out from the stack rather than from a new
+  API parameter; **what they took off the main thread**, as a share of the 1000 ms a second there is to take, since
+  that is the only part that can cost a tick; **the worst single one**, because one 40 ms copy is a stutter an average
+  hides; and **how many are queued** when the trace pool is behind, which is the line that says over capacity rather
+  than busy. The four-stage per-capture tail is still there as `/mapgui camera timings follow`, now at most one line a
+  second with the ones left out counted rather than dropped silently. See
+  [what to watch](docs/camera.md#what-to-watch).
+- **A capture that throws is no longer invisible.** It went to the console and nowhere else, so a camera failing every
+  time looked from outside exactly like a camera nothing was using. Failures are counted with everything else, and
+  `/mapgui status` names the plugin and how long ago.
+- `/mapgui performance` carries the camera's main-thread cost. It is the page somebody opens when a server feels slow,
+  and it counted only bandwidth - which a capture does not spend. No bandwidth figure was added for it: the bytes are
+  the map frame a screen paints the shot into, and those are already counted under whatever wall or player received
+  them.
+
 ### Sending frames
 
 - **A map whose changes are in two places is sent as two updates, not as the box around them.** A map update
@@ -21,6 +43,25 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **The layers a mob's renderer draws over its skin are drawn.** A stray's frost, a bogged's moss and a drowned's
+  outer skin are not part of those mobs' meshes at all - each is a second copy of the body, grown by a fraction of a
+  pixel, over a texture of its own. Without them the three of them stood there as a plain skeleton and a plain zombie
+  in odd colours. A mob may now wear any number of these where it used to wear one, which is what the sheep's fleece
+  had been using on its own.
+- **An idle illager folds its arms, and a pillager levels its crossbow.** The pose an illager stands in is a property
+  of the individual rather than of the model - its own render state starts at neither - so it is now stated per mob and
+  the client's own animation is what holds the mesh in it. An evoker, an illusioner and a vindicator stand with their
+  arms crossed; a pillager stands with its crossbow up.
+- **The three jokes behind a name tag work.** A mob called `Dinnerbone` or `Grumm` stands on its head, and every layer
+  of it goes over with it - its armour, its fleece, whatever it is holding. A rabbit called `Toast` wears the lost
+  pet's coat. A sheep called `jeb_` cycles the sixteen fleece colours a colour every twenty-five ticks, blended across
+  in between, which is the client's own arithmetic rather than a rainbow of our own.
+- **A fox carries what it has in its mouth.** Drawn off the head rather than out of a hand, at the transform the item
+  would be lying on the ground at, and turned a quarter circle so it lies flat in the jaws - with the client's own
+  four offsets for a fox that is grown or a cub, awake or asleep.
+- Fixed: **a trader llama was undecorated, and a carpet on one drew nothing.** Its decoration is the one piece of
+  equipment with no item behind it - the client names the asset outright - and its carpet is drawn on a llama's body
+  under a llama's layer, which the naming rule reached as `trader_llama_body` and did not find.
 - **A map hung in an item frame shows its picture.** It is the one thing in a capture whose picture is nowhere in the
   assets: a map's pixels live in the world's own saved data, one byte of palette index each, so they are read from
   there and widened into a texture per capture. Per capture rather than cached, since a map is not a fixed picture -

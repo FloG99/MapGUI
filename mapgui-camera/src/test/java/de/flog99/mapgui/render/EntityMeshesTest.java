@@ -93,7 +93,7 @@ class EntityMeshesTest {
         assertNull(EntityMeshes.of("cow", null, true));
         assertFalse(EntityMeshes.hasBaby("cow"));
         assertNull(EntitySnapshot.mob("cow", 0, 0, 0, 0, 0, 0, 1f), "so the capture falls back to the bounding box");
-        assertNull(EntitySnapshot.over(EntitySnapshot.box(0, 0, 0, 0, 0, 1, 1, "hide"), "sheep"));
+        assertEquals(List.of(), EntitySnapshot.over(EntitySnapshot.box(0, 0, 0, 0, 0, 1, 1, "hide"), "sheep"));
     }
 
     /** And a partial extraction is useful rather than an error: the meshes that baked are drawn, the rest are not. */
@@ -229,12 +229,12 @@ class EntityMeshesTest {
         ));
 
         EntitySnapshot sheep = EntitySnapshot.mob("sheep", 0.5, 0, 0.5, 0, 0, 0, 1f);
-        EntitySnapshot fleece = EntitySnapshot.over(sheep, "sheep");
-        assertNotNull(fleece);
-        assertEquals("entity/sheep/sheep_wool", fleece.texture());
+        List<EntitySnapshot> fleece = EntitySnapshot.over(sheep, "sheep");
+        assertEquals(1, fleece.size());
+        assertEquals("entity/sheep/sheep_wool", fleece.getFirst().texture());
 
-        assertNull(EntitySnapshot.over(EntitySnapshot.mob("cow", 0.5, 0, 0.5, 0, 0, 0, 1f), "cow"));
-        assertNull(EntitySnapshot.over(EntitySnapshot.mob("sheep", 0.5, 0, 0.5, 0, 0, 0, 0.5f), "sheep"),
+        assertEquals(List.of(), EntitySnapshot.over(EntitySnapshot.mob("cow", 0.5, 0, 0.5, 0, 0, 0, 1f), "cow"));
+        assertEquals(List.of(), EntitySnapshot.over(EntitySnapshot.mob("sheep", 0.5, 0, 0.5, 0, 0, 0, 0.5f), "sheep"),
                 "a lamb's fleece is not a sheep's shrunk, so it is left off rather than drawn the wrong size");
     }
 

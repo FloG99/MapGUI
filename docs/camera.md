@@ -364,12 +364,15 @@ travelling **just above the ground** stays inside cells that hold the ground, so
 maximum height per cell rather than a flag, and measuring every column to get one is main-thread work in the tick
 this is trying to keep cheap.
 
-To see it on your own server rather than in this table, run **`/mapgui camera timings`** and take a picture. It
+To see it on your own server rather than in this table, run **`/mapgui camera timings follow`** and take a picture. It
 reports the four stages and their total: the copy, with how many **chunks** it took and how many of their **sections**
 held anything; the entity gather, with how many were in frame; the trace; and the palette. A section is the 16x16x16
 subchunk Minecraft divides a chunk into, and the filled count is the interesting half of it - a snapshot costs nothing
-for a section of pure air, so that ratio is how much of the copy could ever be avoided. It is per player and it stays
-on until you run it again.
+for a section of pure air, so that ratio is how much of the copy could ever be avoided. It follows captures taken from
+your own eye, at most one line a second, and stays on until you run it again.
+
+For whether the camera is costing the *server* anything, which is a different question, see
+[what to watch](#what-to-watch).
 
 Only work is counted. A capture crosses threads twice - out to a thread for the trace, then back onto the main thread
 to hand over the shot, because touching the Bukkit API anywhere else is not allowed - and **the hop back costs about
@@ -440,6 +443,38 @@ Two limits worth knowing:
   inside one tick.
 - **Entities are capped** at 48 in frame, nearest first, and 64 blocks out. Each one is now a part tree of real
   cubes rather than a single box, so a mob farm in shot would otherwise be tens of thousands of slab tests.
+
+### What to watch
+
+Everything above is for deciding whether the renderer could be faster. **`/mapgui camera timings`** is for deciding
+whether a server is in trouble, which is a much shorter question, so it answers four things and nothing else:
+
+```
+Camera - what captures are costing, over the last few seconds
+Captures  3.2/s   PhotoBooth 3.0/s, Surveillance 0.2/s
+Main thread  6.8ms/s  0.7% of a tick   worst single 4.1ms
+```
+
+- **Captures, and by whom.** Rate is the multiplier on everything else, and the plugin names are the actionable half
+  of it - a camera is always somebody's, and turning one down means turning down whatever asked for it.
+- **Main thread.** The only number that can cost TPS. A second holds 20 ticks of 50 ms, so 1000 ms of tick, and this
+  is what the camera took out of it. Under 1% is nothing, 5% is a server you can feel.
+- **Worst single.** An average of 2 ms with one 40 ms copy in it is a stutter a player saw, and the average hides it.
+  This is the same `copy` a `follow` line reports, kept because one long tick is a different problem from a busy one.
+- **Waiting**, when anything is. Captures are traced one at a time off an unbounded queue - the trace itself is what
+  uses several threads - so a plugin asking for captures faster than the machine can trace them shows up as a queue
+  that only goes up. It is the one line that says "over capacity" rather than "busy", and it is left out entirely
+  when the queue is empty.
+
+Failures get a line here and on `/mapgui status`, which is the only place they show at all: a camera that throws on
+every capture logs to the console and otherwise looks exactly like a camera nothing is using.
+
+There is no bandwidth figure, on purpose. A capture sends nothing - what reaches a client is the map frame a screen
+paints it into, and [`/mapgui performance`](performance.md) already counts those bytes under whatever wall or player
+received them. Counting them twice would only make the camera look expensive in a currency it does not spend.
+
+Nothing has to be switched on for any of this; it is counted whether anybody is looking or not, over a rolling few
+seconds, and a `/mapgui reload` starts it over.
 
 ## Blocks the client draws itself
 

@@ -2,6 +2,7 @@ package de.flog99.mapgui.plugin.camera;
 
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.ItemPoses;
+import de.flog99.mapgui.render.Tints;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Art;
@@ -77,11 +78,40 @@ final class EntityCapture {
                 continue;
             }
 
-            snapshots.addAll(snapshotsOf(entity, skins, assets, maps));
+            snapshots.addAll(upended(entity, snapshotsOf(entity, skins, assets, maps)));
         }
 
         return snapshots;
     }
+
+    /**
+     * A mob called Dinnerbone or Grumm, standing on its head.
+     *
+     * <p>Every layer of it rather than the body alone, which is what makes it a joke rather than a glitch: the client
+     * turns the whole entity over in {@code setupRotations}, so its armor, its fleece and whatever it is holding go
+     * with it.
+     *
+     * <p>The turn is a half circle about Z at half the height it is lifted by, which is the same thing the client's
+     * lift and turn come to together - a rotation about a point is a rotation about the origin and a shift of twice
+     * the distance to it.
+     */
+    private static List<EntitySnapshot> upended(Entity entity, List<EntitySnapshot> drawn) {
+        if (drawn.isEmpty() || !MobNames.upsideDown(entity)) return drawn;
+
+        float pivot = (float) (entity.getHeight() + UPENDED_CLEARANCE) * BLOCK / 2;
+        List<EntitySnapshot> turned = new ArrayList<>(drawn.size());
+        for (EntitySnapshot one : drawn) {
+            turned.add(one.tilted(0, HALF_CIRCLE, pivot));
+        }
+        return List.copyOf(turned);
+    }
+
+    /** What the client lifts an upended mob by over its own height, so its feet clear the ground it stood on. */
+    private static final double UPENDED_CLEARANCE = 0.1;
+
+    private static final float BLOCK = 16;
+
+    private static final float HALF_CIRCLE = (float) Math.PI;
 
     /**
      * The snapshots one entity is drawn from, nearly always one and empty for an entity that is not drawn at all.
@@ -150,10 +180,7 @@ final class EntityCapture {
 
         List<EntitySnapshot> drawn = new ArrayList<>();
         drawn.add(dressed);
-        EntitySnapshot layer = wornLayer(entity, dressed, type, variant);
-        if (layer != null) {
-            drawn.add(layer);
-        }
+        drawn.addAll(wornLayers(entity, dressed, type, variant));
         drawn.addAll(MobEquipment.wornBy(entity, dressed, type, assets, skins));
         drawn.addAll(carried(entity, dressed, assets));
         return drawn;
@@ -374,18 +401,36 @@ final class EntityCapture {
     }
 
     /**
-     * The second layer this mob wears, or null for the great majority that wear none. A sheep is the special case:
-     * its fleece comes off one white texture that vanilla colors per animal, so the dye travels with the layer, and
-     * a shorn sheep is a layer left out rather than a color.
+     * The layers this mob's renderer draws over it, and empty for the great majority that wear none. Two of them come
+     * and go with what the animal has been done to, and the rest simply are what the mob looks like.
+     *
+     * <p>A sheep is the special case: its fleece comes off one white texture that vanilla colors per animal, so the
+     * dye travels with the layer, and a shorn sheep is a layer left out rather than a color. It is also the only one
+     * shearing takes off - a bogged keeps its mossy overlay and loses only the mushrooms on its head, which are part
+     * of its mesh.
      */
-    private static EntitySnapshot wornLayer(Entity entity, EntitySnapshot base, String type, String variant) {
+    private static List<EntitySnapshot> wornLayers(Entity entity, EntitySnapshot base, String type, String variant) {
         if (entity instanceof Sheep sheep) {
+            // A sheep called jeb_ is between two dyes rather than wearing one, so its color is a number and not a
+            // name - which is why this tints the fleece itself rather than handing a dye down.
+            if (MobNames.named(sheep, MobNames.JEB) && !sheep.isSheared()) {
+                return tinted(EntitySnapshot.over(base, type, variant), Tints.rainbow(sheep.getTicksLived()));
+            }
+
             DyeColor dye = sheep.getColor();
             return EntitySnapshot.fleece(base, type, variant, sheep.isSheared(),
                     dye == null ? null : dye.name().toLowerCase(Locale.ROOT));
         }
 
         return EntitySnapshot.over(base, type, variant);
+    }
+
+    private static List<EntitySnapshot> tinted(List<EntitySnapshot> layers, int color) {
+        List<EntitySnapshot> dyed = new ArrayList<>(layers.size());
+        for (EntitySnapshot layer : layers) {
+            dyed.add(layer.tint(color));
+        }
+        return List.copyOf(dyed);
     }
 
     /** What {@code ArmPose.BOW_AND_ARROW} levels both arms to, and how far it swings the off arm clear. */

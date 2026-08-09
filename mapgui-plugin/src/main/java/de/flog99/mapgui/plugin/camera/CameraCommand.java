@@ -12,11 +12,12 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 /**
- * {@code /mapgui camera} - the textures a capture draws with, and nothing about taking one.
+ * {@code /mapgui camera} - the textures a capture draws with, and what captures are costing.
  *
- * <p>Taking a capture belongs to whatever plugin wants the picture, the same way opening a screen does. What an
- * admin needs from here is what state the textures are in and how to get them, which is the one part of the
- * camera that can go wrong in a way only a person can fix.
+ * <p>Taking a capture belongs to whatever plugin wants the picture, the same way opening a screen does, so there is
+ * no command here that takes one. What an admin needs is the two things a plugin cannot tell them: what state the
+ * textures are in and how to get them, which is the one part of the camera only a person can fix, and what the
+ * captures that plugin is taking cost the server.
  */
 public final class CameraCommand {
 
@@ -49,9 +50,16 @@ public final class CameraCommand {
                         }))
                 .then(Commands.literal("timings")
                         .executes(context -> {
-                            timings(context.getSource().getSender(), plugin);
+                            for (Component line : CameraReport.lines(plugin.camera())) {
+                                context.getSource().getSender().sendMessage(line);
+                            }
                             return Command.SINGLE_SUCCESS;
-                        }));
+                        })
+                        .then(Commands.literal("follow")
+                                .executes(context -> {
+                                    follow(context.getSource().getSender(), plugin);
+                                    return Command.SINGLE_SUCCESS;
+                                })));
     }
 
     /**
@@ -100,22 +108,25 @@ public final class CameraCommand {
     }
 
     /**
-     * Turns the per-capture cost report on or off for whoever asked.
+     * Turns the per-capture, four-stage tail on or off for whoever asked.
      *
-     * <p>A player rather than the console, because what it reports is the cost of that player's own captures, and
-     * because the answer arrives after the next one they take rather than now.
+     * <p>For working out why a capture is slow rather than whether it is costing anything - {@code timings} on its own
+     * answers that, for every capture on the server, whoever asked for it. This one only reports captures taken from
+     * <i>this</i> player's eye, so a plugin that captures on a timer or for somebody else shows up in the first and
+     * not in this.
      */
-    private static void timings(CommandSender sender, MapGuiPlugin plugin) {
+    private static void follow(CommandSender sender, MapGuiPlugin plugin) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Only a player can be told what their own captures cost.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Only a player can follow captures, since it reports the ones taken from their own eye.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Run /mapgui camera timings for what every capture on the server is costing.", NamedTextColor.YELLOW));
             return;
         }
 
         if (plugin.camera().toggleTimings(player.getUniqueId())) {
-            player.sendMessage(Component.text("Capture timings on. Take a picture and the cost will follow it.", NamedTextColor.GREEN));
+            player.sendMessage(Component.text("Following your captures, at most one line a second. Run it again to stop.", NamedTextColor.GREEN));
             return;
         }
-        player.sendMessage(Component.text("Capture timings off.", NamedTextColor.YELLOW));
+        player.sendMessage(Component.text("No longer following your captures.", NamedTextColor.YELLOW));
     }
 
     private static void fetch(CommandSender sender, CameraAssetStore assets) {

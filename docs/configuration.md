@@ -16,11 +16,15 @@ groups, and each takes the same three verbs.
 | `/mapgui wall place [content]` | `mapgui.command.wall` | with a name, starts placing it on blocks; without one, lists what there is |
 | `/mapgui wall remove [name]` | `mapgui.command.wall` | the nearest within 32 blocks, or one by name |
 | `/mapgui wall list` | `mapgui.command.wall` | every saved wall, with coordinates you can click to teleport |
-| `/mapgui status` | `mapgui.command.status` | how many are in hand, and how many saved walls are actually showing |
-| `/mapgui performance` | `mapgui.command.performance` | what it is costing in bandwidth - see [performance](performance.md) |
+| `/mapgui camera status` | `mapgui.command.camera` | what state the capture textures are in, and for anything wrong, what to do about it |
+| `/mapgui camera timings` | `mapgui.command.camera` | what captures are costing the server and which plugin is asking - see [camera](camera.md#what-to-watch) |
+| `/mapgui camera fetch-assets` | `mapgui.command.camera` | downloads the client jar the textures come out of |
+| `/mapgui camera reload` | `mapgui.command.camera` | re-reads the packs on disk without a restart |
+| `/mapgui status` | `mapgui.command.status` | how many are in hand, how many saved walls are actually showing, and anything that is failing |
+| `/mapgui performance` | `mapgui.command.performance` | what it is costing in bandwidth and main-thread time - see [performance](performance.md) |
 | `/mapgui reload` | `mapgui.command.reload` | re-reads `config.yml` and applies it to walls already up |
 
-`mapgui.admin` is the parent of all five, for the usual case of wanting the lot. All default to op.
+`mapgui.admin` is the parent of all six, for the usual case of wanting the lot. All default to op.
 
 `list` means the same thing in both groups: what exists right now. `hand open` and `wall place` given no
 argument list what they could take, which is the answer you want at the moment you notice you are missing an

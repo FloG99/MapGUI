@@ -81,7 +81,7 @@ public final class ItemPoses {
     }
 
     /** Where a dropped pose is stated, which is the one other transform a capture can see. */
-    private static final String ON_GROUND = "ground";
+    public static final String ON_GROUND = "ground";
 
     /**
      * What the {@code ground} transform shrinks this item to, for one lying on the floor.
@@ -152,6 +152,52 @@ public final class ItemPoses {
 
     /** The transform that does nothing, for an item whose chain states none for the context asked about. */
     private static final Pose SQUARE = new Pose(new float[3], new float[3], 1);
+
+    /**
+     * How this item sits when a mob's own renderer holds it somewhere that is not a hand.
+     *
+     * <p>Which is a fox's mouth, and the shape of it is the same as a hand's: the client reaches a part, shifts along
+     * it, turns, and then applies the item's own transform for whichever display context it is drawing under. What
+     * differs is that the shift here comes before the turn rather than after it, so it is stated separately.
+     *
+     * <p>Handed back in the frame a model on a mob arrives in, like {@link #of} and unlike {@link #stated} - what
+     * this hangs an item off is a mob's own part.
+     *
+     * @param context which display transform the client draws it under, {@link #ON_GROUND} for the fox
+     * @param shift   from the part to the item, in blocks, in the part's own frame and before the turn
+     * @param turn    what the client turns it by after that, as x, y and z degrees in the order it applies them
+     */
+    public Pose carried(String item, String context, float[] shift, float[] turn) {
+        Stated stated = displays.computeIfAbsent(context + " " + item, key -> written(item, context));
+
+        float[] outer = Turns.display(turn[0], turn[1], turn[2]);
+        float[] reach = Turns.apply(outer, stated.translation()[0] / PIXELS,
+                stated.translation()[1] / PIXELS, stated.translation()[2] / PIXELS);
+        float[] offset = {shift[0] + reach[0], shift[1] + reach[1], shift[2] + reach[2]};
+
+        float[] own = Turns.display(stated.rotation()[0], stated.rotation()[1], stated.rotation()[2]);
+        float[] whole = Turns.times(outer, Turns.times(own, Turns.x(Math.PI)));
+
+        return new Pose(
+                new float[]{-offset[0] * PIXELS, -offset[1] * PIXELS, offset[2] * PIXELS},
+                Turns.angles(Turns.mirrored(whole)),
+                Math.max(0.01f, stated.scale()));
+    }
+
+    /** One display transform as the assets write it: a translation in entity pixels, degrees, and a scale. */
+    private record Stated(float[] translation, float[] rotation, float scale) {
+    }
+
+    private final Map<String, Stated> displays = new ConcurrentHashMap<>();
+
+    private Stated written(String item, String context) {
+        JsonObject display = displayOf(definitions.of(item).model(), 0);
+        if (display == null || !display.has(context)) return new Stated(new float[3], new float[3], 1);
+
+        JsonObject placed = display.getAsJsonObject(context);
+        return new Stated(numbers(placed, "translation", 0), numbers(placed, "rotation", 0),
+                numbers(placed, "scale", 1)[0]);
+    }
 
     private Pose read(String item, boolean rightArm) {
         JsonObject display = displayOf(definitions.of(item).model(), 0);

@@ -30,10 +30,9 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -73,12 +72,30 @@ public final class CameraService implements Camera {
     private final SnapshotCache snapshots;
 
     /**
-     * Players who have asked to be told what a capture costs, from {@code /mapgui camera timings}.
+     * What every capture cost, whoever asked for it, for {@code /mapgui camera timings}.
+     *
+     * <p>Always on, since it is six numbers a second and the question it answers - "is this costing my server
+     * anything" - is asked after the trouble rather than before it. Cleared by a reload, which builds a new service.
+     */
+    private final CaptureLoad load = new CaptureLoad();
+
+    /**
+     * Players following their own captures line by line, from {@code /mapgui camera timings follow}.
      *
      * <p>Per player rather than a config switch, because the question it answers is "why was that slow just now"
-     * and the person asking is standing in the world. Cleared by a reload, which builds a new service.
+     * and the person asking is standing in the world.
      */
-    private final Set<UUID> timed = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Follow> followed = new ConcurrentHashMap<>();
+
+    /** One followed player's tail. Held so a live view capturing every tick cannot turn the report into a wall of chat. */
+    private static final class Follow {
+
+        /** Nanos between reports. Anything faster is a screen refreshing rather than somebody taking a picture. */
+        private static final long EVERY_NANOS = TimeUnit.SECONDS.toNanos(1);
+
+        private long lastAt;
+        private int skipped;
+    }
 
     /** Only for the report, where the point is that the first few captures are the JIT warming up rather than a cost. */
     private final AtomicInteger captureCount = new AtomicInteger();
@@ -93,7 +110,7 @@ public final class CameraService implements Camera {
      * band with no thread left to run on. Core size zero with a short keep-alive, so an idle camera holds no threads
      * and a service left behind by a reload cannot leak one.
      */
-    private final ExecutorService captures = new ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS,
+    private final ThreadPoolExecutor captures = new ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(), runnable -> {
         Thread thread = new Thread(runnable, "MapGUI-capture");
         thread.setDaemon(true);
@@ -174,6 +191,8 @@ public final class CameraService implements Camera {
 
         long started = System.nanoTime();
         int number = captureCount.incrementAndGet();
+        // Here rather than in the task, since this is the one moment the caller is still on the stack to be read.
+        String owner = CallingPlugin.of(plugin);
 
         // On this thread, in this tick: everything the trace is allowed to touch.
         CameraView view = WorldCapture.viewOf(eye, options, distance);
@@ -191,6 +210,9 @@ public final class CameraService implements Camera {
         // entities off asks for the world without the things standing in it rather than with holes in the walls.
         entities.addAll(BlockEntityCapture.take(eye, ready.mobs(), skins));
         long gathered = System.nanoTime();
+        // Counted in the tick it happened in rather than when the shot comes back: a capture whose trace waits three
+        // seconds for a thread still cost this tick, and a report that said otherwise would point at the wrong second.
+        load.captured(owner, gathered - started);
 
         captures.execute(() -> {
             int[] argb = new int[pixels * pixels];
@@ -205,10 +227,14 @@ public final class CameraService implements Camera {
                 // With the stack, because without it this is unactionable. A capture failing is always a bug in here
                 // rather than something an admin did, and the message alone once cost an afternoon.
                 plugin.getLogger().log(Level.WARNING, "A camera capture failed", e);
+                // And counted, since a console nobody is reading is where this used to end: a camera that fails every
+                // time looks from the outside exactly like one nothing is using.
+                load.failed(owner, e);
                 onMainThread(() -> onShot.accept(null));
                 return;
             }
             long quantized = System.nanoTime();
+            load.traced(owner, quantized - traceStarted);
 
             // A capture that succeeded can still have been drawn from the wrong layers, and this is the only
             // moment anything knows: a pack that stopped being readable reads as a pack that never had the file.
@@ -218,9 +244,10 @@ public final class CameraService implements Camera {
             onMainThread(() -> {
                 onShot.accept(shot);
                 // After the shot is handed over, so a slow consumer is not timed as if the camera had been slow.
-                if (timed.contains(player.getUniqueId()) && player.isOnline()) {
+                Follow follow = followed.get(player.getUniqueId());
+                if (follow != null && player.isOnline()) {
                     int[] sections = world.sections();
-                    report(player, new CaptureTimings(pixels, number, world.chunks(), sections[0], sections[1],
+                    tail(player, follow, new CaptureTimings(pixels, number, world.chunks(), sections[0], sections[1],
                             entities.size(), copied - started, gathered - copied, traced - traceStarted, quantized - traced));
                 }
             });
@@ -242,23 +269,59 @@ public final class CameraService implements Camera {
         }
     }
 
+    /** What every capture has cost lately, for whoever asks rather than for whoever took them. */
+    CaptureLoad load() {
+        return load;
+    }
+
     /**
-     * Whether this player is told what their captures cost.
+     * Captures copied out of the world and now waiting for a thread to trace them.
+     *
+     * <p>The one number here that says a server is over its capacity rather than just busy: the queue is unbounded, so
+     * a plugin asking for captures faster than this machine can trace them shows up as a number that only goes up.
+     */
+    int queued() {
+        return captures.getQueue().size();
+    }
+
+    /**
+     * Whether this player is told what their captures cost, line by line.
      *
      * @return the state it is now in
      */
     public boolean toggleTimings(UUID player) {
-        if (timed.remove(player)) return false;
+        if (followed.remove(player) != null) return false;
 
-        timed.add(player);
+        followed.put(player, new Follow());
         return true;
     }
 
-    private void report(Player player, CaptureTimings timings) {
+    /**
+     * One capture's four stages, for the player following along.
+     *
+     * <p>At most one a second. A camera driving a live view captures every tick, and thirty of these a second is not a
+     * report - the ones left out are counted into the next line rather than dropped silently, since a reader who
+     * cannot tell they are seeing one capture in twenty reads its cost as the whole cost.
+     */
+    private void tail(Player player, Follow follow, CaptureTimings timings) {
+        long now = System.nanoTime();
+        if (now - follow.lastAt < Follow.EVERY_NANOS) {
+            follow.skipped++;
+            return;
+        }
+
+        report(player, timings, follow.skipped);
+        follow.lastAt = now;
+        follow.skipped = 0;
+    }
+
+    private void report(Player player, CaptureTimings timings, int skipped) {
         player.sendMessage(Component.text("Capture ", NamedTextColor.GOLD)
                 .append(Component.text("#" + timings.number() + "  " + timings.size() + "x" + timings.size() + "  ", NamedTextColor.DARK_GRAY))
                 .append(Component.text(CaptureTimings.millis(timings.totalNanos()), NamedTextColor.WHITE))
-                .append(Component.text(" of work", NamedTextColor.DARK_GRAY)));
+                .append(Component.text(" of work", NamedTextColor.DARK_GRAY))
+                .append(skipped == 0 ? Component.empty()
+                        : Component.text("  +" + skipped + " not shown", NamedTextColor.DARK_GRAY)));
 
         // Copy first and in its own color, because it is the only one of these that lands on the server's tick.
         player.sendMessage(Component.text("  copy ", NamedTextColor.YELLOW)

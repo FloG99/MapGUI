@@ -3,6 +3,7 @@ package de.flog99.mapgui.render;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -84,8 +85,9 @@ class SheepWoolTest {
 
     private static List<EntitySnapshot> sheep(boolean sheared, String dye) {
         EntitySnapshot body = EntitySnapshot.mob("sheep", null, 0.5, 0, 0.5, 0, 0, 0, 1f, false);
-        EntitySnapshot fleece = EntitySnapshot.fleece(body, "sheep", null, sheared, dye);
-        return fleece == null ? List.of(body) : List.of(body, fleece);
+        List<EntitySnapshot> sheep = new ArrayList<>(List.of(body));
+        sheep.addAll(EntitySnapshot.fleece(body, "sheep", null, sheared, dye));
+        return List.copyOf(sheep);
     }
 
     @Test
@@ -109,7 +111,7 @@ class SheepWoolTest {
         installSheep();
 
         assertEquals(0xE6E6E6, EntitySnapshot.fleece(EntitySnapshot.mob("sheep", null, 0.5, 0, 0.5, 0, 0, 0, 1f, false),
-                "sheep", null, false, "white").tint() & 0xFFFFFF);
+                "sheep", null, false, "white").getFirst().tint() & 0xFFFFFF);
     }
 
     /** A shorn sheep wears no fleece at all, which is a layer left out rather than a color. */
@@ -118,7 +120,7 @@ class SheepWoolTest {
         TestWorld world = world();
         installSheep();
 
-        assertNull(EntitySnapshot.fleece(EntitySnapshot.mob("sheep", null, 0.5, 0, 0.5, 0, 0, 0, 1f, false), "sheep", null, true, "red"));
+        assertEquals(List.of(), EntitySnapshot.fleece(EntitySnapshot.mob("sheep", null, 0.5, 0, 0.5, 0, 0, 0, 1f, false), "sheep", null, true, "red"));
         assertEquals(1, sheep(true, "red").size(), "just the body");
         assertPatch(0xFF20FF20, pixel(world, sheep(true, "red")), "so the hide under it is what shows");
     }
@@ -140,8 +142,8 @@ class SheepWoolTest {
         installSheep();
 
         EntitySnapshot body = EntitySnapshot.mob("sheep", null, 0.5, 0, 0.5, 0, 0, 0, 1f, false);
-        EntitySnapshot fleece = EntitySnapshot.fleece(body, "sheep", null, false, null);
-        assertNotNull(fleece);
-        assertEquals(0, fleece.tint());
+        List<EntitySnapshot> fleece = EntitySnapshot.fleece(body, "sheep", null, false, null);
+        assertEquals(1, fleece.size());
+        assertEquals(0, fleece.getFirst().tint());
     }
 }

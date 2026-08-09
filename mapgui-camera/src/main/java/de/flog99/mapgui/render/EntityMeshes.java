@@ -32,9 +32,13 @@ final class EntityMeshes {
      * @param scale          what the client scales the whole mesh by when it registers this layer, or 0 for none. A
      *                       husk is a zombie at 1.0625 and a cave spider a spider at 0.7
      * @param space          which space this model is built in, which is decided by what its renderer does to it
+     * @param state          fields to set on the render state before the client poses this mesh, as field name to
+     *                       enum constant. For the handful of poses that are a property of the individual rather than
+     *                       of the species - an illager's arms are crossed or holding a crossbow, and nothing about
+     *                       the model says which
      */
     record Layer(String type, String factory, int textureWidth, int textureHeight, float[] numbers, float scale,
-                 String component, String pose, Space space) {
+                 String component, String pose, Space space, Map<String, String> state) {
     }
 
     /**
@@ -75,10 +79,10 @@ final class EntityMeshes {
      * A shape, the texture it indexes, and how the client sizes it.
      *
      * @param scale what the entity's renderer multiplies the whole model by, for the handful that do
-     * @param over  a second layer worn over this one, or null for the ordinary mob. Its own cubes over its own
-     *              texture, which is why it cannot just be more cubes on the model below it
+     * @param over  the layers worn over this one, empty for the ordinary mob. Each has its own cubes over its own
+     *              texture, which is why they cannot just be more cubes on the model below
      */
-    record Mob(EntityModel model, String texture, float scale, Mob over) {
+    record Mob(EntityModel model, String texture, float scale, List<Mob> over) {
     }
 
     /**
@@ -138,9 +142,12 @@ final class EntityMeshes {
     static List<Spec> specs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
         for (Entry entry : TABLE.types.values()) {
-            for (String mesh : List.of(entry.mesh, entry.babyMesh == null ? entry.mesh : entry.babyMesh,
-                    entry.over == null ? entry.mesh : entry.over)) {
-                specs.computeIfAbsent(mesh, EntityMeshes::parse);
+            specs.computeIfAbsent(entry.mesh, EntityMeshes::parse);
+            if (entry.babyMesh != null) {
+                specs.computeIfAbsent(entry.babyMesh, EntityMeshes::parse);
+            }
+            for (Worn worn : entry.over) {
+                specs.computeIfAbsent(worn.mesh(), EntityMeshes::parse);
             }
             for (String mesh : entry.variants.values()) {
                 specs.computeIfAbsent(mesh, EntityMeshes::parse);
@@ -164,7 +171,7 @@ final class EntityMeshes {
                 mobs.put(type, adult);
             }
             // No worn layer on the young one, or the grown fleece stands a sheep-sized coat around a lamb.
-            Mob baby = entry.babyMesh == null ? null : mob(meshes, entry, entry.babyMesh, null);
+            Mob baby = entry.babyMesh == null ? null : mob(meshes, entry, entry.babyMesh, List.of());
             if (baby != null) {
                 mobs.put(baby(type), baby);
             }
@@ -267,13 +274,18 @@ final class EntityMeshes {
         return installed.containsKey(baby(type));
     }
 
-    private static Mob mob(Map<String, List<MeshPart>> meshes, Entry entry, String mesh, String overMesh) {
+    private static Mob mob(Map<String, List<MeshPart>> meshes, Entry entry, String mesh, List<Worn> layers) {
         EntityModel model = model(meshes, mesh, entry.lift, entry.turn);
         if (model == null) return null;
 
-        EntityModel worn = overMesh == null ? null : model(meshes, overMesh, entry.lift, entry.turn);
-        Mob over = worn == null ? null : new Mob(worn, entry.overTexture, entry.scale, null);
-        return new Mob(model, entry.texture, entry.scale, over);
+        List<Mob> over = new ArrayList<>(layers.size());
+        for (Worn worn : layers) {
+            EntityModel drawn = model(meshes, worn.mesh(), entry.lift, entry.turn);
+            if (drawn != null) {
+                over.add(new Mob(drawn, worn.texture(), entry.scale, List.of()));
+            }
+        }
+        return new Mob(model, entry.texture, entry.scale, List.copyOf(over));
     }
 
     /**
@@ -315,7 +327,8 @@ final class EntityMeshes {
      * {@code (numbers)} where zero will not do, {@code ~member} to pick one mesh out of a factory that returns a set,
      * {@code !class} for a mesh whose pose belongs to a different model class than its geometry,
      * {@code @<width>x<height>} for the few that hand back a bare mesh, {@code *scale} where the client registers it
-     * scaled, and {@code +} to join two layers into one.
+     * scaled, {@code {field=CONSTANT}} where the pose depends on a field of the render state, and {@code +} to join
+     * two layers into one.
      *
      * <p>The name is the specification rather than a label pointing at one, so two types that share a model share its
      * mesh by writing the same thing rather than by agreeing on a nickname.
@@ -328,6 +341,19 @@ final class EntityMeshes {
             int height = 0;
             float[] numbers = {};
             float scale = 0;
+
+            // First, since what is inside the braces is the one part of a name that may hold anything at all.
+            int brace = name.indexOf('{');
+            Map<String, String> state = Map.of();
+            if (brace >= 0) {
+                Map<String, String> fields = new LinkedHashMap<>();
+                for (String assignment : name.substring(brace + 1, name.indexOf('}')).split(",")) {
+                    int equals = assignment.indexOf('=');
+                    fields.put(assignment.substring(0, equals), assignment.substring(equals + 1));
+                }
+                state = Map.copyOf(fields);
+                name = name.substring(0, brace);
+            }
 
             // Which class stands the mob up, where that is not the class the mesh is built by - the exceptions are
             // the shared meshes, like a zombie drawn from the plain humanoid one but posed by ZombieModel.
@@ -379,7 +405,7 @@ final class EntityMeshes {
 
             int hash = name.indexOf('#');
             String factory = hash < 0 ? DEFAULT_FACTORY : name.substring(hash + 1);
-            layers.add(new Layer(hash < 0 ? name : name.substring(0, hash), factory, width, height, numbers, scale, component, pose, space));
+            layers.add(new Layer(hash < 0 ? name : name.substring(0, hash), factory, width, height, numbers, scale, component, pose, space, state));
         }
         return new Spec(mesh, List.copyOf(layers));
     }
@@ -404,11 +430,18 @@ final class EntityMeshes {
                 .mob("zombie", "entity/zombie/zombie", "HumanoidModel#createMesh@64x64!monster.zombie.ZombieModel").baby("monster.zombie.BabyZombieModel")
                 .mob("husk", "entity/zombie/husk", "HumanoidModel#createMesh@64x64*1.0625!monster.zombie.ZombieModel").baby("monster.zombie.BabyZombieModel")
                 .mob("giant", "entity/zombie/zombie", "HumanoidModel#createMesh@64x64*6!monster.zombie.GiantZombieModel")
+                // The drowned's outer skin is its own mesh grown a quarter pixel, off a texture of its own - the
+                // seaweed and the bloat, which is most of what makes it look drowned rather than green.
                 .mob("drowned", "entity/zombie/drowned", "monster.zombie.DrownedModel").baby("monster.zombie.BabyDrownedModel")
+                .over("monster.zombie.DrownedModel#createBodyLayer(0.25)", "entity/zombie/drowned_outer_layer")
+                // A stray's frost and a bogged's moss are the same idea: the plain humanoid mesh inflated, posed by
+                // SkeletonModel, over an overlay texture. Only the inflation and the texture differ between them.
                 .mob("skeleton", "entity/skeleton/skeleton", "monster.skeleton.SkeletonModel")
                 .also("stray", "entity/skeleton/stray")
+                .over(SKELETON_CLOTHES + "(0.25)@64x32!monster.skeleton.SkeletonModel", "entity/skeleton/stray_overlay")
                 .mob("wither_skeleton", "entity/skeleton/wither_skeleton", "monster.skeleton.SkeletonModel*1.2")
                 .mob("bogged", "entity/skeleton/bogged", "monster.skeleton.BoggedModel")
+                .over(SKELETON_CLOTHES + "(0.2)@64x32!monster.skeleton.SkeletonModel", "entity/skeleton/bogged_overlay")
                 .mob("parched", "entity/skeleton/parched", "monster.skeleton.SkeletonModel#createSingleModelDualBodyLayer")
                 .mob("zombie_villager", "entity/zombie_villager/zombie_villager", "monster.zombie.ZombieVillagerModel").baby("monster.zombie.BabyZombieVillagerModel")
                 .mob("piglin", "entity/piglin/piglin", "monster.piglin.AdultPiglinModel").baby("monster.piglin.BabyPiglinModel")
@@ -418,10 +451,14 @@ final class EntityMeshes {
                 // Villagers and illagers.
                 .mob("villager", "entity/villager/villager", "npc.VillagerModel#createBodyModel@64x64*0.9375").baby("npc.BabyVillagerModel#createBodyModel@64x64*0.9375")
                 .also("wandering_trader", "entity/wandering_trader/wandering_trader")
-                .mob("evoker", "entity/illager/evoker", "monster.illager.IllagerModel*0.9375")
+                // The illagers are one mesh in four skins, held in whichever pose that illager stands in when it is
+                // doing nothing: arms folded for three of them, and a crossbow levelled for the one that carries one.
+                // Which is a property of the individual rather than of the model, so it is stated rather than left
+                // at the render state's own default - and that default is NEUTRAL, which is arms hanging.
+                .mob("evoker", "entity/illager/evoker", ILLAGER + "{armPose=CROSSED}")
                 .also("illusioner", "entity/illager/illusioner")
-                .also("pillager", "entity/illager/pillager")
                 .also("vindicator", "entity/illager/vindicator")
+                .mob("pillager", "entity/illager/pillager", ILLAGER + "{armPose=CROSSBOW_HOLD}")
                 .mob("witch", "entity/witch/witch", "monster.witch.WitchModel*0.9375")
                 .mob("vex", "entity/illager/vex", "monster.vex.VexModel")
                 .mob("ravager", "entity/illager/ravager", "monster.ravager.RavagerModel")
@@ -625,6 +662,15 @@ final class EntityMeshes {
     private static final float SKULL_LIFT = -1.501f * 16;
 
     /**
+     * What {@code SkeletonClothingLayer} is handed: the plain humanoid mesh, inflated, on the skeleton's own texture
+     * size and posed as a skeleton. A stray's frost and a bogged's moss differ only in how far it is inflated.
+     */
+    private static final String SKELETON_CLOTHES = "HumanoidModel#createMesh";
+
+    /** The one illager mesh, at the size its renderer registers it. Four mobs, four skins, four arm poses. */
+    private static final String ILLAGER = "monster.illager.IllagerModel*0.9375";
+
+    /**
      * And what a vehicle's lift comes to. Both renderers flip the model like a mob, so the mesh arrives with that
      * same 1.501 blocks in it, and both stand it 0.375 blocks up instead.
      */
@@ -694,14 +740,19 @@ final class EntityMeshes {
 
     private static final String MINECART_TEXTURE = "entity/minecart/minecart";
 
+    /** One layer a mob's renderer adds over its skin: its own mesh, over its own texture. */
+    private record Worn(String mesh, String texture) {
+    }
+
     /**
+     * @param over     the layers this mob's renderer draws over it, in the order it adds them. Empty for most
      * @param lift     how far off vanilla's standard ground offset this mesh sits, in entity pixels
      * @param turn     a quarter circle or so about Y that this entity's renderer applies on top of its yaw, in
      *                 degrees. Zero for everything but the boats, whose model is built along their side
      * @param variants a mesh per coat that is genuinely a different shape, keyed by the word the assets name it by.
      *                 Empty for the great majority, which either have no variants or wear them as colors
      */
-    private record Entry(String texture, String mesh, String babyMesh, String over, String overTexture, float scale, float lift,
+    private record Entry(String texture, String mesh, String babyMesh, List<Worn> over, float scale, float lift,
                          float turn, Map<String, String> variants) {
     }
 
@@ -712,7 +763,7 @@ final class EntityMeshes {
         private String last;
 
         Table mob(String type, String texture, String mesh) {
-            types.put(type, new Entry(texture, mesh, null, null, null, 1, 0, 0, Map.of()));
+            types.put(type, new Entry(texture, mesh, null, List.of(), 1, 0, 0, Map.of()));
             last = type;
             return this;
         }
@@ -721,15 +772,19 @@ final class EntityMeshes {
          * The same mesh in another skin. The variants are deliberately not carried over: a mooshroom has no cold form
          * to inherit one for, and carrying them would leave {@code cold} on a type whose word is only ever
          * {@code red} or {@code brown}.
+         *
+         * <p>Its worn layers are, because they belong to the mesh: a stray is a skeleton in a coat, and the coat is
+         * the one thing that makes it look like a stray. A skin that wants none says so with {@link #bare}.
          */
         Table also(String type, String texture) {
             Entry from = types.get(last);
-            types.put(type, new Entry(texture, from.mesh, from.babyMesh, from.over, from.overTexture, from.scale, from.lift, from.turn, Map.of()));
+            types.put(type, new Entry(texture, from.mesh, from.babyMesh, from.over, from.scale, from.lift, from.turn, Map.of()));
+            last = type;
             return this;
         }
 
         Table baby(String mesh) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, mesh, entry.over, entry.overTexture, entry.scale, entry.lift, entry.turn, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, mesh, entry.over, entry.scale, entry.lift, entry.turn, entry.variants));
         }
 
         /** A coat of this species that vanilla builds a mesh of its own for. */
@@ -737,24 +792,29 @@ final class EntityMeshes {
             return replace(entry -> {
                 Map<String, String> variants = new LinkedHashMap<>(entry.variants);
                 variants.put(variant, mesh);
-                return new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, entry.lift, entry.turn, Map.copyOf(variants));
+                return new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.scale, entry.lift, entry.turn, Map.copyOf(variants));
             });
         }
 
+        /** A layer this mob's renderer adds over its skin. Repeatable, for the few that wear more than one. */
         Table over(String mesh, String texture) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, mesh, texture, entry.scale, entry.lift, entry.turn, entry.variants));
+            return replace(entry -> {
+                List<Worn> over = new ArrayList<>(entry.over);
+                over.add(new Worn(mesh, texture));
+                return new Entry(entry.texture, entry.mesh, entry.babyMesh, List.copyOf(over), entry.scale, entry.lift, entry.turn, entry.variants);
+            });
         }
 
         Table scale(float scale) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, scale, entry.lift, entry.turn, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, scale, entry.lift, entry.turn, entry.variants));
         }
 
         Table lift(float pixels) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, pixels, entry.turn, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.scale, pixels, entry.turn, entry.variants));
         }
 
         Table turn(float degrees) {
-            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.overTexture, entry.scale, entry.lift, degrees, entry.variants));
+            return replace(entry -> new Entry(entry.texture, entry.mesh, entry.babyMesh, entry.over, entry.scale, entry.lift, degrees, entry.variants));
         }
 
         private Table replace(UnaryOperator<Entry> change) {

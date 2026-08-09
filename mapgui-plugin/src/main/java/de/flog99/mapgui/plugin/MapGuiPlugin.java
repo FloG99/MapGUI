@@ -89,7 +89,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(anvil, this);
 
         walls.load();
-        PerformanceReport performance = new PerformanceReport(transport, sessions, walls);
+        PerformanceReport performance = new PerformanceReport(this, transport, sessions, walls);
         getServer().getPluginManager().registerEvents(new WallListeners(walls), this);
         getServer().getPluginManager().registerEvents(wallRegistry, this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->

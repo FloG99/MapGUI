@@ -18,13 +18,13 @@ permissions:
     description: Place, remove and list GUIs on blocks.
     default: op
   mapgui.command.camera:
-    description: See and fetch the textures a camera capture draws with.
+    description: See and fetch the textures a camera capture draws with, and what captures are costing.
     default: op
   mapgui.command.status:
     description: See what is in hand and what is up.
     default: op
   mapgui.command.performance:
-    description: See what MapGUI is costing in bandwidth.
+    description: See what MapGUI is costing in bandwidth and main-thread time.
     default: op
   mapgui.command.reload:
     description: Re-read config.yml and apply it.

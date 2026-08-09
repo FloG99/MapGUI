@@ -1,5 +1,6 @@
 package de.flog99.mapgui.render;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -119,33 +120,36 @@ public record EntitySnapshot(
     }
 
     /**
-     * The second layer of a mob that wears one, sitting on {@code base}, or null for the mobs that do not - which
-     * is all of them but the sheep.
+     * The layers a mob wears over its skin, sitting on {@code base}, and empty for the many that wear none.
      *
-     * <p>Its own snapshot rather than more cubes on the base model, because a layer comes from a texture of its own
-     * and a snapshot samples one texture. That costs nothing: the renderer keeps the nearest entity texel along the
-     * ray whatever entity it belongs to, and a layer's cubes are inflated outward, so the fleece lands in front of
-     * the body it covers without anything having to order the two.
+     * <p>Each is its own snapshot rather than more cubes on the base model, because a layer comes from a texture of
+     * its own and a snapshot samples one texture. That costs nothing: the renderer keeps the nearest entity texel
+     * along the ray whatever entity it belongs to, and a layer's cubes are inflated outward, so a stray's frost lands
+     * in front of the bones it covers without anything having to order the two.
      */
-    public static EntitySnapshot over(EntitySnapshot base, String type) {
+    public static List<EntitySnapshot> over(EntitySnapshot base, String type) {
         return over(base, type, null);
     }
 
-    /** The same for an animal that has variants, so the layer is looked up off the mesh the base was built from. */
-    public static EntitySnapshot over(EntitySnapshot base, String type, String variant) {
+    /** The same for an animal that has variants, so the layers are looked up off the mesh the base was built from. */
+    public static List<EntitySnapshot> over(EntitySnapshot base, String type, String variant) {
         // Which of the two meshes this snapshot was built from, since a lamb's fleece is not a sheep's shrunk and
         // vanilla only gives the layer to the grown one.
         EntityMeshes.Mob young = EntityMeshes.of(type, variant, true);
         EntityMeshes.Mob mob = young != null && young.model() == base.model() ? young : EntityMeshes.of(type, variant, false);
-        if (mob == null || mob.over() == null) return null;
+        if (mob == null) return List.of();
 
-        return new EntitySnapshot(base.x(), base.y(), base.z(), base.bodyYaw(), base.headYaw(), base.pitch(), base.scale(),
-                mob.over().model(), mob.over().texture());
+        List<EntitySnapshot> worn = new ArrayList<>(mob.over().size());
+        for (EntityMeshes.Mob layer : mob.over()) {
+            worn.add(new EntitySnapshot(base.x(), base.y(), base.z(), base.bodyYaw(), base.headYaw(), base.pitch(),
+                    base.scale(), layer.model(), layer.texture()));
+        }
+        return List.copyOf(worn);
     }
 
     /**
-     * A sheep's fleece: the one white wool texture in the assets, multiplied by the animal's own dye - or null once
-     * it is shorn, because a shorn sheep wears no fleece rather than a colorless one.
+     * A sheep's fleece: the one white wool texture in the assets, multiplied by the animal's own dye - or nothing
+     * once it is shorn, because a shorn sheep wears no fleece rather than a colorless one.
      *
      * <p>Its own factory because the fleece is the only worn layer whose color is not in its texture. There are
      * sixteen wools and one wool texture, so the dye has to travel with the layer, and a fleece drawn from the
@@ -153,11 +157,17 @@ public record EntitySnapshot(
      *
      * @param dye the lowercase dye name, {@code light_blue} and the rest, or null for a sheep with none
      */
-    public static EntitySnapshot fleece(EntitySnapshot base, String type, String variant, boolean sheared, String dye) {
-        if (sheared) return null;
+    public static List<EntitySnapshot> fleece(EntitySnapshot base, String type, String variant, boolean sheared, String dye) {
+        if (sheared) return List.of();
 
-        EntitySnapshot worn = over(base, type, variant);
-        return worn == null || dye == null ? worn : worn.tint(Tints.wool(dye));
+        List<EntitySnapshot> worn = over(base, type, variant);
+        if (dye == null) return worn;
+
+        List<EntitySnapshot> dyed = new ArrayList<>(worn.size());
+        for (EntitySnapshot layer : worn) {
+            dyed.add(layer.tint(Tints.wool(dye)));
+        }
+        return List.copyOf(dyed);
     }
 
     /**
