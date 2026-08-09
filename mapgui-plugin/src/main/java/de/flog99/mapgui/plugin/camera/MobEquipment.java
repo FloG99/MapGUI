@@ -235,7 +235,7 @@ final class MobEquipment {
      */
     private static ItemPoses.Pose onHead(float[] stated) {
         return new ItemPoses.Pose(
-                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, -stated[2] * ON_HEAD_SCALE},
+                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, stated[2] * ON_HEAD_SCALE},
                 new float[]{0, (float) Math.PI, 0},
                 ON_HEAD_SCALE * stated[3]);
     }

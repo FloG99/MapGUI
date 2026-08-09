@@ -268,11 +268,8 @@ public record EntitySnapshot(
         // back the right way, a block model is built the right way round to begin with, so a turn stated in the
         // first space goes the other way in the second. Left and right swap, up and down swap, and forward stays
         // forward - which is exactly what the two mirrored axes do and nothing a single wrong sign would.
-        float turned = head ? 2 * wearer.bodyYaw() - wearer.headYaw() : wearer.headYaw();
-        float tilted = head ? -wearer.pitch() : wearer.pitch();
-
-        return new EntitySnapshot(wearer.x(), wearer.y(), wearer.z(), wearer.bodyYaw(), turned,
-                tilted, wearer.scale(), block.model().onJoint(joint, pose, head), block.texture(), block.tint());
+        return new EntitySnapshot(wearer.x(), wearer.y(), wearer.z(), wearer.bodyYaw(), wearer.headYaw(),
+                wearer.pitch(), wearer.scale(), block.model().onJoint(joint, pose, head), block.texture(), block.tint());
     }
 
     /**
