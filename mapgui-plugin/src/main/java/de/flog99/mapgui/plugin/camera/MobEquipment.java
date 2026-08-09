@@ -205,11 +205,7 @@ final class MobEquipment {
             // Two meshes come back - the pole and crossbar, and the cloth - and only the cloth is dyed and patterned.
             EntitySnapshot cloth = woven != null && BannerCloth.BASE.equals(layer.texture()) ? layer.texture(woven) : layer;
 
-            // On the head part but square to the body. Vanilla carries it with the head, and this cannot: a block
-            // worn on a head is drawn with the head's turn reversed, since a block model's axes run the other way to
-            // a mob's - which is invisible on a pumpkin, sitting on the crown where every way round looks the same,
-            // and swings a banner right off the back of the head and round to the front.
-            EntitySnapshot flown = EntitySnapshot.on(base, ON_HEAD_PART, cloth, pose, false);
+            EntitySnapshot flown = EntitySnapshot.onHead(base, cloth, pose);
             if (flown != null) {
                 into.add(flown);
             }
@@ -242,9 +238,6 @@ final class MobEquipment {
                 new float[]{0, (float) Math.PI, 0},
                 ON_HEAD_SCALE * stated[3]);
     }
-
-    /** The part a head layer hangs off, and the only name the client looks one up by. */
-    private static final String ON_HEAD_PART = "head";
 
     /** A quarter of a block down the head, in entity pixels, and the five eighths the layer draws at. */
     private static final float HEAD_DROP = 4;

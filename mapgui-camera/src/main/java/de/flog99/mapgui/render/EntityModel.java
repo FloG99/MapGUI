@@ -499,11 +499,22 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
 
         // Hung underneath rather than flattened into one box, so a shape with rotations of its own keeps them - a
         // lectern's sloped top, an azalea's crossed planes.
-        return of(List.of(new MeshPart("item", head,
-                joint.x() + reach[0], joint.y() + reach[1], joint.z() + reach[2],
+        MeshPart item = new MeshPart("item", false,
+                reach[0], reach[1], reach[2],
                 turned[0], turned[1], turned[2],
                 pose.scale(), pose.scale(), pose.scale(),
-                List.of(), centred())), culled);
+                List.of(), centred());
+
+        // Two parts rather than one, and the offset on the inner: a head turn is applied to a part about that part's
+        // own pivot, so an item carrying its offset in its own position turns on the spot where the head carries it
+        // round. Invisible on anything sitting on the crown - a pumpkin's offset is straight up, and every way round
+        // looks alike - and a banner standing a quarter block behind the head is twenty pixels wide and two deep, so
+        // on the spot it sweeps its own width past the face. The pivot belongs at the joint, which is where the head
+        // really turns.
+        return of(List.of(new MeshPart("joint", head,
+                joint.x(), joint.y(), joint.z(),
+                0, 0, 0, 1, 1, 1,
+                List.of(), List.of(item))), culled);
     }
 
     /**
