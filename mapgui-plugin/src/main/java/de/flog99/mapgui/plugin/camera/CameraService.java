@@ -88,6 +88,14 @@ public final class CameraService implements Camera {
     private final CaptureLoad load = new CaptureLoad();
 
     /**
+     * How often a live view is allowed a frame, which is the camera's own business rather than any one plugin's.
+     *
+     * <p>Only the server can see every viewfinder pointed at it at once, so only the server can divide the time
+     * between them. Advisory: it paces whoever asks, and a plugin that never asks is never paced.
+     */
+    private final CaptureBudget budget;
+
+    /**
      * Players following their own captures line by line, from {@code /mapgui camera timings follow}.
      *
      * <p>Per player rather than a config switch, because the question it answers is "why was that slow just now"
@@ -143,7 +151,7 @@ public final class CameraService implements Camera {
     }
 
     public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance) {
-        this(plugin, assets, packs, backend, walls, defaultFov, defaultDistance, 0);
+        this(plugin, assets, packs, backend, walls, defaultFov, defaultDistance, 0, 0, 0);
     }
 
     /**
@@ -151,9 +159,12 @@ public final class CameraService implements Camera {
      *                          and the angles a squid is really swimming at. Null draws neither
      * @param walls             the MapGUI walls a photographer can see, or null to leave them out of the picture
      * @param reuseChunksMillis how long a copied chunk may be served to a later capture, or 0 to copy every time
+     * @param liveBudgetMillis  main-thread time a tick may spend on live views, or 0 for no budget
+     * @param liveMaxFps        the most frames a second any one live view may take, or 0 for no ceiling
      */
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance, int reuseChunksMillis) {
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance, int reuseChunksMillis, double liveBudgetMillis, int liveMaxFps) {
         this.plugin = plugin;
+        this.budget = new CaptureBudget(liveBudgetMillis, liveMaxFps);
         this.framedMaps = new FramedMaps(backend == null ? null : backend.savedMapPixels());
         this.angles = backend == null ? null : backend.entityAngles();
         this.walls = walls;
@@ -229,6 +240,9 @@ public final class CameraService implements Camera {
         // Counted in the tick it happened in rather than when the shot comes back: a capture whose trace waits three
         // seconds for a thread still cost this tick, and a report that said otherwise would point at the wrong second.
         load.captured(owner, gathered - started);
+        // Whether this one was paced or not: what it cost to copy the world around this player is the same either
+        // way, and a still taken mid-view is a free measurement for the view.
+        budget.spent(player.getUniqueId(), gathered - started);
 
         captures.execute(() -> {
             int[] argb = new int[pixels * pixels];
@@ -285,9 +299,19 @@ public final class CameraService implements Camera {
         }
     }
 
+    @Override
+    public boolean readyForFrame(Player player) {
+        return budget.readyForFrame(player.getUniqueId());
+    }
+
     /** What every capture has cost lately, for whoever asks rather than for whoever took them. */
     CaptureLoad load() {
         return load;
+    }
+
+    /** What the live views are getting out of the budget, for the report that has to explain it. */
+    CaptureBudget.Live live() {
+        return budget.live();
     }
 
     /**

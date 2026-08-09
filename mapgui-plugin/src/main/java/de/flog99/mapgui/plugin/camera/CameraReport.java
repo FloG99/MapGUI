@@ -72,6 +72,8 @@ public final class CameraReport {
                     .append(Component.text("   worst single ", NamedTextColor.GRAY))
                     .append(Component.text(CaptureTimings.millis(now.worstMainNanos()), spikeColor(now.worstMainNanos()))));
 
+            addLive(lines, camera.live());
+
             // Only when something is waiting. A trace time with nothing behind it is a renderer's number, and an empty
             // queue is not news - it is the normal state, and printing it every time trains an eye to skip the line.
             int waiting = camera.queued();
@@ -136,6 +138,36 @@ public final class CameraReport {
                 .append(Component.text(ago(System.currentTimeMillis() - failure.at()) + " ago, for "
                         + failure.plugin(), NamedTextColor.WHITE)));
         lines.add(Component.text("  " + reason(failure.reason()), NamedTextColor.DARK_GRAY));
+    }
+
+    /**
+     * What the live views are getting, and next to it the two settings that decided it.
+     *
+     * <p>Both settings on the line rather than in the config file alone, because the number beside them is only
+     * ever readable against them: 6.7 fps means one thing when the ceiling is 10 and the budget ran out, and quite
+     * another when the ceiling is 6. The one that is binding is the one to change.
+     */
+    private static void addLive(List<Component> lines, CaptureBudget.Live live) {
+        if (live == null) return;
+
+        String fps = live.slowestFps() >= live.fastestFps() - 0.05
+                ? String.format("%.1f fps", live.fastestFps())
+                : String.format("%.1f to %.1f fps", live.slowestFps(), live.fastestFps());
+
+        boolean capped = live.fpsCeiling() > 0 && live.fastestFps() >= live.fpsCeiling() - 0.05;
+        lines.add(Component.text("Live views  ", NamedTextColor.GRAY)
+                .append(Component.text(live.viewers() + (live.viewers() == 1 ? " viewer at " : " viewers at "), NamedTextColor.WHITE))
+                .append(Component.text(fps, capped ? NamedTextColor.GREEN : NamedTextColor.YELLOW))
+                .append(Component.text("   " + settings(live), NamedTextColor.DARK_GRAY)));
+    }
+
+    private static String settings(CaptureBudget.Live live) {
+        String budget = live.budgetMillisPerTick() <= 0
+                ? "no budget"
+                : String.format("%.1fms/t", live.budgetMillisPerTick());
+        String ceiling = live.fpsCeiling() <= 0 ? "no cap" : live.fpsCeiling() + " fps cap";
+
+        return budget + ", " + ceiling;
     }
 
     /** Who is asking, busiest first, which is the only actionable half of a rate. */

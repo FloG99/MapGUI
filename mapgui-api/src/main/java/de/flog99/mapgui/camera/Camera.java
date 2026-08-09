@@ -65,6 +65,35 @@ public interface Camera {
     void capture(Player player, CameraOptions options, Consumer<CameraShot> onShot);
 
     /**
+     * Whether a <b>live view</b> of this player should take a frame now.
+     *
+     * <p>For a viewfinder rather than a photograph. A still is one capture and whoever pressed the shutter is waiting
+     * for it, so take it; a live view wants every frame it can get, forever, and how many that is depends on how many
+     * other people are pointing one at the same server. Only MapGUI can see all of them, so it does the dividing:
+     * ask every tick you would like a frame, and take one when this says yes.
+     *
+     * <pre>
+     * if (MapGui.get().camera().readyForFrame(player)) {
+     *     MapGui.get().camera().capture(player, options, shot -&gt; ...);
+     * }
+     * </pre>
+     *
+     * <p>The rate comes from two settings an admin owns - a budget in main-thread milliseconds per tick, and a
+     * ceiling in frames a second - and from what your captures are measured to actually cost. Views get as many
+     * frames as the budget affords and stop at the ceiling, so a lone viewer does not get twenty times the frames
+     * for being alone, and a fifth one joining slows everybody a fifth rather than costing the server a fifth more.
+     *
+     * <p><b>Advisory.</b> Nothing stops a plugin capturing without asking - it is the admin's tick either way, and
+     * `/mapgui camera timings` will name whoever is spending it. Asking is also what makes you a viewer: a screen
+     * that asks once a second is one that wanted one frame a second and is divided by as one, and a screen that
+     * stops asking stops being divided by at all, so there is nothing to open and nothing to close.
+     *
+     * <p>Keyed on the player being looked out of, not on the caller, so two plugins running a view for the same
+     * person share one person's worth of frames rather than taking two.
+     */
+    boolean readyForFrame(Player player);
+
+    /**
      * Loads the textures now rather than on the first capture.
      *
      * @return false if a download is already running, or if {@code camera.assets.download} is off and there is

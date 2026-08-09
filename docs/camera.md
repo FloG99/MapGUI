@@ -297,6 +297,60 @@ the sky through it, because there the texels really are bigger than the pixels. 
 cutout - bars, ladders, glass panes, grass - keeps its gaps at any distance, because you are never looking through a
 hundred of them at once.
 
+## Live views
+
+A still and a viewfinder are not the same problem. A still happens once, somebody pressed a button, and they are
+waiting for it - take it. A viewfinder wants every frame it can get, forever, and how many that should be depends on
+how many other people have one open. Only the server can see all of them, so the server does the dividing:
+
+```java
+if (MapGui.get().camera().readyForFrame(player)) {
+    MapGui.get().camera().capture(player, options, shot -> this.shot.set(shot));
+}
+```
+
+Ask every tick you would like a frame and take one when it says yes. There is nothing to open and nothing to close:
+asking is what makes you a viewer, and a screen that stops asking stops being divided by, so a plugin cannot leak a
+viewfinder and a player who logs out takes their share with them.
+
+Two settings decide the rate, and everything between them is spent:
+
+```yaml
+camera:
+  live:
+    budget-ms-per-tick: 1.0
+    max-fps: 10
+```
+
+The **budget** is main-thread milliseconds a tick - the only kind of time a capture can take from the server, since
+the trace runs on its own threads. The **ceiling** is where a viewfinder stops looking better and only costs more. So
+with those defaults, and a frame that costs a millisecond to copy:
+
+| viewers | each gets | total main-thread cost |
+|---|---|---|
+| 1 | 10 fps | 0.5 ms/t |
+| 2 | 10 fps | 1.0 ms/t |
+| 3 | 6.7 fps | 1.0 ms/t |
+| 4 | 5 fps | 1.0 ms/t |
+
+One viewer does not get twenty times the frames for being alone, and the fourth to open one slows the other three
+rather than costing you a quarter more. Either setting takes `0` to mean no limit of that kind - `budget` at 0 lets
+everybody have the ceiling however many there are, `max-fps` at 0 lets one lonely viewer take the whole budget.
+
+**What a frame costs is measured, per viewer.** A 64-pixel viewfinder pointed at a wall copies a fraction of what a
+128-pixel one pointed across a valley does, so the budget is divided as *time* rather than as frames, and a view that
+would hit the ceiling on less than its share hands the rest back to the ones that cannot. That is what makes it spend
+the budget rather than merely respect it. The first frame or two of a new view are paced on an assumption, which the
+real measurements replace within a second.
+
+It is **advisory**. Nothing stops a plugin capturing without asking - it is the admin's tick either way, and
+[`/mapgui camera timings`](#what-to-watch) names whoever is spending it. That report also carries a `Live views` line
+with what the viewers are getting and the two settings that decided it, since 6.7 fps means one thing when the budget
+ran out and quite another when the ceiling is 6.
+
+A still taken by a plugin that never asks is not paced at all, which is the intended behaviour: one photograph is one
+photograph. `reuse-chunks-for-ms` is worth turning on alongside a live view - see [what it costs](#what-it-costs).
+
 ## What it costs
 
 Measured on a wooded, hilly scene with water in it, against the real 26.2 assets, at 128x128. Median of nine runs
@@ -602,9 +656,16 @@ with whatever is hanging in it, at the place and size the client hangs one.
   75 degrees and most models draw whatever it says, but the equines cap it at twenty - drawn uncapped, a donkey
   stares straight at the camera while the animal in front of you has barely turned its head.
 
-- **A sheep's fleece, a villager's clothes, a horse's markings and glowing eyes**, each a second pass over the same
-  mesh, composited rather than layered. Eyes are what made an enderman's white: the skin holds white eyes and the
-  layer over it holds pink ones, so a capture that skipped the layer drew the pair vanilla never shows anybody.
+- **The layers a mob's renderer draws over its skin**: a sheep's fleece, a stray's frost, a bogged's moss, a
+  drowned's outer skin, a sulfur cube's shell. Each is its own mesh - the body grown by the fraction of a pixel the
+  client grows it by - over a texture of its own, which is why it cannot be a second pass on the same one. A mob may
+  wear several. Without them a stray is a plain skeleton and a drowned a green zombie.
+
+- **A villager's clothes, a horse's markings, a tropical fish's pattern and glowing eyes**, each a second pass over
+  the same mesh, composited rather than layered. Eyes are what made an enderman's white: the skin holds white eyes
+  and the layer over it holds pink ones, so a capture that skipped the layer drew the pair vanilla never shows
+  anybody. A tropical fish is the extreme case - two greyscale textures and two dyes rather than one of 3072
+  pictures.
 
   Compositing costs the one thing ordering gave vanilla - it cannot hide the robe's hood where a hat covers it - and
   it is what a single-surface trace can do: two snapshots of one mesh are two surfaces at the same depth, and which

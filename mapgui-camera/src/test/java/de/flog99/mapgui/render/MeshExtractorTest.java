@@ -111,6 +111,26 @@ class MeshExtractorTest {
     }
 
     /**
+     * Every mesh the table asks for bakes.
+     *
+     * <p>Which is the one thing a table of class names cannot be trusted about: a name that moved package, a factory
+     * that was renamed or a mesh that reaches something a server has no answer for all fail the same quiet way -
+     * that mob keeps its bounding box, and nothing says so. A test is the only place it can be heard.
+     */
+    @Test
+    void everyMeshTheTableNamesBakes() throws Exception {
+        Map<String, List<MeshPart>> baked = extract();
+
+        List<String> missing = new ArrayList<>();
+        for (EntityMeshes.Spec spec : EntityMeshes.specs()) {
+            if (!baked.containsKey(spec.mesh())) {
+                missing.add(spec.mesh());
+            }
+        }
+        assertEquals(List.of(), missing, "these are drawn as bounding boxes rather than as themselves");
+    }
+
+    /**
      * A cold cow is built differently from a temperate one, which is the fact the variant table rests on: it hangs
      * its horns off its head as parts of their own where a temperate cow's are cubes of the head. Sharing one mesh
      * between them is what left a taiga cow with no horns at all.

@@ -9,7 +9,10 @@ import de.flog99.mapgui.render.ItemModels;
 import de.flog99.mapgui.render.ItemPoses;
 import de.flog99.mapgui.render.TextureAtlas;
 import org.bukkit.entity.Entity;
+import org.bukkit.Material;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Fox;
+import org.bukkit.entity.MushroomCow;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Snowman;
@@ -76,6 +79,7 @@ final class MobEquipment {
         hold(layers, base, assets, skins, worn.getItemInOffHand(), !rightHanded);
 
         wear(layers, base, assets, entity);
+        sprout(layers, base, assets, entity);
         carry(layers, base, assets, skins, entity, worn.getItemInMainHand());
         decorate(layers, base, atlas, equipment, entity);
         contains(layers, base, assets, type, worn.getItem(EquipmentSlot.BODY));
@@ -172,6 +176,53 @@ final class MobEquipment {
                 into.add(worn);
             }
         }
+    }
+
+    /**
+     * The three mushrooms growing on a mooshroom, which are three copies of the mushroom's own block model rather
+     * than anything on the cow's mesh - which is why an ordinary mooshroom came out a plain red cow.
+     *
+     * <p>Two of them stand on the back and one on the head, at the client's own offsets and each turned a different
+     * way so they do not read as three of the same thing. The turn each carries is that angle plus the half circle
+     * between the flip {@code MushroomCowMushroomLayer} uses and the one a block on a mob part arrives with.
+     */
+    private static void sprout(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets, Entity entity) {
+        if (!(entity instanceof MushroomCow cow) || cow.getVariant() == null) return;
+
+        Material mushroom = cow.getVariant() == MushroomCow.Variant.BROWN ? Material.BROWN_MUSHROOM : Material.RED_MUSHROOM;
+        BlockData block = mushroom.createBlockData();
+
+        for (EntitySnapshot layer : assets.items().displayed(block.getAsString(), mushroom.getKey().asString())) {
+            for (Sprout sprout : SPROUTS) {
+                EntitySnapshot grown = EntitySnapshot.on(base, sprout.part(), layer, sprout.pose(), sprout.onHead());
+                if (grown != null) {
+                    into.add(grown);
+                }
+            }
+        }
+    }
+
+    /** One mushroom: which part it grows on, where, and whether it turns with the head. */
+    private record Sprout(String part, ItemPoses.Pose pose, boolean onHead) {
+    }
+
+    /** The part a mooshroom's back is, which is the root of its mesh - the client hangs two of the three off it. */
+    private static final String BODY = "root";
+
+    private static final String HEAD = "head";
+
+    /**
+     * The client's three placements, converted into this module's space: an offset in entity pixels with X and Y
+     * running the other way, and a turn about Y that runs the other way too.
+     */
+    private static final List<Sprout> SPROUTS = List.of(
+            new Sprout(BODY, turned(-3.2f, 5.6f, 8f, -132), false),
+            new Sprout(BODY, turned(-2.035f, 5.6f, -0.205f, -174), false),
+            new Sprout(HEAD, turned(0, 11.2f, -3.2f, -102), true)
+    );
+
+    private static ItemPoses.Pose turned(float x, float y, float z, float degrees) {
+        return new ItemPoses.Pose(new float[]{x, y, z}, new float[]{0, (float) Math.toRadians(degrees), 0}, 1f);
     }
 
     /**

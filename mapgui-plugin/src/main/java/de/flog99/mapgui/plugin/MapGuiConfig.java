@@ -34,7 +34,9 @@ public record MapGuiConfig(
         boolean cameraFollowServerPacks,
         float cameraFov,
         int cameraDistance,
-        int cameraReuseChunksMillis) {
+        int cameraReuseChunksMillis,
+        double cameraLiveBudgetMillis,
+        int cameraLiveMaxFps) {
 
     public static MapGuiConfig from(FileConfiguration config) {
         int fps = clampFps(config.getInt("animations.fps", Animator.MAX_FPS));
@@ -64,7 +66,10 @@ public record MapGuiConfig(
                 (float) config.getDouble("camera.fov", CameraView.DEFAULT_FOV),
                 Math.max(1, config.getInt("camera.max-distance", 96)),
                 // Zero by default: reusing a copied chunk is the only fast path the camera has that is not exact.
-                Math.max(0, config.getInt("camera.reuse-chunks-for-ms", 0))
+                Math.max(0, config.getInt("camera.reuse-chunks-for-ms", 0)),
+                // Both floor at zero, which each read as "no limit of this kind" rather than as "no frames".
+                Math.max(0, config.getDouble("camera.live.budget-ms-per-tick", 1.0)),
+                Math.max(0, config.getInt("camera.live.max-fps", 10))
         );
     }
 

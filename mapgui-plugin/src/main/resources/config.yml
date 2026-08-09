@@ -107,6 +107,32 @@ camera:
   # nothing anyway. 1000 is a sensible value if you want it.
   reuse-chunks-for-ms: 0
 
+  # What a LIVE view costs you. A still photograph is not this: it happens once, somebody pressed a button and
+  # is waiting for it. A viewfinder wants every frame it can get, forever, and how many that should be depends
+  # on how many other people have one open - which only the server can see, so the server decides.
+  #
+  # Everything between these two numbers is spent. Views take as many frames as the budget affords and stop at
+  # the ceiling, so one person alone does not get twenty times the frames for being alone, and the tenth person
+  # to open one slows everybody down instead of costing you ten times as much.
+  #
+  # With the defaults below and a frame that costs a millisecond of main-thread time, one viewer gets 10 fps,
+  # two get 10 fps each, three get 6.7, four get 5. What a frame really costs is measured per viewer rather
+  # than assumed, so a small viewfinder pointed at a wall earns a higher rate than a wide one over a valley.
+  live:
+    # Main-thread time a tick may spend copying the world for live views. This is the only kind of time a
+    # capture can take from the server - the trace runs on its own threads and cannot cost you a tick - so it
+    # is the number to turn down if the camera is what is hurting. A tick is 50ms, so 1.0 is 2% of one.
+    #
+    # 0 means no budget: views take whatever the ceiling allows, however many of them there are.
+    budget-ms-per-tick: 1.0
+
+    # The most frames a second any one view may take, however much budget is going spare. Past about 10 a
+    # viewfinder on a map stops looking better and only costs more - a map holds 128 pixels and the palette
+    # is 61 colours, so the frames are not what is limiting how it looks.
+    #
+    # 0 means no ceiling: one lonely viewer would take the entire budget.
+    max-fps: 10
+
   assets:
     # The camera draws blocks and mobs with Minecraft's real textures, which are not ours to ship. With this
     # on, MapGUI downloads the official client jar from Mojang the first time something takes a capture,

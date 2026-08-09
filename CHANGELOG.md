@@ -7,6 +7,17 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Running a server
 
+- **A live camera view now costs the server what an admin gives it, however many people have one open.** Two settings,
+  `camera.live.budget-ms-per-tick` and `camera.live.max-fps`, and everything between them is spent: views take as many
+  frames as the budget affords and stop at the ceiling. At the defaults, and a frame costing a millisecond of
+  main-thread time, one viewer gets 10 fps, two get 10 each, three get 6.7 and four get 5 - so a lone viewer does not
+  get twenty times the frames for being alone, and the fourth to open one slows the other three rather than costing a
+  quarter more. What a frame costs is **measured per viewer**, so the budget is divided as time and not as frames, and
+  a cheap view that would hit the ceiling on less than its share hands the rest to one that cannot. A plugin asks
+  `camera().readyForFrame(player)` every tick it would like a frame; asking is what makes it a viewer, so there is
+  nothing to open, nothing to close, and a screen that stops asking stops being divided by. Advisory rather than
+  enforced - it is the admin's tick either way, and `/mapgui camera timings` names whoever is spending it. See
+  [live views](docs/camera.md#live-views).
 - **`/mapgui camera timings` now reports what every capture on the server cost, whoever asked for it.** It used to be
   a per-player switch that pushed three lines of chat after each capture taken from *that* player's eye, which only
   describes the one camera the sample plugin has - somebody aims and clicks. A plugin capturing on a timer, for a live
@@ -67,6 +78,13 @@ surface is `mapgui-api` and `mapgui-layout`.
   of the individual rather than of the model - its own render state starts at neither - so it is now stated per mob and
   the client's own animation is what holds the mesh in it. An evoker, an illusioner and a vindicator stand with their
   arms crossed; a pillager stands with its crossbow up.
+- **A tropical fish is drawn as the fish it is.** Twelve patterns over two body shapes and two dyes each is 3072
+  combinations, so the client ships two greyscale bodies and six greyscale patterns and colours them per fish - which
+  is exactly what happens here now, composited into one texture. Every one of them used to be the same plain
+  `tropical_a`.
+- **A mooshroom grows its mushrooms.** Three copies of the mushroom's own block model, two on the back and one on the
+  head, at the client's own offsets - they are not on the cow's mesh at all, which is why a mooshroom came out as a
+  plain red cow.
 - **The three jokes behind a name tag work.** A mob called `Dinnerbone` or `Grumm` stands on its head, and every layer
   of it goes over with it - its armour, its fleece, whatever it is holding. A rabbit called `Toast` wears the lost
   pet's coat. A sheep called `jeb_` cycles the sixteen fleece colours a colour every twenty-five ticks, blended across

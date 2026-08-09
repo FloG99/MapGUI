@@ -73,7 +73,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         cameraAssets.follow(serverPacks::followed);
         // Before the camera, which photographs whatever the walls are showing.
         wallRegistry = new WallRegistry(this, transport, prompts, router);
-        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
+        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis(), config.cameraLiveBudgetMillis(), config.cameraLiveMaxFps());
         cameraAssets.announce();
         serverPacks.start();
 
@@ -163,7 +163,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         // textures go either way, since the fov and distance they were built against may have changed.
         serverPacks.retune(config.cameraFollowServerPacks());
         cameraAssets.retune(config.cameraPacks(), config.cameraDownload(), config.cameraAllowVersionMismatch());
-        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
+        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis(), config.cameraLiveBudgetMillis(), config.cameraLiveMaxFps());
     }
 
     MapGuiConfig config() {
