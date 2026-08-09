@@ -453,6 +453,34 @@ class MeshExtractorTest {
     }
 
     /**
+     * A model that hides half of itself per pose is baked with that half left out.
+     *
+     * <p>{@code IllagerModel} builds a crossed pair of arms <i>and</i> two separate ones, and hides whichever set the
+     * pose does not want. Baked without asking, an evoker comes out with a spare arm on its side.
+     *
+     * <p>Which set survives is the client's own answer rather than one chosen here: an illager's render state starts
+     * at {@code NEUTRAL}, so the separate arms are the ones it draws and the crossed pair is the one hidden.
+     */
+    @Test
+    void aModelThatHidesAPartIsBakedWithoutIt() throws Exception {
+        MeshPart illager = extract().get("monster.illager.IllagerModel*0.9375").getFirst();
+
+        assertTrue(named(illager, "right_arm"), "the pose the client starts an illager in has two separate arms");
+        assertTrue(named(illager, "left_arm"), "both of them");
+        assertFalse(named(illager, "arms"), "and not the crossed pair as well, which is the spare arm on its side");
+    }
+
+    /** Whether any part of this tree answers to a name. */
+    private static boolean named(MeshPart part, String name) {
+        if (part.name().equals(name)) return true;
+
+        for (MeshPart child : part.children()) {
+            if (named(child, name)) return true;
+        }
+        return false;
+    }
+
+    /**
      * A skull stands on the block it is in rather than a block and a half above it.
      *
      * <p>Which is the whole of what its lift is for: {@code SkullBlockRenderer} turns the model over the way a mob's

@@ -135,6 +135,7 @@ record MeshCube(
         return patch(0, 0, 1, 1, 1, 1, false);
     }
 
+
     float[] face(Direction direction) {
         return faces[direction.ordinal()];
     }

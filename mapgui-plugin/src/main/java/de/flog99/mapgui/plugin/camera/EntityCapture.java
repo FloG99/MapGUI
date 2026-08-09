@@ -27,6 +27,8 @@ import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Sheep;
 import org.bukkit.entity.Slime;
+import org.bukkit.inventory.meta.MapMeta;
+import org.bukkit.map.MapView;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -59,7 +61,7 @@ final class EntityCapture {
     private EntityCapture() {
     }
 
-    static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, boolean includeSelf) {
+    static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, FramedMaps maps, boolean includeSelf) {
         List<Entity> nearby = new ArrayList<>(viewer.getWorld().getNearbyEntities(eye, MAX_DISTANCE, MAX_DISTANCE, MAX_DISTANCE));
         nearby.sort((left, right) -> Double.compare(left.getLocation().distanceSquared(eye), right.getLocation().distanceSquared(eye)));
 
@@ -75,7 +77,7 @@ final class EntityCapture {
                 continue;
             }
 
-            snapshots.addAll(snapshotsOf(entity, skins, assets));
+            snapshots.addAll(snapshotsOf(entity, skins, assets, maps));
         }
 
         return snapshots;
@@ -85,7 +87,7 @@ final class EntityCapture {
      * The snapshots one entity is drawn from, nearly always one and empty for an entity that is not drawn at all.
      * More than one only for a mob wearing a second layer, since a snapshot samples one texture.
      */
-    private static List<EntitySnapshot> snapshotsOf(Entity entity, SkinCache skins, MobAssets assets) {
+    private static List<EntitySnapshot> snapshotsOf(Entity entity, SkinCache skins, MobAssets assets, FramedMaps maps) {
         Location at = entity.getLocation();
         String type = entity.getType().name().toLowerCase(Locale.ROOT);
 
@@ -96,7 +98,7 @@ final class EntityCapture {
             List<EntitySnapshot> drawn = painting(hung, at, assets);
             if (!drawn.isEmpty()) return drawn;
         } else if (entity instanceof ItemFrame frame) {
-            List<EntitySnapshot> drawn = itemFrame(frame, at, assets, skins);
+            List<EntitySnapshot> drawn = itemFrame(frame, at, assets, skins, maps);
             if (!drawn.isEmpty()) return drawn;
         } else if (entity instanceof Item dropped) {
             for (String id : ItemIds.of(dropped.getItemStack())) {
@@ -224,11 +226,11 @@ final class EntityCapture {
      * half circle about Y from where their json states them, and that half circle is exactly the difference between
      * the two conventions.
      *
-     * <p><b>A framed map is a frame and no picture.</b> The frame is the right one - vanilla keeps a second model for
-     * it, with the border a map fills - but the pixels live in the world's saved map data rather than in the assets,
-     * and nothing in the trace can reach them.
+     * <p>A framed map fills the frame rather than sitting in it as an item does, and gets the frame vanilla keeps for
+     * one - the model with the border a map fills. Its picture is read out of the world's own saved map data, since
+     * that is the only place it exists.
      */
-    private static List<EntitySnapshot> itemFrame(ItemFrame frame, Location at, MobAssets assets, SkinCache skins) {
+    private static List<EntitySnapshot> itemFrame(ItemFrame frame, Location at, MobAssets assets, SkinCache skins, FramedMaps maps) {
         BlockFace facing = frame.getFacing();
         double x = at.getX() + facing.getModX() * FRAME_OUT;
         double y = at.getY() + facing.getModY() * FRAME_OUT;
@@ -248,11 +250,38 @@ final class EntityCapture {
                 drawn.add(EntitySnapshot.frame(x, y, z, yaw, layer).tipped(tipped));
             }
         }
-        if (!map) {
+        if (map) {
+            EntitySnapshot picture = framedMap(frame, held, x, y, z, yaw, tipped, assets, maps);
+            if (picture != null) {
+                drawn.add(picture);
+            }
+        } else {
             drawn.addAll(framed(frame, held, x, y, z, yaw, tipped, assets, skins));
         }
         return List.copyOf(drawn);
     }
+
+    /**
+     * The map's own pixels, or null when the world will not give them up - which leaves the frame and no picture.
+     *
+     * <p>A map turns in quarters where an item turns in eighths, which is vanilla's own {@code rotation % 4}: there
+     * are only four ways up a map can be read.
+     */
+    private static EntitySnapshot framedMap(ItemFrame frame, ItemStack held, double x, double y, double z,
+                                            float yaw, float tipped, MobAssets assets, FramedMaps maps) {
+        MapMeta meta = held.getItemMeta() instanceof MapMeta mapped ? mapped : null;
+        MapView view = meta == null ? null : meta.getMapView();
+        if (view == null) return null;
+
+        String texture = maps.textureOf(view.getId(), assets.atlas());
+        if (texture == null) return null;
+
+        float spin = (float) Math.toRadians(frame.getRotation().ordinal() % QUARTERS * QUARTER);
+        return EntitySnapshot.framedMap(x, y, z, yaw, texture, spin).tipped(tipped);
+    }
+
+    /** How many ways up a map can be read, against the eight an item can be turned to. */
+    private static final int QUARTERS = 4;
 
     /** How far out of its block the client pushes a frame, in blocks, and the quarter circle a flat one is tipped. */
     private static final double FRAME_OUT = 0.46875;

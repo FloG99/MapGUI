@@ -71,7 +71,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         // Before announce(), so the first load already layers whatever was kept on an earlier run.
         serverPacks = new ServerPacks(this, cameraAssets, getDataFolder().toPath().resolve("cache").resolve("camera"), config.cameraFollowServerPacks());
         cameraAssets.follow(serverPacks::followed);
-        camera = new CameraService(this, cameraAssets, serverPacks, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
+        camera = new CameraService(this, cameraAssets, serverPacks, backend.savedMapPixels(), config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
         cameraAssets.announce();
         serverPacks.start();
 
@@ -162,7 +162,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         // textures go either way, since the fov and distance they were built against may have changed.
         serverPacks.retune(config.cameraFollowServerPacks());
         cameraAssets.retune(config.cameraPacks(), config.cameraDownload(), config.cameraAllowVersionMismatch());
-        camera = new CameraService(this, cameraAssets, serverPacks, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
+        camera = new CameraService(this, cameraAssets, serverPacks, backend.savedMapPixels(), config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis());
     }
 
     MapGuiConfig config() {

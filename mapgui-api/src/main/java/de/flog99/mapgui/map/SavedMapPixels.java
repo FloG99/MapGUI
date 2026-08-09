@@ -21,4 +21,15 @@ public interface SavedMapPixels {
      * @return false if this server does not let us at them, in which case nothing was written
      */
     boolean write(int mapId, byte[] pixels);
+
+    /**
+     * The same array read back: one map's worth of palette indices, as the world has them.
+     *
+     * <p>For drawing a map somebody has hung on a wall. A framed map is the one thing in a capture whose picture is
+     * not in the assets anywhere - it is in the world's own saved data - so a camera that cannot read this draws the
+     * frame and leaves the picture out.
+     *
+     * @return null for a map this server has never heard of, or if it does not let us at the pixels
+     */
+    byte[] read(int mapId);
 }

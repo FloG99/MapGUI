@@ -6,6 +6,7 @@ import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.camera.CameraAssets;
 import de.flog99.mapgui.camera.CameraOptions;
 import de.flog99.mapgui.camera.CameraShot;
+import de.flog99.mapgui.map.SavedMapPixels;
 import de.flog99.mapgui.render.BiomeColors;
 import de.flog99.mapgui.render.BlockItems;
 import de.flog99.mapgui.render.BlockModels;
@@ -60,6 +61,9 @@ public final class CameraService implements Camera {
     private final ServerPacks packs;
     private final SkinCache skins = new SkinCache();
 
+    /** The pixels of a map somebody has hung on a wall, which are the world's rather than the assets'. */
+    private final FramedMaps framedMaps;
+
     /**
      * Not part of {@link Baked}: this holds world, not assets, and a reload that swaps the textures has not changed
      * a single block. It bounds itself by age and by count, so nothing here has to empty it.
@@ -113,15 +117,16 @@ public final class CameraService implements Camera {
                          MobAssets mobs, FrameTracer tracer, String version) {
     }
 
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, float defaultFov, int defaultDistance) {
-        this(plugin, assets, packs, defaultFov, defaultDistance, 0);
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, SavedMapPixels saved, float defaultFov, int defaultDistance) {
+        this(plugin, assets, packs, saved, defaultFov, defaultDistance, 0);
     }
 
     /**
      * @param reuseChunksMillis how long a copied chunk may be served to a later capture, or 0 to copy every time
      */
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, float defaultFov, int defaultDistance, int reuseChunksMillis) {
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, SavedMapPixels saved, float defaultFov, int defaultDistance, int reuseChunksMillis) {
         this.plugin = plugin;
+        this.framedMaps = new FramedMaps(saved);
         this.assets = assets;
         this.packs = packs;
         this.defaultFov = defaultFov;
@@ -180,7 +185,7 @@ public final class CameraService implements Camera {
         // including them would fill the frame with the back of it.
         List<EntitySnapshot> entities = new ArrayList<>();
         if (options.entities()) {
-            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), options.selfie()));
+            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, options.selfie()));
         }
         // Not under the entities option, whatever the trace calls these: a chest is part of the build, and turning
         // entities off asks for the world without the things standing in it rather than with holes in the walls.

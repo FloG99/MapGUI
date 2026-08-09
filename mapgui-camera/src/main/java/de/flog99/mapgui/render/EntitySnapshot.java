@@ -364,6 +364,31 @@ public record EntitySnapshot(
     }
 
     /**
+     * The map hanging in an item frame, which fills the frame rather than sitting in it as an item would.
+     *
+     * <p>A block across and a hundredth of a block proud of where an item would be, at whichever quarter turn the
+     * frame was clicked round to - a map has four orientations where an item has eight, which is vanilla's own
+     * {@code rotation % 4}.
+     *
+     * @param texture the map's own pixels, published into the atlas by the caller
+     * @param spin    in radians, in the client's own sign
+     */
+    public static EntitySnapshot framedMap(double x, double y, double z, float facing, String texture, float spin) {
+        return new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
+                EntityModel.picture(MAP_HALF_WIDTH, MAP_HALF_WIDTH, -MAP_FRONT, -spin), texture);
+    }
+
+    /** Half a block, since a framed map is drawn the full width of the block the frame is in. */
+    private static final float MAP_HALF_WIDTH = 8;
+
+    /**
+     * Where a map sits, in entity pixels: the front of the frame's backplate, less the hundredth of a block vanilla
+     * lifts it by so that it does not fight the plate. Negative because a frame's own model arrives a half circle
+     * about Y from where its json states it - see {@link Turns#halfTurned}.
+     */
+    private static final float MAP_FRONT = 0.4375f * 16 - 16 / 128f;
+
+    /**
      * The same tipped onto its back or its front, for a frame on a floor or a ceiling.
      *
      * <p>Vanilla turns those about X <i>outside</i> its half circle about Y, and the trace's own turn is outside

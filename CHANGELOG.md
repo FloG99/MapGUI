@@ -21,12 +21,22 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **A map hung in an item frame shows its picture.** It is the one thing in a capture whose picture is nowhere in the
+  assets: a map's pixels live in the world's own saved data, one byte of palette index each, so they are read from
+  there and widened into a texture per capture. Per capture rather than cached, since a map is not a fixed picture -
+  it fills in as somebody walks around with it. The unexplored parts stay transparent, which is what lets the frame
+  show through the middle of a fresh one.
+- Fixed: **an evoker drew a spare arm on its side, and a vindicator held its axe with its arms crossed.** A model may
+  hide half of itself per pose - `IllagerModel` builds both a crossed pair of arms and two separate ones and shows
+  whichever the pose wants - and the extraction read only the nine pose fields off each part, never the flag that says
+  whether it is drawn at all. It reads that now, which is general: any mob whose model hides parts is baked without
+  them. The held item follows for free, since an item hangs off the arm part and there is no longer one to hang it off.
 - **Item frames are drawn, and what is hanging in them.** The frame is its own block model - the glow one and the
   map-sized one included - centred on the block's middle and pushed 0.46875 blocks out along the face it is on, and
   the item hangs at the front of the backplate at half size, turned by whichever eighth of a circle the frame was
   clicked round to. A frame on a floor or a ceiling is tipped a quarter circle on top of that, carried in the model
   rather than in the yaw so that the two rotations end up in the client's own order. A framed **map** gets the frame
-  vanilla keeps for one and no picture: the pixels live in the world's saved map data rather than in the assets.
+  vanilla keeps for one, with the border a map fills.
 - **What is standing on a shelf is drawn**, at the three places `ShelfRenderer` puts it - a fifth of a block either
   side of the middle, a quarter forward, quarter size, and each item hung by its own middle so a tall one and a flat
   one sit on the same point.

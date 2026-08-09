@@ -378,6 +378,32 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
     private static final float PAINTING_HALF_THICKNESS = 0.5f;
 
     /**
+     * A flat picture facing out of an item frame or a sign: a block-wide slab with one side drawn.
+     *
+     * <p>Built rather than extruded because there is nothing to extrude - a map's pixels and a sign's lettering are
+     * not in the assets at all, they are painted per capture and handed straight to the atlas.
+     *
+     * <p>Drawn on the model's +Z side, which is the side a frame and a sign both face once the yaw a block entity
+     * takes has turned them - the opposite of a mob, whose face is on its -Z.
+     *
+     * @param across half its width, in entity pixels, and {@code up} half its height
+     * @param out    how far in front of the model's own origin it sits
+     * @param spin   how far round it is turned in its own plane, in radians
+     */
+    static EntityModel picture(float across, float up, float out, float spin) {
+        float[][] faces = new float[6][];
+        faces[Direction.SOUTH.ordinal()] = MeshCube.whole();
+
+        MeshCube slab = new MeshCube(-across, -up, out - PICTURE_HALF_THICKNESS,
+                across, up, out + PICTURE_HALF_THICKNESS, faces);
+        return of(List.of(new MeshPart("picture", false, 0, 0, 0, 0, 0, spin,
+                1, 1, 1, List.of(slab), List.of())), true);
+    }
+
+    /** Thin enough to read as flat and thick enough for a ray to meet, which is the painting's own thickness. */
+    private static final float PICTURE_HALF_THICKNESS = 0.5f;
+
+    /**
      * The picture at the size and place the item model states, extruded along its own outline.
      *
      * <p>Built from the icon rather than from its frame - see {@link SpriteShape} - because an item is seen edge on

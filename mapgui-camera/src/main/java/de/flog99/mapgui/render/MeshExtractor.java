@@ -362,12 +362,18 @@ final class MeshExtractor {
     @SuppressWarnings("unchecked")
     private MeshPart part(String name, Object source, boolean animated, EntityMeshes.Space space) throws ReflectiveOperationException {
         List<MeshCube> cubes = new ArrayList<>();
-        for (Object cube : (List<Object>) cubesField.get(source)) {
-            cubes.add(cube(cube, space));
+        // A part may be told to draw its children and none of its own boxes, which is what skipDraw is for.
+        if (!(animated && flag(source, "skipDraw"))) {
+            for (Object cube : (List<Object>) cubesField.get(source)) {
+                cubes.add(cube(cube, space));
+            }
         }
 
         List<MeshPart> children = new ArrayList<>();
         for (Map.Entry<String, Object> child : ((Map<String, Object>) childrenField.get(source)).entrySet()) {
+            if (animated && !flag(child.getValue(), "visible")) {
+                continue;
+            }
             children.add(part(child.getKey(), child.getValue(), animated, space));
         }
 
@@ -385,6 +391,25 @@ final class MeshExtractor {
                 pose[6], pose[7], pose[8],
                 List.copyOf(cubes), List.copyOf(children)
         );
+    }
+
+    /**
+     * One of the two booleans a posed part carries, defaulting to drawn if this version does not have it.
+     *
+     * <p>Read only off a tree the client's own {@code setupAnim} has been over, because that is what sets them: an
+     * unposed part is visible because nobody has said otherwise yet, not because it is drawn.
+     *
+     * <p>This is how a model says "not this pose". {@code IllagerModel} builds both a crossed pair of arms and two
+     * separate ones and hides whichever set the pose does not want, so a mesh baked without asking gives an evoker a
+     * spare arm on its side - and a vindicator an axe held in a hand that is not there, since an item hangs off the
+     * arm part and there was one to hang it off.
+     */
+    private static boolean flag(Object part, String name) {
+        try {
+            return part.getClass().getField(name).getBoolean(part);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return name.equals("visible");
+        }
     }
 
     /** Where the geometry was authored, which is what a mesh nobody could pose has to fall back to. */

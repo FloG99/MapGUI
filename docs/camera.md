@@ -474,10 +474,6 @@ Paintings and item frames are not among them. A painting is the slab the client 
 with the picture on the front and the planks it is nailed to around the rest. An item frame is its own block model
 with whatever is hanging in it, at the place and size the client hangs one.
 
-- **The picture on a framed map.** The frame is right - vanilla keeps a second model for one, with the border a map
-  fills - but a map's pixels live in the world's saved map data rather than in the assets, and nothing the trace can
-  reach carries them.
-
 - **The text on a sign.** The sign itself is an ordinary block model and is drawn. Its text needs the client's font -
   the glyph pages, the per-character widths and the layout rules - which nothing here reads yet.
 

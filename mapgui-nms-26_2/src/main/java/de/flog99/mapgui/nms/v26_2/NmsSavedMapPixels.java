@@ -15,8 +15,7 @@ import org.bukkit.craftbukkit.CraftServer;
  * what stops the terrain scan from painting over the photograph the first time somebody holds it. And the saved data
  * is marked dirty, so the world writes it out and anybody already looking at the map is sent the new pixels.
  *
- * <p>Map data is kept by the overworld whichever world the map belongs to, which is where the server looks a map id
- * up as well.
+ * <p>The same array reads back out again, for drawing a map somebody has hung on a wall.
  */
 public final class NmsSavedMapPixels implements SavedMapPixels {
 
@@ -24,11 +23,15 @@ public final class NmsSavedMapPixels implements SavedMapPixels {
     private static final int MAP_SIZE = 128;
 
     @Override
-    public boolean write(int mapId, byte[] pixels) {
-        ServerLevel overworld = ((CraftServer) Bukkit.getServer()).getServer().overworld();
-        if (overworld == null) return false;
+    public byte[] read(int mapId) {
+        MapItemSavedData data = dataOf(mapId);
+        // A copy, since the caller reads it off the main thread and the world goes on painting this one.
+        return data == null ? null : data.colors.clone();
+    }
 
-        MapItemSavedData data = overworld.getMapData(new MapId(mapId));
+    @Override
+    public boolean write(int mapId, byte[] pixels) {
+        MapItemSavedData data = dataOf(mapId);
         if (data == null || data.colors.length != pixels.length) return false;
 
         System.arraycopy(pixels, 0, data.colors, 0, pixels.length);
@@ -39,5 +42,11 @@ public final class NmsSavedMapPixels implements SavedMapPixels {
         data.setColorsDirty(0, 0, true);
         data.setColorsDirty(MAP_SIZE - 1, MAP_SIZE - 1, true);
         return true;
+    }
+
+    /** Kept by the overworld whichever world the map belongs to, which is where the server looks one up as well. */
+    private static MapItemSavedData dataOf(int mapId) {
+        ServerLevel overworld = ((CraftServer) Bukkit.getServer()).getServer().overworld();
+        return overworld == null ? null : overworld.getMapData(new MapId(mapId));
     }
 }
