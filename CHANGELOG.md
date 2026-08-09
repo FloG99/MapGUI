@@ -43,6 +43,11 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **What is written on a sign is drawn**, front and back, in the sign's own dye and dimmed the way the client dims it
+  unless it has been glow-inked. A sign's text is four strings and nothing else - the client rasterises them with its
+  font every frame - so they are rasterised here too, with MapGUI's map font, which is Minecraft's own glyphs and was
+  already in the plugin. Placed by the client's own transform chain. Hanging signs are left out: their board is a
+  different size on a different chain, and text in the wrong place is worse than none.
 - **A capture shows what MapGUI's own walls are playing.** A wall is the one thing in front of a camera that is not
   in the world - its maps and the frames holding them are sent to each viewer's client and nothing is placed - so a
   photograph of a cinema used to come back with bare stone where the screen is. The camera now asks the walls what

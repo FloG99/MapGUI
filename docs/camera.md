@@ -509,8 +509,12 @@ Paintings and item frames are not among them. A painting is the slab the client 
 with the picture on the front and the planks it is nailed to around the rest. An item frame is its own block model
 with whatever is hanging in it, at the place and size the client hangs one.
 
-- **The text on a sign.** The sign itself is an ordinary block model and is drawn. Its text needs the client's font -
-  the glyph pages, the per-character widths and the layout rules - which nothing here reads yet.
+- **The text on a sign** is drawn, front and back, in the sign's own dye and at the place the client's own transform
+  puts it: from the middle of the block, turned to the way the sign faces, dropped and pushed back against the wall
+  for a wall sign, then a third of a block up and a hair proud of the board. The lettering is drawn per capture with
+  MapGUI's map font rather than read from anywhere - a sign's text is four strings, and the client rasterises them
+  every frame too. Hanging signs are the exception: their board is a different size on a different chain, so their
+  text is left out rather than drawn in the wrong place.
 
 - **The blocks the client draws from a block entity renderer** are drawn where they stand: chests, heads, shulker
   boxes, conduits, banners, bells, decorated pots, copper golem statues, and the book over an enchanting table. Each

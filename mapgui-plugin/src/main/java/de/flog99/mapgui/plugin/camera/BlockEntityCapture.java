@@ -24,6 +24,7 @@ import org.bukkit.block.Conduit;
 import org.bukkit.block.DecoratedPot;
 import org.bukkit.block.EnchantingTable;
 import org.bukkit.block.Shelf;
+import org.bukkit.block.Sign;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.block.Skull;
 import org.bukkit.block.data.BlockData;
@@ -31,9 +32,14 @@ import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.Rotatable;
 import org.bukkit.block.data.type.Chest;
 import org.bukkit.block.data.type.CopperGolemStatue;
+import org.bukkit.block.data.type.WallSign;
+import org.bukkit.block.sign.Side;
+import org.bukkit.block.sign.SignSide;
 import org.bukkit.block.banner.Pattern;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -106,6 +112,7 @@ final class BlockEntityCapture {
         // standing there are animations the server does not carry.
         if (state instanceof EnchantingTable) return one(book(block));
         if (state instanceof Shelf shelf) return shelved(block, data, shelf, assets);
+        if (state instanceof Sign sign) return written(block, data, sign, assets);
         // The bell itself, which hangs in the same place whichever way the block faces and whatever holds it up -
         // its renderer neither turns nor moves it. The posts and the bar are the block model's and are drawn already.
         if (state instanceof Bell) return one(middleOf(block, "bell"));
@@ -126,6 +133,90 @@ final class BlockEntityCapture {
         String texture = textureOf(block, chest, assets);
         return texture == null ? List.of() : one(authored.texture(texture));
     }
+
+    /**
+     * What is written on a sign: one flat strip of lettering per side, where there is anything written.
+     *
+     * <p>The sign itself is an ordinary block model and is drawn already. This is only the text, which is nowhere in
+     * the assets - the client draws it with its font every frame, and so does {@link SignPictures}.
+     *
+     * <p>The placing is the client's own chain in {@code StandingSignRenderer.textTransformation}: from the middle of
+     * the block, turned to the way the sign faces, dropped and pushed back against the wall for a wall sign, then a
+     * third of a block up and a hair proud of the board. The back side is the same point on the other side of it,
+     * facing the other way, which is what the half turn in that chain comes to.
+     *
+     * <p>Hanging signs are left out. Their renderer is a different chain against a differently sized board, and half
+     * a sign drawn in the wrong place is worse than a sign whose text a photograph does not carry.
+     */
+    private static List<EntitySnapshot> written(Block block, BlockData data, Sign sign, MobAssets assets) {
+        BlockFace faces = signFacing(data);
+        if (faces == null) return List.of();
+
+        Vector out = faces.getDirection();
+        double x = block.getX() + 0.5;
+        double y = block.getY() + 0.5;
+        double z = block.getZ() + 0.5;
+
+        // A wall sign's board is against the wall behind it rather than in the middle of its own block.
+        if (data instanceof WallSign) {
+            x -= out.getX() * WALL_BACK;
+            y -= WALL_DROP;
+            z -= out.getZ() * WALL_BACK;
+        }
+        y += TEXT_UP;
+
+        List<EntitySnapshot> drawn = new ArrayList<>();
+        for (Side side : Side.values()) {
+            boolean front = side == Side.FRONT;
+            float facing = yawOf(front ? faces : faces.getOppositeFace());
+            double proud = front ? TEXT_OUT : -TEXT_OUT;
+
+            EntitySnapshot lettering = writing(block, side, sign.getSide(side), assets,
+                    x + out.getX() * proud, y, z + out.getZ() * proud, facing);
+            if (lettering != null) {
+                drawn.add(lettering);
+            }
+        }
+        return List.copyOf(drawn);
+    }
+
+    /** One side's lettering, or null when nothing is written on it. */
+    private static EntitySnapshot writing(Block block, Side side, SignSide text, MobAssets assets,
+                                          double x, double y, double z, float facing) {
+        List<String> lines = new ArrayList<>(SignPictures.LINES);
+        for (Component line : text.lines()) {
+            lines.add(PlainTextComponentSerializer.plainText().serialize(line));
+        }
+
+        String key = block.getX() + "_" + block.getY() + "_" + block.getZ() + "_" + side.name().toLowerCase(Locale.ROOT);
+        String texture = SignPictures.publish(key, lines, text.getColor(), text.isGlowingText(), assets.atlas());
+        if (texture == null) return null;
+
+        return EntitySnapshot.lettering(x, y, z, facing,
+                SignPictures.WIDTH / SignPictures.PER_BLOCK * PIXELS / 2,
+                SignPictures.LINES * SignPictures.LINE_HEIGHT / SignPictures.PER_BLOCK * PIXELS / 2,
+                texture);
+    }
+
+    /** Which way the front of this sign looks, or null for a shape this does not draw the text of. */
+    private static BlockFace signFacing(BlockData data) {
+        if (data instanceof WallSign wall) return wall.getFacing();
+        if (data instanceof org.bukkit.block.data.type.Sign standing) return standing.getRotation();
+
+        return null;
+    }
+
+    /** Entity pixels to the block, since a picture is measured in the units a mesh is. */
+    private static final float PIXELS = 16;
+
+    /** The client's own three numbers: how far a wall sign drops, how far back it sits, and where its text is. */
+    private static final double WALL_DROP = 0.3125;
+
+    private static final double WALL_BACK = 0.4375;
+
+    private static final double TEXT_UP = 0.33333334;
+
+    private static final double TEXT_OUT = 0.046666667;
 
     /** One snapshot as a list, or none when it did not resolve. */
     private static List<EntitySnapshot> one(EntitySnapshot snapshot) {

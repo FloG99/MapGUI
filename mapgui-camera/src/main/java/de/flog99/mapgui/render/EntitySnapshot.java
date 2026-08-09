@@ -389,6 +389,20 @@ public record EntitySnapshot(
     }
 
     /**
+     * A flat picture standing at a point and facing a way, which is what a sign's lettering is.
+     *
+     * <p>Placed rather than hung: the caller has already worked out where the text plane is, so this is the picture
+     * and nothing else. The two half sizes are what let a sign's strip of writing be wider than it is tall.
+     *
+     * @param facing where it points, in the yaw convention a block model takes
+     */
+    public static EntitySnapshot lettering(double x, double y, double z, float facing,
+                                           float halfWidth, float halfHeight, String texture) {
+        return new EntitySnapshot(x, y, z, facing, facing, 0, 1f,
+                EntityModel.picture(halfWidth, halfHeight, 0, 0), texture);
+    }
+
+    /**
      * A map of a MapGUI wall, drawn on the face of the block it hangs on.
      *
      * <p>A wall puts nothing in the world - its maps and the frames holding them are sent to a viewer's client and
