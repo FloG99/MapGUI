@@ -109,7 +109,7 @@ final class TestWorld implements VoxelSource, Textures {
             faces[side.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0, BakedFace.NO_TINT, null);
         }
         BakedElement cube = new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0);
-        return place(x, y, z, new BakedState(List.of(cube), true, BakedState.Alpha.CUTOUT, false, true));
+        return place(x, y, z, new BakedState(List.of(cube), true, BakedState.Alpha.CUTOUT, false, true, 0));
     }
 
     /** An arbitrary box, for the cases where a ray has to be able to miss the geometry inside a block. */

@@ -38,9 +38,20 @@ public final class BlockModels {
             "lava", "block/lava_still"
     );
 
+    /** The moving surface, which is a second image rather than the still one turned. Named in the client's own code too. */
+    private static final Map<String, String> FLUID_FLOW = Map.of(
+            "water", "block/water_flow",
+            "lava", "block/lava_flow"
+    );
+
     /**
      * Blocks that stand in water without a {@code waterlogged} property to say so. A plugin cannot ask what fluid a
      * block sits in, so without these an ocean of kelp is a field of holes with air around every stalk.
+     *
+     * <p>Counted rather than collected: these are exactly the five vanilla blocks whose own {@code getFluidState}
+     * hands back water while carrying no waterlogged property. The server could be asked instead, which would cover
+     * a modded block too, but only through a fifth thing that touches {@code net.minecraft} - and for vanilla the
+     * answer would be this list.
      */
     private static final Set<String> ALWAYS_FLOODED = Set.of(
             "kelp", "kelp_plant", "seagrass", "tall_seagrass", "bubble_column"
@@ -72,8 +83,20 @@ public final class BlockModels {
      *              blockstate json is written against, and the whole bridge from the server to the assets
      */
     public BakedState bake(String state) {
-        return baked.computeIfAbsent(state, this::resolve);
+        return bake(state, false);
     }
+
+    /**
+     * @param covered whether the same fluid stands directly above, which fills a fluid block to the top the way
+     *                vanilla does - only the surface of a pool is the eight ninths a level states, and without this
+     *                every block in an ocean would be short and the whole body would come out as steps
+     */
+    public BakedState bake(String state, boolean covered) {
+        return baked.computeIfAbsent(covered ? state + COVERED : state, this::resolve);
+    }
+
+    /** Part of the cache key rather than of the state, so it cannot collide with a real property. */
+    private static final String COVERED = " covered";
 
     /** How many distinct states have been baked, for the ready message and for a sanity check in tests. */
     public int size() {
@@ -96,13 +119,16 @@ public final class BlockModels {
         return List.copyOf(geometry.elements);
     }
 
-    private BakedState resolve(String state) {
+    private BakedState resolve(String key) {
+        boolean covered = key.endsWith(COVERED);
+        String state = covered ? key.substring(0, key.length() - COVERED.length()) : key;
+
         String id = blockId(state);
         Map<String, String> properties = properties(state);
 
         JsonObject blockstate = readJson(AssetStack.BLOCKSTATES + id + ".json");
         if (blockstate == null) {
-            BakedState built = fluid(id);
+            BakedState built = fluid(id, properties, covered);
             return built != null ? built : BakedState.EMPTY;
         }
 
@@ -120,7 +146,7 @@ public final class BlockModels {
         }
 
         if (geometry.elements.isEmpty()) {
-            BakedState built = fluid(id);
+            BakedState built = fluid(id, properties, covered);
             if (built != null) return built;
 
             BakedState drawn = drawnByTheClient(id);
@@ -130,8 +156,10 @@ public final class BlockModels {
         // A waterlogged stair or fence is standing in water, and no part of its own model says so - vanilla draws
         // the fluid separately, so the water cube is added here.
         if ("true".equals(properties.get("waterlogged")) || ALWAYS_FLOODED.contains(id)) {
-            geometry.elements.add(fluidCube("block/water_still", true));
-            return new BakedState(List.copyOf(geometry.elements), false, BakedState.Alpha.TRANSLUCENT, true);
+            int standing = covered ? FULL : SOURCE;
+            geometry.elements.add(fluidCube(FLUID_TEXTURES.get("water"), true, standing));
+            return new BakedState(List.copyOf(geometry.elements), false, BakedState.Alpha.TRANSLUCENT, true, false,
+                    standing, FLUID_FLOW.get("water"));
         }
 
         // Every element being a full block, rather than there being only one: grass_block is a full cube of dirt
@@ -139,7 +167,7 @@ public final class BlockModels {
         // is made of. Both layers still composite - this only says the face the DDA reported is the one that was
         // hit, so no slab test is needed to find it.
         boolean fullCube = geometry.elements.stream().allMatch(BakedElement::isFullBlock);
-        return new BakedState(List.copyOf(geometry.elements), fullCube, alphaOf(geometry), false, id.endsWith("_leaves"));
+        return new BakedState(List.copyOf(geometry.elements), fullCube, alphaOf(geometry), false, id.endsWith("_leaves"), 0);
     }
 
     /**
@@ -197,24 +225,67 @@ public final class BlockModels {
         };
     }
 
-    /** A full cube of the still texture, translucent for water and opaque for lava. */
-    private BakedState fluid(String id) {
+    /** A body of the still texture, as deep as its level says, translucent for water and opaque for lava. */
+    private BakedState fluid(String id, Map<String, String> properties, boolean covered) {
         String texture = FLUID_TEXTURES.get(id);
         if (texture == null) return null;
 
         boolean water = id.equals("water");
-        return new BakedState(List.of(fluidCube(texture, water)), true,
-                water ? BakedState.Alpha.TRANSLUCENT : BakedState.Alpha.OPAQUE, water);
+        int height = covered ? FULL : depthOf(properties);
+        // Only a full one can cull the block above it, and only a full one is a full cube to the tracer.
+        return new BakedState(List.of(fluidCube(texture, water, height)), height == FULL,
+                water ? BakedState.Alpha.TRANSLUCENT : BakedState.Alpha.OPAQUE, water, false, height,
+                FLUID_FLOW.get(id));
     }
 
-    /** A full cube of fluid, every face culled by its neighbour so a body of it reads as one surface. */
-    private static BakedElement fluidCube(String texture, boolean water) {
+    private static final int FULL = 16;
+
+    /** Eight ninths, which is what a source stands at and the dip you can see across any pool. */
+    private static final int SOURCE = Math.round(8 / 9f * FULL);
+
+    /**
+     * How deep a fluid stands, in sixteenths, from the {@code level} its state carries.
+     *
+     * <p>Vanilla's own arithmetic. A source is eight ninths rather than full, which is the dip you can see across
+     * any pool, and each step away from it loses another ninth - so a stream is a staircase and reads as running
+     * downhill without anything here having to work out which way that is. Level eight and up is fluid that is
+     * falling, which fills its block whatever the number says.
+     */
+    private static int depthOf(Map<String, String> properties) {
+        String stated = properties.get("level");
+        if (stated == null) return FULL;
+
+        int level;
+        try {
+            level = Integer.parseInt(stated);
+        } catch (NumberFormatException e) {
+            return FULL;
+        }
+        if (level >= 8) return FULL;
+
+        return Math.round((8 - level) / 9f * FULL);
+    }
+
+    /**
+     * A cube of fluid, every side face culled by its neighbour so a body of it reads as one surface.
+     *
+     * <p>The top is only culled when the fluid fills its block. Culling it on a shallow one opens a hole in the
+     * surface of every stream, since what is above is air and there is nothing behind to draw.
+     */
+    private static BakedElement fluidCube(String texture, boolean water, int height) {
         BakedFace[] faces = new BakedFace[6];
         for (Direction direction : Direction.values()) {
-            faces[direction.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0, water ? Tints.WATER : Tints.NONE, direction, water);
+            boolean culled = height == FULL || direction != Direction.UP;
+            // Fluid whether or not it is water: lava's sides meet lava's the same way, and marking only water left
+            // every lava block drawing all six of them.
+            faces[direction.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0,
+                    water ? Tints.WATER : Tints.NONE, culled ? direction : null, true);
         }
 
-        return new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0);
+        // Shaded whatever it is standing at. Its depth decides how tall the box is and nothing else: the client
+        // lights a fluid by the direction of the face like any other block, so tying the two together left the
+        // side of every shallow stream flat and bright against the full blocks beside it.
+        return new BakedElement(0, 0, 0, 16, height, 16, faces, true, 0, 0);
     }
 
     /**

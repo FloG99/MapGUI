@@ -56,9 +56,28 @@ final class MobTextures {
             return horse.getColor() == null ? null : assetWord(horse.getColor().name());
         }
 
+        Object variant = variantValue(entity, type);
+        if (variant == null) return null;
+
+        String word = word(variant);
+        return word == null ? null : ODD_COATS.getOrDefault(word, word);
+    }
+
+    /**
+     * Where this mob's variant sits in the server's own enum, or -1 when it does not have one.
+     *
+     * <p>Only of use to {@link EntityVariants#coatOf}, and only where the two sides disagree on the name: a parrot the
+     * server calls {@code cyan} the client calls {@code yellow_blue}, and being the fourth of five is all they share.
+     */
+    private static int ordinalOf(Entity entity, String type) {
+        return variantValue(entity, type) instanceof Enum<?> constant ? constant.ordinal() : -1;
+    }
+
+    /** The variant object itself, which the two above read differently. */
+    private static Object variantValue(Entity entity, String type) {
         for (String accessor : List.of("getVariant", "get" + camelCase(type) + "Type", "getColor")) {
-            String variant = called(entity, accessor);
-            if (variant != null) return ODD_COATS.getOrDefault(variant, variant);
+            Object variant = called(entity, accessor);
+            if (variant != null) return variant;
         }
         return null;
     }
@@ -100,6 +119,12 @@ final class MobTextures {
         TextureAtlas atlas = assets.atlas();
         String stated = assets.variants().textureOf(type, variant, baby, moodOf(entity));
         if (stated != null && atlas.has(stated)) return stated;
+
+        // What the client's own renderer says, which is the only source for the coats that never became registry
+        // entries. Ahead of the name rule below because that rule does not merely miss on them - a parrot's base is
+        // parrot_red_blue, so swapping the last word finds parrot_red_blue again and draws all five as the red one.
+        String named = assets.variants().coatOf(type, variant, ordinalOf(entity, type));
+        if (named != null && atlas.has(named)) return named;
 
         for (String candidate : candidates(authored, variant)) {
             if (baby && atlas.has(candidate + "_baby")) return candidate + "_baby";
@@ -241,14 +266,20 @@ final class MobTextures {
     }
 
     /** One accessor, or null when this entity has no such method or it answers with nothing nameable. */
-    private static String called(Entity entity, String accessor) {
+    private static Object called(Entity entity, String accessor) {
         try {
-            Object variant = entity.getClass().getMethod(accessor).invoke(entity);
-            if (variant instanceof Keyed keyed) return keyed.getKey().value();
-            if (variant instanceof Enum<?> named) return named.name().toLowerCase(Locale.ROOT);
+            return entity.getClass().getMethod(accessor).invoke(entity);
         } catch (ReflectiveOperationException | RuntimeException e) {
             // No such method on this type, which is the ordinary case and not worth a log line per entity.
+            return null;
         }
+    }
+
+    /** What the assets would call this variant, whichever of the two shapes Bukkit hands it over as. */
+    private static String word(Object variant) {
+        if (variant instanceof Keyed keyed) return keyed.getKey().value();
+        if (variant instanceof Enum<?> named) return named.name().toLowerCase(Locale.ROOT);
+
         return null;
     }
 

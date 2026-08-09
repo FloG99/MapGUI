@@ -250,12 +250,12 @@ class MeshExtractorTest {
      */
     private static final EntityMeshes.Spec HUMANOID_MESH = new EntityMeshes.Spec(
             "HumanoidModel#createMesh@64x64",
-            List.of(new EntityMeshes.Layer("HumanoidModel", "createMesh", 64, 64, new float[]{}, 0, null, null)));
+            List.of(new EntityMeshes.Layer("HumanoidModel", "createMesh", 64, 64, new float[]{}, 0, null, null, EntityMeshes.Space.MOB)));
 
     /** The player mesh, which is not in the table - the player is authored, so nothing asks the client for its shape. */
     private static final EntityMeshes.Spec PLAYER_MESH = new EntityMeshes.Spec(
             "player.PlayerModel#createMesh@64x64",
-            List.of(new EntityMeshes.Layer("player.PlayerModel", "createMesh", 64, 64, new float[]{}, 0, null, null)));
+            List.of(new EntityMeshes.Layer("player.PlayerModel", "createMesh", 64, 64, new float[]{}, 0, null, null, EntityMeshes.Space.MOB)));
 
     /**
      * Every patch a subtree reads, as text, so two sets of them can be compared and named. A subtree rather than a

@@ -474,10 +474,13 @@ assets carry a texture at `entity/<type>`. A type with neither is left out rathe
 missing-texture checkerboard. Minecarts and tridents have that texture and so get a box; boats keep theirs per wood
 and do not.
 
-- **Chests, shulker boxes, banners, mob heads and skulls, decorated pots, conduits and copper golem statues** - about
-  75 block states in 26.2. Their model json carries no geometry at all, because the client draws them from a block
-  entity renderer, so a capture shows what is behind them. End portals and end gateways are the exception and get a
-  built-in stand-in.
+- **Shulker boxes, banners, mob heads and skulls, decorated pots, conduits and copper golem statues.** Their model
+  json carries no geometry at all, because the client draws them from a block entity renderer, so a capture shows
+  what is behind them. End portals and end gateways are the exception and get a built-in stand-in.
+
+  Chests are no longer among them: their mesh is baked out of `ChestModel` the way a mob's is, and the same route is
+  open to the rest, since all of these are `object.*` models in the client. What each still needs is its own texture
+  rule and, for a banner or a head, data a `ChunkSnapshot` does not carry.
 - **The fifty-one items the client draws in code** - a banner, a shulker box, a chest, a head - draw nothing in a
   hand, for the same reason.
 

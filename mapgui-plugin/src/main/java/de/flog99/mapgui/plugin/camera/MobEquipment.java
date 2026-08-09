@@ -11,6 +11,7 @@ import de.flog99.mapgui.render.TextureAtlas;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Snowman;
 import org.bukkit.entity.Mob;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
@@ -66,8 +67,79 @@ final class MobEquipment {
         hold(layers, base, assets, worn.getItemInMainHand(), rightHanded);
         hold(layers, base, assets, worn.getItemInOffHand(), !rightHanded);
 
+        wear(layers, base, assets, entity);
+        contains(layers, base, assets, type, worn.getItem(EquipmentSlot.BODY));
         return layers;
     }
+
+    /**
+     * The carved pumpkin a snow golem wears, which is not equipment and is not in any slot.
+     *
+     * <p>Vanilla draws it as a further pass over the head part, from the block's own model rather than from anything
+     * on the mesh - so a snow golem with no pumpkin is not a golem missing a layer, it is the same mesh with this
+     * left off. Shearing one is the only way to see the snow head underneath.
+     */
+    private static void wear(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets, Entity entity) {
+        if (!(entity instanceof Snowman golem) || golem.isDerp()) return;
+
+        for (EntitySnapshot layer : assets.items().held(PUMPKIN)) {
+            EntitySnapshot worn = EntitySnapshot.onHead(base, layer, PUMPKIN_POSE);
+            if (worn != null) {
+                into.add(worn);
+            }
+        }
+    }
+
+    /**
+     * What has been put inside a sulfur cube, which its renderer draws as a block model rather than as a worn mesh.
+     *
+     * <p>It arrives in the body slot like a piece of armor, but nothing about it is armor: there is no
+     * {@code equippable} component naming an asset, so the armor path above resolves nothing and draws nothing. The
+     * block goes in the middle of the cube, on the one part its mesh names.
+     */
+    private static void contains(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets,
+                                 String type, ItemStack item) {
+        if (!type.equals("sulfur_cube") || item == null || item.isEmpty()) return;
+
+        for (String id : ItemIds.of(item)) {
+            List<EntitySnapshot> layers = assets.items().held(id);
+            if (layers.isEmpty()) continue;
+
+            for (EntitySnapshot layer : layers) {
+                EntitySnapshot inside = EntitySnapshot.on(base, CUBE, layer, CONTAINED_POSE, false);
+                if (inside != null) {
+                    into.add(inside);
+                }
+            }
+            return;
+        }
+    }
+
+    /**
+     * The root rather than the shell's own part, because the shell is not there any more: it is what the block
+     * replaces, and {@link EntityCapture} has already taken it off by the time this runs.
+     */
+    private static final String CUBE = "root";
+
+    /**
+     * Turned over, off {@code SulfurCubeInnerLayer}, and left at full size.
+     *
+     * <p>That layer halves the block, but it halves it inside a cube its own renderer has already halved - and this
+     * mesh is not halved, because the halving is folded into the lift instead. Relative to the shell around it the
+     * block is a whole one, which is what it looks like in the game.
+     */
+    private static final ItemPoses.Pose CONTAINED_POSE =
+            new ItemPoses.Pose(new float[]{0, 0, 0}, new float[]{(float) Math.PI, 0, 0}, 1f);
+
+    private static final String PUMPKIN = "minecraft:carved_pumpkin";
+
+    /**
+     * Where the pumpkin sits on the head, read off {@code SnowGolemHeadLayer}: a third of a block up, turned to face
+     * back the way the head does, at five eighths of a block. The client's own numbers, in the units a pose is
+     * stated in - {@code 0.34375} of a block is the 5.5 pixels below.
+     */
+    private static final ItemPoses.Pose PUMPKIN_POSE =
+            new ItemPoses.Pose(new float[]{0, 5.5f, 0}, new float[]{0, (float) Math.PI, 0}, 0.625f);
 
     /** Whether this entity's main hand is its left one, which the server states for mobs and players separately. */
     static boolean leftHanded(Entity entity) {

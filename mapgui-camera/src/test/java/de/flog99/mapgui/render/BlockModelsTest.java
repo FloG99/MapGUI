@@ -369,7 +369,7 @@ class BlockModelsTest {
         BlockModels models = models();
 
         BakedState water = models.bake("minecraft:water[level=0]");
-        assertTrue(water.fullCube());
+        assertFalse(water.fullCube(), "a surface source stands at eight ninths, which is the dip across a pool");
         assertEquals(BakedState.Alpha.TRANSLUCENT, water.alpha());
         assertEquals("block/water_still", textureOn(water, Direction.UP));
         assertEquals(Tints.WATER, water.elements().getFirst().face(Direction.UP).tint(), "water is tinted per biome");
@@ -380,6 +380,37 @@ class BlockModelsTest {
         assertEquals(BakedState.Alpha.OPAQUE, lava.alpha());
         assertEquals("block/lava_still", textureOn(lava, Direction.UP));
         assertFalse(lava.water());
+    }
+
+    /**
+     * How deep a fluid stands, which is what makes a stream read as running rather than as a full block of water
+     * lying in a trench. Only the shape is checked: the heights themselves are vanilla's own arithmetic.
+     */
+    @Test
+    void aFluidIsAsDeepAsItsLevelSays() throws IOException {
+        BlockModels models = models();
+
+        float source = models.bake("minecraft:water[level=0]").elements().getFirst().toY();
+        float flowing = models.bake("minecraft:water[level=4]").elements().getFirst().toY();
+        float falling = models.bake("minecraft:water[level=8]").elements().getFirst().toY();
+
+        assertTrue(flowing < source, "flowing water sits below the source it came from");
+        assertEquals(16f, falling, "falling water fills its block whatever the level says");
+
+        // What keeps an ocean from coming out as steps: only the surface is short.
+        BakedState submerged = models.bake("minecraft:water[level=0]", true);
+        assertEquals(16f, submerged.elements().getFirst().toY());
+        assertTrue(submerged.fullCube());
+    }
+
+    /** How deep it stands decides how tall the box is and nothing else - a shallow stream is lit like a full block. */
+    @Test
+    void aFluidIsShadedWhateverDepthItStandsAt() throws IOException {
+        BlockModels models = models();
+
+        assertTrue(models.bake("minecraft:water[level=0]").elements().getFirst().shade(), "a source");
+        assertTrue(models.bake("minecraft:water[level=4]").elements().getFirst().shade(), "a shallow stream");
+        assertTrue(models.bake("minecraft:lava[level=6]").elements().getFirst().shade(), "and lava the same");
     }
 
     /**

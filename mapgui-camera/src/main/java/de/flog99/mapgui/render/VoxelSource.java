@@ -22,6 +22,19 @@ public interface VoxelSource {
     BakedState stateAt(int x, int y, int z);
 
     /**
+     * Whether a block is solid in the sense a fluid's corner heights need: one that holds a fluid's edge up rather
+     * than letting it fall away.
+     *
+     * <p>Its own method because it is the server's answer and not the model's. A stair is solid and is not a full
+     * cube, and reading solidity off the geometry dips the water at the foot of every staircase - so the default
+     * here is the closest a renderer can get on its own, and the plugin overrides it with what the block actually
+     * says.
+     */
+    default boolean solidAt(int x, int y, int z) {
+        return stateAt(x, y, z).fullCube();
+    }
+
+    /**
      * Combined block and sky light, 0 to 15.
      *
      * <p>Sampled at the air the ray came through rather than at the block it hit, because the light inside a

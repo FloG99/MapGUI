@@ -16,21 +16,41 @@ final class EntityTracer {
 
     private static final float PIXEL = 1 / 16f;
 
+    /**
+     * Below this a texel is the transparent part of a texture rather than a drawn one.
+     *
+     * <p>The client's own number: its entity pipeline discards under an {@code ALPHA_CUTOUT} of {@code 0.1}, which
+     * is this out of 255. Blocks cut at half, entities at a tenth, and using the block figure here threw away every
+     * shell drawn at a third.
+     */
+    private static final int MIN_ALPHA = 26;
+
     private final Textures textures;
 
-    /** Written by {@link #hit}, so it does not have to allocate a result per test. */
+    /** Written by the walk, so it does not have to allocate a result per test. */
     private double distance;
     private int color;
     private Direction face;
 
     /** The entity being tested, held for the walk rather than threaded through every frame of it. */
+    private EntitySnapshot entity;
     private Texture texture;
     private int tint;
     private boolean culled;
+    private double scale;
+    private double from;
     private double nearest;
     private double headXRot;
     private double headYRot;
     private boolean found;
+
+    /** The ray in the entity's own space, kept so walking to the surface behind one costs no setup. */
+    private double rayX;
+    private double rayY;
+    private double rayZ;
+    private double stepX;
+    private double stepY;
+    private double stepZ;
 
     /** Both crossings of a cube, set by {@link #slab}, which finds the faces along with the distances. */
     private double slabEnter;
@@ -62,13 +82,14 @@ final class EntityTracer {
     }
 
     /**
-     * Nearest drawn texel of one entity along the ray, or false if the ray misses everything.
+     * Nearest drawn texel of one entity along the ray, or false if the ray misses it entirely.
      *
      * @param limit ignore anything at or beyond this, which is where the blocks already stopped the ray
      */
-    boolean hit(EntitySnapshot entity, double originX, double originY, double originZ,
-                double dx, double dy, double dz, double limit) {
+    boolean first(EntitySnapshot entity, double originX, double originY, double originZ,
+                  double dx, double dy, double dz, double limit) {
 
+        this.entity = entity;
         texture = textures.get(entity.texture());
         tint = entity.tint();
         culled = entity.model().culled();
@@ -86,19 +107,45 @@ final class EntityTracer {
         headYRot = Math.toRadians(entity.bodyYaw() - entity.headYaw());
         headXRot = Math.toRadians(-entity.pitch());
 
-        // Into entity space: relative to the feet, then turned against the body yaw.
-        double scale = entity.scale() * PIXEL;
+        // Into entity space: relative to the feet, then turned against the body yaw. Kept, because every further
+        // surface of the same entity is walked with the same ray and there is nothing to work out twice.
+        scale = entity.scale() * PIXEL;
         double relX = (originX - entity.x()) / scale;
         double relY = (originY - entity.y()) / scale;
         double relZ = (originZ - entity.z()) / scale;
 
+        rayX = relX * bodyCos - relZ * bodySin;
+        rayY = relY;
+        rayZ = relX * bodySin + relZ * bodyCos;
+        stepX = dx * bodyCos - dz * bodySin;
+        stepY = dy;
+        stepZ = dx * bodySin + dz * bodyCos;
+
+        from = 0;
+        return walk(limit);
+    }
+
+    /**
+     * The next surface of the same entity behind the one just reported, or false once there is nothing more.
+     *
+     * <p>What a mob that can be seen into needs: a slime's outer shell is one cube and its inner one another, both
+     * in the one mesh, so reporting only the nearest of the two draws the shell and never looks for what the shell
+     * contains. The cursor stays in the entity's own space rather than being handed back in blocks, because a
+     * distance that went out multiplied by the scale and came back divided by it can land a bit short of where it
+     * started - and a cursor that fails to advance reports the same texel until the fragment list is full of it.
+     */
+    boolean next(double limit) {
+        from = nearest;
+        return walk(limit);
+    }
+
+    /** The kept ray against every part, nearest drawn texel beyond the cursor winning. */
+    private boolean walk(double limit) {
         nearest = limit / scale;
         found = false;
 
         for (MeshPart part : entity.model().parts()) {
-            walk(part,
-                    relX * bodyCos - relZ * bodySin, relY, relX * bodySin + relZ * bodyCos,
-                    dx * bodyCos - dz * bodySin, dy, dx * bodySin + dz * bodyCos);
+            walk(part, rayX, rayY, rayZ, stepX, stepY, stepZ);
         }
 
         distance = found ? nearest * scale : limit;
@@ -190,13 +237,13 @@ final class EntityTracer {
      * @return whether that side drew at all, which is what decides if the far one is worth asking about
      */
     private boolean draw(MeshCube cube, Direction side, double at, double ox, double oy, double oz, double dx, double dy, double dz) {
-        if (at <= 0 || at >= nearest) return false;
+        if (at <= from || at >= nearest) return false;
 
         float[] corners = cube.face(side);
         if (corners == null) return false;
 
         int texel = sample(cube, side, corners, ox + dx * at, oy + dy * at, oz + dz * at);
-        if ((texel >>> 24) < 128) return false;
+        if ((texel >>> 24) < MIN_ALPHA) return false;
 
         nearest = at;
         color = tint == 0 ? texel : tinted(texel);
@@ -259,7 +306,7 @@ final class EntityTracer {
             }
         }
 
-        if (exit < enter || exit <= 0 || enterAxis < 0 || exitAxis < 0 || enter >= nearest) return false;
+        if (exit < enter || exit <= from || enterAxis < 0 || exitAxis < 0 || enter >= nearest) return false;
 
         slabEnter = enter;
         slabExit = exit;

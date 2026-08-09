@@ -3,6 +3,7 @@ package de.flog99.mapgui.render;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -30,10 +31,41 @@ final class EntityMeshes {
      *                       donkey and a mule are the equine mesh at 0.87 and 0.92
      * @param scale          what the client scales the whole mesh by when it registers this layer, or 0 for none. A
      *                       husk is a zombie at 1.0625 and a cave spider a spider at 0.7
+     * @param space          which space this model is built in, which is decided by what its renderer does to it
      */
     record Layer(String type, String factory, int textureWidth, int textureHeight, float[] numbers, float scale,
-                 String component, String pose) {
+                 String component, String pose, Space space) {
     }
+
+    /**
+     * The three ways a model reaches the world, which nothing about a class name tells you - an armor stand and an
+     * end crystal are both {@code object.*} and are drawn by different kinds of renderer.
+     */
+    enum Space {
+
+        /**
+         * Built hanging downward from the neck and drawn upside down: {@code LivingEntityRenderer} flips it and
+         * translates it 1.501 blocks, which is what stands it on the ground. Almost everything.
+         */
+        MOB,
+
+        /**
+         * Built the right way up already, because a bare {@code EntityRenderer} does neither of those - an end
+         * crystal, whose renderer scales it and drops it half a block and nothing else. Flipping one of these puts
+         * its base on top of it.
+         */
+        ENTITY,
+
+        /** The same, and measured from a block's corner rather than about its middle - a chest. */
+        BLOCK;
+
+        boolean flipped() {
+            return this == MOB;
+        }
+    }
+
+    /** Marks which space a mesh is built in, since the default is by far the commonest and stays unmarked. */
+    private static final Map<String, Space> SPACES = Map.of("block:", Space.BLOCK, "entity:", Space.ENTITY);
 
     /** A named mesh: usually one layer, occasionally two that share a texture. */
     record Spec(String mesh, List<Layer> layers) {
@@ -95,6 +127,11 @@ final class EntityMeshes {
     private static volatile Map<String, Mob> installed = Map.of();
 
     private EntityMeshes() {
+    }
+
+    /** Every entity named here, which is where {@link RendererCoats} starts looking for a coat table. */
+    static Set<String> types() {
+        return Set.copyOf(TABLE.types.keySet());
     }
 
     /** Every mesh the table names, deduplicated, for the extractor to bake. */
@@ -266,9 +303,17 @@ final class EntityMeshes {
                 name = name.substring(0, open);
             }
 
+            Space space = Space.MOB;
+            for (Map.Entry<String, Space> marked : SPACES.entrySet()) {
+                if (name.startsWith(marked.getKey())) {
+                    space = marked.getValue();
+                    name = name.substring(marked.getKey().length());
+                }
+            }
+
             int hash = name.indexOf('#');
             String factory = hash < 0 ? DEFAULT_FACTORY : name.substring(hash + 1);
-            layers.add(new Layer(hash < 0 ? name : name.substring(0, hash), factory, width, height, numbers, scale, component, pose));
+            layers.add(new Layer(hash < 0 ? name : name.substring(0, hash), factory, width, height, numbers, scale, component, pose, space));
         }
         return new Spec(mesh, List.copyOf(layers));
     }
@@ -343,15 +388,34 @@ final class EntityMeshes {
                 // two layers are one mesh. A sulfur cube's do not, so its shell is a worn layer instead.
                 .mob("slime", "entity/slime/slime", "monster.slime.SlimeModel#createInnerBodyLayer+monster.slime.SlimeModel#createOuterBodyLayer")
                 .mob("magma_cube", "entity/slime/magmacube", "monster.slime.MagmaCubeModel")
+                // Alone among the mob meshes, this one is built around its own middle rather than hung off the neck:
+                // a 16px cube from -8 to 8 on every axis, where a slime's sits at 17 to 23 like everything else. So
+                // the standard ground lift puts it a whole block up, and only the lift is wrong - it is a one block
+                // cube and comes out as one at its own size.
                 .mob("sulfur_cube", "entity/sulfur_cube/sulfur_cube_inner", "monster.slime.SulfurCubeModel#createInnerBodyLayer")
                 .over("monster.slime.SulfurCubeModel#createOuterBodyLayer", "entity/sulfur_cube/sulfur_cube_outer")
+                .lift(-16.016f)
 
                 // The golems and the constructs.
                 .mob("iron_golem", "entity/iron_golem/iron_golem", "animal.golem.IronGolemModel")
                 .mob("snow_golem", "entity/snow_golem/snow_golem", "animal.golem.SnowGolemModel")
                 .mob("copper_golem", "entity/copper_golem/copper_golem", "animal.golem.CopperGolemModel")
+                // Block entities. Not mobs at all, but the same thing to everything downstream: a mesh, a texture
+                // and a yaw. The texture named here is the plain chest, and the capture swaps in the one its wood
+                // and its half actually wear.
+                .mob("chest", "entity/chest/normal", "block:object.chest.ChestModel#createSingleBodyLayer")
+                .mob("chest_left", "entity/chest/normal_left", "block:object.chest.ChestModel#createDoubleBodyLeftLayer")
+                .mob("chest_right", "entity/chest/normal_right", "block:object.chest.ChestModel#createDoubleBodyRightLayer")
+
                 .mob("armor_stand", "entity/armorstand/armorstand", "object.armorstand.ArmorStandModel")
-                .mob("end_crystal", "entity/end_crystal/end_crystal", "object.crystal.EndCrystalModel")
+                // Drawn by a bare EntityRenderer, so nothing turns it over or stands it on the ground. What that
+                // renderer does do is double it and drop it half a block, and the drop is stated before the doubling
+                // - so it is eight of the pixels this lift is measured in rather than sixteen.
+                //
+                // Flipped it turns wrongly rather than merely upside down, since a flip negates two of the three
+                // part rotations and this one's pose has all three.
+                .mob("end_crystal", "entity/end_crystal/end_crystal", "entity:object.crystal.EndCrystalModel")
+                .scale(2).lift(-8)
 
                 // The quadrupeds. Almost all have a baby mesh of their own, drawn on a texture of a different size,
                 // which is exactly why the mesh has to come from the client instead of being scaled here.

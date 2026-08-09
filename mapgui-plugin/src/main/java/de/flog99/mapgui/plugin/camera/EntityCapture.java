@@ -7,7 +7,9 @@ import org.bukkit.Location;
 import org.bukkit.entity.Ageable;
 import org.bukkit.entity.ChestedHorse;
 import org.bukkit.entity.ComplexEntityPart;
+import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fish;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
@@ -16,6 +18,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Sheep;
 import org.bukkit.entity.Slime;
 import org.bukkit.inventory.EntityEquipment;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
@@ -62,7 +65,7 @@ final class EntityCapture {
                 continue;
             }
 
-            snapshots.addAll(snapshotsOf(entity, eye, skins, assets));
+            snapshots.addAll(snapshotsOf(entity, skins, assets));
         }
 
         return snapshots;
@@ -72,7 +75,7 @@ final class EntityCapture {
      * The snapshots one entity is drawn from, nearly always one and empty for an entity that is not drawn at all.
      * More than one only for a mob wearing a second layer, since a snapshot samples one texture.
      */
-    private static List<EntitySnapshot> snapshotsOf(Entity entity, Location eye, SkinCache skins, MobAssets assets) {
+    private static List<EntitySnapshot> snapshotsOf(Entity entity, SkinCache skins, MobAssets assets) {
         Location at = entity.getLocation();
         String type = entity.getType().name().toLowerCase(Locale.ROOT);
 
@@ -82,7 +85,7 @@ final class EntityCapture {
         } else if (entity instanceof Item dropped) {
             for (String id : ItemIds.of(dropped.getItemStack())) {
                 List<EntitySnapshot> sprite = assets.items().dropped(
-                        id, at.getX(), at.getY(), at.getZ(), facingCamera(eye, at));
+                        id, at.getX(), at.getY() + bob(dropped), at.getZ(), spin(dropped));
                 // Empty when neither a sprite nor a block model resolved, which falls through to the box below.
                 if (!sprite.isEmpty()) {
                     return sprite;
@@ -117,7 +120,7 @@ final class EntityCapture {
         EntitySnapshot authored = EntitySnapshot.mob(
                 type, variant,
                 at.getX(), at.getY(), at.getZ(),
-                body, headYaw(type, body, at.getYaw()), at.getPitch(),
+                body, headYaw(type, body, at.getYaw() + halfTurn(entity)), at.getPitch(),
                 scaleOf(entity), isBaby(entity)
         );
         if (authored == null) return null;
@@ -153,6 +156,15 @@ final class EntityCapture {
         ));
     }
 
+    /** Whether this is a sulfur cube with something inside it, which is drawn in place of its inner shell. */
+    private static boolean holding(Entity entity) {
+        if (entity.getType() != EntityType.SULFUR_CUBE || !(entity instanceof LivingEntity living)) return false;
+
+        EntityEquipment worn = living.getEquipment();
+        ItemStack inside = worn == null ? null : worn.getItem(EquipmentSlot.BODY);
+        return inside != null && !inside.isEmpty();
+    }
+
     /**
      * Parts the mesh carries but this animal is not wearing. A donkey, mule and llama build their two panniers into
      * the mesh, and the client hides them unless the animal really is carrying a chest.
@@ -160,6 +172,16 @@ final class EntityCapture {
     private static EntitySnapshot hideUnworn(Entity entity, EntitySnapshot mob) {
         if (entity instanceof ChestedHorse chested && !chested.isCarryingChest()) {
             return mob.without("left_chest", "right_chest");
+        }
+        // A sulfur cube's inner shell is what whatever has been put inside it replaces, rather than something the
+        // block hides behind: SulfurCubeInnerLayer draws one or the other and never both.
+        if (holding(entity)) {
+            return mob.without("cube");
+        }
+        // The bedrock slab under an end crystal, which one placed to respawn the dragon does not have - only the
+        // four standing on the obsidian pillars do, and the entity carries the flag either way.
+        if (entity instanceof EnderCrystal crystal && !crystal.isShowingBottom()) {
+            return mob.without("base");
         }
 
         return mob;
@@ -306,13 +328,35 @@ final class EntityCapture {
     }
 
     /**
-     * The yaw that turns a dropped item's sprite toward the camera. A flat quad is a thin line from the side, and the
-     * item's own rotation is no help - the client spins a dropped item and the phase is not on the server. Aiming it
-     * at the eye is what that spin averages out to.
+     * How far round a dropped item has turned, the way the client turns it: its age in radians over twenty ticks.
+     *
+     * <p>Offset per item so a pile does not spin as one lump. Vanilla's own offset is a random drawn when the entity
+     * is created and never sent, so the id is hashed for one instead - the phase is arbitrary either way, and what
+     * matters is that two items in the same pile disagree and that each keeps its own between frames.
      */
-    private static float facingCamera(Location eye, Location at) {
-        // Yaw 0 looks toward +Z and grows toward -X, which is what puts the arguments in this order.
-        return (float) Math.toDegrees(Math.atan2(at.getX() - eye.getX(), eye.getZ() - at.getZ()));
+    private static float spin(Item dropped) {
+        // Negated: the trace turns a model the opposite way round to the client's own Y rotation, so the unnegated
+        // angle spins every dropped item backwards.
+        return -(float) Math.toDegrees(dropped.getTicksLived() / 20.0 + phase(dropped));
+    }
+
+    /**
+     * How far off the ground it is riding, in blocks. The client's own sine, twice as quick as the spin and never
+     * negative, so an item hovers just clear of the floor rather than sinking through it.
+     */
+    private static double bob(Item dropped) {
+        return Math.sin(dropped.getTicksLived() / 10.0 + phase(dropped)) * 0.1 + 0.1;
+    }
+
+    /**
+     * The offset that keeps two items in a pile from turning and rising as one lump.
+     *
+     * <p>Vanilla draws one at random when the entity is created and never sends it, so the id is hashed for one
+     * instead. Shared between the spin and the bob because vanilla shares it: an item is at the top of its rise at
+     * a different point of its turn depending which item it is.
+     */
+    private static float phase(Item dropped) {
+        return (dropped.getUniqueId().hashCode() % 628) / 100f;
     }
 
     /**
@@ -320,6 +364,33 @@ final class EntityCapture {
      * and using it here makes a mob look at you with its whole torso.
      */
     private static float bodyYaw(Entity entity) {
-        return entity instanceof LivingEntity living ? living.getBodyYaw() : entity.getLocation().getYaw();
+        if (UNTURNED.contains(entity.getType())) return NOT_TURNED;
+
+        float yaw = entity instanceof LivingEntity living ? living.getBodyYaw() : entity.getLocation().getYaw();
+        return yaw + halfTurn(entity);
     }
+
+    /**
+     * Entities their renderer never turns by the yaw they carry: an end crystal spins in its own animation and its
+     * slab stays square to the world, so taking the entity's yaw tilts the slab by whatever that happens to be.
+     */
+    private static final Set<EntityType> UNTURNED = Set.of(EntityType.END_CRYSTAL);
+
+    /** What to hand the trace for those, which turns a model by {@code -180 - yaw} and so leaves this one alone. */
+    private static final float NOT_TURNED = -180;
+
+    /**
+     * Half a turn for the two drawn by a bare {@code EntityRenderer}, which turns a model by {@code -yaw} where
+     * {@code LivingEntityRenderer} turns it by {@code 180 - yaw}. The trace carries that 180 for everything, so
+     * without this a dragon flies tail first.
+     *
+     * <p>It has to reach the head as well as the body. The trace turns a head by the difference between the two, so
+     * turning only the body leaves the head pointing exactly backwards.
+     */
+    private static float halfTurn(Entity entity) {
+        return TURNED_ABOUT.contains(entity.getType()) ? 180 : 0;
+    }
+
+    /** See {@link #halfTurn}. Checked against the renderer rather than guessed at. */
+    private static final Set<EntityType> TURNED_ABOUT = Set.of(EntityType.ENDER_DRAGON);
 }

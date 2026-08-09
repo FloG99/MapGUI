@@ -88,7 +88,7 @@ final class MeshExtractor {
         // The loader outside the extractor rather than owned by it, because a jar that is not a client jar fails
         // in the constructor - and a loader that leaked there would hold the file open, which on Windows means
         // nothing can delete it afterwards.
-        try (URLClassLoader loader = new ClientLoader(classpath, parent)) {
+        try (URLClassLoader loader = new ClientLoader("mapgui-client-mesh", classpath, parent)) {
             MeshExtractor extractor = new MeshExtractor(loader);
 
             Map<String, List<MeshPart>> meshes = new LinkedHashMap<>();
@@ -146,12 +146,21 @@ final class MeshExtractor {
         // Which tree to read, and which of a part's two poses to read it from: {@code initialPose} is where the
         // geometry was authored, and the live fields are where the animation left it.
         boolean animated = stood(posed, layer);
-        MeshPart part = part("root", animated ? posed : root, animated);
-        // The whole tree lifted onto the ground, added to whatever offset the root itself carried.
-        return new MeshPart(part.name(), part.head(), part.x(), part.y() + GROUND, part.z(),
+        MeshPart part = part("root", animated ? posed : root, animated, layer.space());
+
+        // Anything not drawn by LivingEntityRenderer is already standing where it belongs: nothing to turn over and
+        // nothing to lift. A block entity moves by half a block on top of that, since its model is measured from the
+        // block's corner and everything downstream is measured about the middle of what it is drawing.
+        float middle = layer.space() == EntityMeshes.Space.BLOCK ? HALF_BLOCK : 0;
+        float lift = layer.space() == EntityMeshes.Space.MOB ? GROUND : 0;
+
+        return new MeshPart(part.name(), part.head(), part.x() - middle, part.y() + lift, part.z() - middle,
                 part.xRot(), part.yRot(), part.zRot(), part.xScale(), part.yScale(), part.zScale(),
                 part.cubes(), part.children());
     }
+
+    /** Where the middle of a block sits in the pixels its model is measured in. */
+    private static final float HALF_BLOCK = 8;
 
     /**
      * The named factory, searched up the hierarchy because the shared bases are where several of them live.
@@ -253,24 +262,28 @@ final class MeshExtractor {
      * negates and one about Z is left alone.
      */
     @SuppressWarnings("unchecked")
-    private MeshPart part(String name, Object source, boolean animated) throws ReflectiveOperationException {
+    private MeshPart part(String name, Object source, boolean animated, EntityMeshes.Space space) throws ReflectiveOperationException {
         List<MeshCube> cubes = new ArrayList<>();
         for (Object cube : (List<Object>) cubesField.get(source)) {
-            cubes.add(cube(cube));
+            cubes.add(cube(cube, space));
         }
 
         List<MeshPart> children = new ArrayList<>();
         for (Map.Entry<String, Object> child : ((Map<String, Object>) childrenField.get(source)).entrySet()) {
-            children.add(part(child.getKey(), child.getValue(), animated));
+            children.add(part(child.getKey(), child.getValue(), animated, space));
         }
 
         float[] pose = animated ? standing(source) : authored(source);
 
+        // Turned over for a mob and left alone for a block entity, for the reason on Layer#block. Both end up in
+        // the same space - what a mob's renderer reaches by flipping, a block entity's model is authored in.
+        float flip = space.flipped() ? -1 : 1;
+
         // Which part turns with the head is decided by {@link MeshPart#withHeads} once the tree is whole.
         return new MeshPart(
                 name, false,
-                -pose[0], -pose[1], pose[2],
-                -pose[3], -pose[4], pose[5],
+                flip * pose[0], flip * pose[1], pose[2],
+                flip * pose[3], flip * pose[4], pose[5],
                 pose[6], pose[7], pose[8],
                 List.copyOf(cubes), List.copyOf(children)
         );
@@ -366,6 +379,12 @@ final class MeshExtractor {
      * about to decide how a hand is held.
      */
     private Object standingStill(Class<?> state) throws ReflectiveOperationException {
+        // A few models are posed by a number rather than by a render state - an end crystal by its age, and at rest
+        // that is zero. Without this they come back unposed, and an unposed end crystal is three glass shells built
+        // in the same 8x8x8 box: the pose is the whole of what tells them apart.
+        if (state == Float.class || state == float.class) return 0f;
+        if (state == Double.class || state == double.class) return 0d;
+
         Object made = state.getConstructor().newInstance();
 
         for (Class<?> level = state; level != null && level != Object.class; level = level.getSuperclass()) {
@@ -418,7 +437,7 @@ final class MeshExtractor {
      * <p>Which face a quad is comes from its geometry rather than its normal, because a mirrored cube has its
      * winding reversed and its normals with it, and geometry cannot lie about which plane it lies in.
      */
-    private MeshCube cube(Object source) throws ReflectiveOperationException {
+    private MeshCube cube(Object source, EntityMeshes.Space space) throws ReflectiveOperationException {
         Object[] polygons = (Object[]) source.getClass().getField("polygons").get(source);
 
         float[][] positions = new float[polygons.length][];
@@ -432,12 +451,13 @@ final class MeshExtractor {
             Object[] vertices = (Object[]) polygons[i].getClass().getMethod("vertices").invoke(polygons[i]);
             positions[i] = new float[vertices.length * 3];
             coordinates[i] = new float[vertices.length * 2];
-            normals[i] = normal(polygons[i]);
+            normals[i] = normal(polygons[i], space);
 
             for (int v = 0; v < vertices.length; v++) {
                 Class<?> vertexType = vertices[v].getClass();
-                float x = -(float) vertexType.getMethod("x").invoke(vertices[v]);
-                float y = -(float) vertexType.getMethod("y").invoke(vertices[v]);
+                float flip = space.flipped() ? -1 : 1;
+                float x = flip * (float) vertexType.getMethod("x").invoke(vertices[v]);
+                float y = flip * (float) vertexType.getMethod("y").invoke(vertices[v]);
                 float z = (float) vertexType.getMethod("z").invoke(vertices[v]);
 
                 positions[i][v * 3] = x;
@@ -463,11 +483,15 @@ final class MeshExtractor {
     }
 
     /** The outward normal turned the same way as the positions, or it would name the opposite side of the cube. */
-    private static float[] normal(Object polygon) throws ReflectiveOperationException {
+    private static float[] normal(Object polygon, EntityMeshes.Space space) throws ReflectiveOperationException {
         Object vector = polygon.getClass().getMethod("normal").invoke(polygon);
+        // Turned with the vertices or not turned with them, but never one without the other: the normal is what
+        // says which side of the cube a quad is, so a normal flipped against its own positions puts the lid
+        // texture underneath the chest.
+        float flip = space.flipped() ? -1 : 1;
         return new float[]{
-                -(float) vector.getClass().getMethod("x").invoke(vector),
-                -(float) vector.getClass().getMethod("y").invoke(vector),
+                flip * (float) vector.getClass().getMethod("x").invoke(vector),
+                flip * (float) vector.getClass().getMethod("y").invoke(vector),
                 (float) vector.getClass().getMethod("z").invoke(vector)
         };
     }
@@ -558,38 +582,4 @@ final class MeshExtractor {
         return Class.forName(name, true, loader);
     }
 
-    /**
-     * Child first for {@code net.minecraft}, parent first for everything else.
-     *
-     * <p>Without this a server's own {@code net.minecraft} classes shadow the jar's, and the model builders end up
-     * half from each. With it the jar is a self-consistent copy and only the shared libraries are borrowed.
-     */
-    private static final class ClientLoader extends URLClassLoader {
-
-        ClientLoader(URL[] urls, ClassLoader parent) {
-            super("mapgui-client-mesh", urls, parent);
-        }
-
-        @Override
-        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-            if (!name.startsWith("net.minecraft.")) {
-                return super.loadClass(name, resolve);
-            }
-
-            synchronized (getClassLoadingLock(name)) {
-                Class<?> found = findLoadedClass(name);
-                if (found == null) {
-                    try {
-                        found = findClass(name);
-                    } catch (ClassNotFoundException e) {
-                        return super.loadClass(name, resolve);
-                    }
-                }
-                if (resolve) {
-                    resolveClass(found);
-                }
-                return found;
-            }
-        }
-    }
 }

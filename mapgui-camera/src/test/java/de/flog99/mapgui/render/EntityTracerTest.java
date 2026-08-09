@@ -221,6 +221,20 @@ class EntityTracerTest {
         assertPatch(0xFF808080, pixel(world, dressed(SkinLayers.ALL), atChest()), "the chest");
     }
 
+    /**
+     * A texel that is neither solid nor clear has to be blended with what is behind it in the same mesh, which
+     * means walking on rather than stopping at the nearest drawn one. A slime is the case that needs it - one mesh
+     * holding a translucent outer shell around an opaque inner one - and an overlay skin layer is the same shape of
+     * problem: stopping at the shell drew it over an inner model that was never looked for.
+     */
+    @Test
+    void aTranslucentOverlayTexelBlendsWithTheLayerUnderIt() {
+        TestWorld world = new TestWorld().texture("skin", wearing(0xB400FF00, 0));
+
+        // Green at 180 of 255 over the red face, so a little under a third of the red is left.
+        assertPatch(0xFF4BB400, pixel(world, dressed(SkinLayers.ALL), from(0.5, 4, 180)), "hat blended onto the face");
+    }
+
     /** A layer the client has switched off is not drawn, however opaque the skin is where it would be. */
     @Test
     void aSkinPartTheClientHasTurnedOffIsNotDrawn() {

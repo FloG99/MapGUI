@@ -334,13 +334,15 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
     }
 
     /**
-     * This shape as one part in somebody's hand: at the joint the pose is measured from, turned with it, and centred
-     * on the box it was authored in - which is the client's convention, since every {@code display} rotation in the
-     * assets turns the item about that middle rather than about a corner.
+     * This shape as one part hung off a joint of another model: at the joint the pose is measured from, turned with
+     * it, and centred on the box it was authored in - which is the client's convention, since every {@code display}
+     * rotation in the assets turns the item about that middle rather than about a corner.
      *
      * <p>The joint's own rotation composes in, so an item follows the arm holding it.
+     *
+     * @param head whether it turns with the wearer's head, which a pumpkin worn on one does and a held item does not
      */
-    EntityModel inHand(Joint joint, ItemPoses.Pose pose) {
+    EntityModel onJoint(Joint joint, ItemPoses.Pose pose, boolean head) {
         if (parts.isEmpty()) return this;
 
         float[] reach = Turns.apply(joint.turn(), pose.offset()[0], pose.offset()[1], pose.offset()[2]);
@@ -349,7 +351,7 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
 
         // Hung underneath rather than flattened into one box, so a shape with rotations of its own keeps them - a
         // lectern's sloped top, an azalea's crossed planes.
-        return of(List.of(new MeshPart("item", false,
+        return of(List.of(new MeshPart("item", head,
                 joint.x() + reach[0], joint.y() + reach[1], joint.z() + reach[2],
                 turned[0], turned[1], turned[2],
                 pose.scale(), pose.scale(), pose.scale(),

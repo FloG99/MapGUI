@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,8 +52,44 @@ public final class EntityVariants {
     /** Absent means "not looked up yet"; this means "looked up and there is nothing", which is the common answer. */
     private static final String NONE = "";
 
+    /** What the client's renderers state, for the variants that never became registry entries. Read once. */
+    private Map<String, List<RendererCoats.Coat>> coats;
+
     public EntityVariants(AssetStack stack) {
         this.stack = stack;
+    }
+
+    /**
+     * The texture the client's own renderer hands out for this coat, or null when it names none.
+     *
+     * <p>By name first and by position second, because the two sides do not always agree on the name: a parrot the
+     * server calls {@code cyan} the client calls {@code yellow_blue}, and the only thing tying them together is that
+     * both are the fourth. Where the names do match, matching on them is safe against a reordering that position
+     * alone would get wrong.
+     *
+     * @param ordinal where the server's own variant sits in its enum, or -1 when it is not one
+     */
+    public String coatOf(String type, String variant, int ordinal) {
+        if (type == null || variant == null) return null;
+
+        List<RendererCoats.Coat> stated = renderers().get(type);
+        if (stated == null) return null;
+
+        for (RendererCoats.Coat coat : stated) {
+            if (coat.variant().equals(variant)) return coat.texture();
+        }
+        return ordinal >= 0 && ordinal < stated.size() ? stated.get(ordinal).texture() : null;
+    }
+
+    private synchronized Map<String, List<RendererCoats.Coat>> renderers() {
+        if (coats == null) {
+            try {
+                coats = RendererCoats.read(stack.read(RendererCoats.FILE));
+            } catch (IOException e) {
+                coats = Map.of();
+            }
+        }
+        return coats;
     }
 
     /**

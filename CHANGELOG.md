@@ -21,6 +21,31 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **Chests are drawn.** Their block json carries no geometry - the client builds them from `ChestModel` like a mob -
+  so they used to be a hole you could see the wall through. The mesh is now baked out of the client the same way mob
+  geometry already was, with the flip and ground lift suppressed: a block entity's model is authored the way the block
+  sits, 0 to 14 upward off the floor, where a mob's hangs downward off the neck. Single and double, every wood and
+  every copper state, turned the way the block faces.
+- **Coats come from the client's own renderers** rather than a table here. Parrots drew all five variants as the red
+  one, because the rule that reaches `parrot_blue` from `parrot_red_blue` cannot exist - and dyed shulkers drew undyed,
+  which nobody had noticed. Both are read by invoking the renderer's own variant function out of the jar, which needs
+  no dependency: the libraries those classes want are Minecraft's own and a server already has them.
+- **Water and lava stand at the depth their level says.** Every fluid was a full cube, so a stream was a trench full
+  to the brim. A source is eight ninths and each step away loses another ninth. Fluid under more of its own fluid
+  stays full, or an ocean would come out as steps.
+- **A fluid's surface is a sheet through its four corner heights**, not a flat lid, so a stream tilts the way it
+  runs. Each corner is the weighted average of the four blocks touching it, which is what makes two neighbouring
+  blocks agree along the edge they share - and that agreement is why the face between them can be dropped whole, as
+  the client drops it. Drawn as flat boxes they disagreed, and the step between two depths was a gap you could see
+  the riverbed through.
+- **Moving fluid is drawn with the flowing texture, turned downhill.** The still texture has no direction in it at
+  all, so no amount of turning it would have shown a current. The angle is the surface's own gradient.
+- **Layers you can see into.** An entity texel is carried at its texture's own alpha instead of being rounded to
+  solid, and the ray walks on to whatever is behind it in the same mesh. A slime's inner cube, its eyes, and the
+  block put inside a sulfur cube were all sitting behind a shell that had been drawn opaque.
+- **Dropped items turn** as the client turns them, by age rather than facing the camera.
+- The sulfur cube is drawn at its own size and height. Its model is the one built around its middle rather than hung
+  off a neck, so the standard lift put it a block up and at twice its size.
 - `MapGui.camera()` - a screenshot of the world onto a map. Real block textures, transparency through glass, ice,
   water and leaves, biome tints, the sky with its sun, moon, stars and clouds, and the players and mobs in view
   turned the way they stand. `CameraOptions` sets size, field of view, range, fog, entities, clouds and selfie.

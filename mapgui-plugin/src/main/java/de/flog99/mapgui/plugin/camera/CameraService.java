@@ -27,6 +27,7 @@ import org.bukkit.util.Vector;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -177,9 +178,13 @@ public final class CameraService implements Camera {
         long copied = System.nanoTime();
         // A selfie is the one shot the holder belongs in. Every other one is taken from inside their own head, so
         // including them would fill the frame with the back of it.
-        List<EntitySnapshot> entities = options.entities()
-                ? EntityCapture.take(player, eye, skins, ready.mobs(), options.selfie())
-                : List.of();
+        List<EntitySnapshot> entities = new ArrayList<>();
+        if (options.entities()) {
+            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), options.selfie()));
+        }
+        // Not under the entities option, whatever the trace calls these: a chest is part of the build, and turning
+        // entities off asks for the world without the things standing in it rather than with holes in the walls.
+        entities.addAll(BlockEntityCapture.take(eye, ready.mobs()));
         long gathered = System.nanoTime();
 
         captures.execute(() -> {

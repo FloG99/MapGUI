@@ -1,5 +1,6 @@
 package de.flog99.mapgui.render;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -153,6 +154,16 @@ public final class RayTracer {
     private final double[] slabLow = new double[3];
     private final double[] slabHigh = new double[3];
 
+    /** One per traced position, which is plenty: a ray meets a handful of fluid blocks and neighbouring rays the same ones. */
+    private static final int FLUID_SLOTS = 1024;
+
+    /** No packed position is negative, so this is a slot nothing can match - including the origin, which packs to 0. */
+    private static final long NO_POSITION = -1;
+
+    private final long[] fluidKeys = new long[FLUID_SLOTS];
+    private final int[] fluidCorners = new int[FLUID_SLOTS];
+    private final float[] fluidFlows = new float[FLUID_SLOTS];
+
     /** Set by {@link #enterBox}, which finds the face and the point along with the distance it returns. */
     private Direction boxFace;
     private double boxHitX;
@@ -239,6 +250,9 @@ public final class RayTracer {
 
         frameView = view;
         frameEmpty = skipEmpty ? world.emptySpace() : EmptySpace.NONE;
+        // Emptied per frame rather than trusted across them: the same tracer renders the next snapshot too, and the
+        // water in it has moved. A thousand longs is nothing next to a frame.
+        Arrays.fill(fluidKeys, NO_POSITION);
         CameraView.Frame frame = view.frame();
         EntityScreen screen = entities.isEmpty() ? null : new EntityScreen(entities, view, width, height);
 
@@ -293,7 +307,12 @@ public final class RayTracer {
                 continue;
             }
 
-            if (entityTracer.hit(screen.entity(index), view.x(), view.y(), view.z(), dx, dy, dz, limit)) {
+            // Every surface of this entity the ray meets, nearest first, and not just the first of them. A slime is
+            // one mesh holding both its shells, so stopping at the nearest texel draws the outer one over an inner
+            // one that is never looked for. Each pass starts where the last ended and the walk is bounded by the
+            // fragment list, so an entity with nothing to see into costs the one pass it always cost.
+            boolean more = entityTracer.first(screen.entity(index), view.x(), view.y(), view.z(), dx, dy, dz, limit);
+            while (more) {
                 double at = entityTracer.distance();
                 int lit = litEntity(world, entityTracer.color(), entityTracer.face(),
                         view.x() + dx * at, view.y() + dy * at, view.z() + dz * at);
@@ -301,9 +320,21 @@ public final class RayTracer {
                     lit = fogged(lit, at, backdrop(world));
                 }
 
-                // Opaque: an entity texel is either drawn or it is not, so it always stops the ray.
-                fragments.add(0xFF000000 | lit & 0xFFFFFF, (float) at);
-                limit = Math.min(limit, at);
+                // Carried at the texture's own alpha rather than forced solid. A slime's outer shell is 180 of 255
+                // in the texture itself, which is what the client blends it by, and rounding that up to solid hid
+                // its inner cube, every other inner cube, and anything a sulfur cube had been given to hold.
+                int alpha = entityTracer.color() >>> 24;
+                if (!fragments.add(alpha << 24 | lit & 0xFFFFFF, (float) at)) {
+                    break;
+                }
+
+                // Only a solid texel closes the ray off. Shortening the limit on a see-through one is what stopped
+                // whatever stood behind it from ever being looked for.
+                if (alpha == 0xFF) {
+                    limit = Math.min(limit, at);
+                    break;
+                }
+                more = entityTracer.next(limit);
             }
         }
     }
@@ -478,7 +509,10 @@ public final class RayTracer {
                 localY = (originY + dy * hit - blockY) * 16;
                 localZ = (originZ + dz * hit - blockZ) * 16;
             } else {
-                hit = enterBox(element, blockX, blockY, blockZ, originX, originY, originZ, dx, dy, dz);
+                int corners = tilt(world, state, element, blockX, blockY, blockZ);
+                hit = corners == LEVEL
+                        ? enterBox(element, blockX, blockY, blockZ, originX, originY, originZ, dx, dy, dz)
+                        : enterFluid(corners, blockX, blockY, blockZ, originX, originY, originZ, dx, dy, dz);
                 if (Double.isNaN(hit)) {
                     continue;
                 }
@@ -493,7 +527,14 @@ public final class RayTracer {
                 continue;
             }
 
-            int texel = texel(element, drawn, face, localX, localY, localZ);
+            // Only a fluid's own top runs anywhere. Its sides are the still texture in the client too.
+            float running = drawn.fluid() && face == Direction.UP && state.fluidFlow() != null
+                    ? flow(world, state, blockX, blockY, blockZ)
+                    : FluidSurface.STILL;
+
+            int texel = Float.isNaN(running)
+                    ? texel(element, drawn, face, localX, localY, localZ)
+                    : flowing(state, running, localX, localZ);
             int alpha = state.alpha() == BakedState.Alpha.OPAQUE ? 255 : texel >>> 24;
             if (alpha == 0) {
                 // A gap in a distant canopy is smaller than the pixel looking through it, so what is behind it gets a
@@ -528,10 +569,11 @@ public final class RayTracer {
      * against a solid full block, a face between two blocks holding the same water, and a translucent block against
      * itself, which is what keeps a pane of glass one pane rather than stacked layers of blue.
      *
-     * <p>Water needs its own rule rather than the identity one, since a source, a flowing block and a waterlogged
+     * <p>A fluid needs its own rule rather than the identity one, since a source, a flowing block and a waterlogged
      * stair are three states holding the same water - comparing states leaves seams at the edges of a pool.
      */
-    private static boolean culled(VoxelSource world, BakedState state, BakedFace drawn, int blockX, int blockY, int blockZ) {
+    private static boolean culled(VoxelSource world, BakedState state, BakedFace drawn,
+                                  int blockX, int blockY, int blockZ) {
         Direction against = drawn.cull();
         if (against == null) return false;
 
@@ -540,10 +582,187 @@ public final class RayTracer {
 
         if (neighbour.fullCube() && neighbour.alpha() == BakedState.Alpha.OPAQUE) return true;
 
-        if (drawn.fluid() && neighbour.water()) return true;
+        // The whole face, however much deeper the neighbour's fluid is, which is what the client does. It can,
+        // because both blocks average the corners they share and their tops meet along the edge between them -
+        // so there is no step between two depths to leave a gap. Drawing part of the side instead was patching a
+        // hole that a sloped surface does not have.
+        if (drawn.fluid() && neighbour.fluidTop() > 0 && neighbour.water() == state.water()) {
+            return true;
+        }
 
         // Identity is enough: states are cached per state string, so two panes of the same glass are one object.
         return neighbour == state && state.alpha() != BakedState.Alpha.OPAQUE;
+    }
+
+    /** A top that is flat, which the ordinary box test already draws exactly. */
+    private static final int LEVEL = 0;
+
+    /**
+     * The corner heights of a fluid's surface, or {@link #LEVEL} for an element that is not one.
+     *
+     * <p>Asked for every fluid surface rather than only a visibly tilted one, because the corners are the height
+     * even when all four agree: a lone source stands at eight ninths but averages down to three quarters against
+     * the air around it, and drawing it at the height its own state carries makes every puddle too deep.
+     *
+     * <p>The body under the surface is untouched. Fluid with more of the same above it is full to the brim, which
+     * is a full block and never reaches here, so an ocean is flat boxes and only its top is ever solved for.
+     */
+    private int tilt(VoxelSource world, BakedState state, BakedElement element, int blockX, int blockY, int blockZ) {
+        BakedFace top = element.face(Direction.UP);
+        if (top == null || !top.fluid()) return LEVEL;
+
+        return fluidCorners[remember(world, state, blockX, blockY, blockZ)];
+    }
+
+    /** Which way the fluid at a position runs, off the same remembered entry its corners came from. */
+    private float flow(VoxelSource world, BakedState state, int x, int y, int z) {
+        return fluidFlows[remember(world, state, x, y, z)];
+    }
+
+    /**
+     * The slot holding what was worked out about the fluid at a position, filling it first if it holds something
+     * else. Direct-mapped so a miss costs a compare, and read once per position rather than once per ray - which is
+     * the point, since what it holds takes eight neighbours to arrive at.
+     *
+     * <p>Good for the frame it was filled in because the world a frame traces cannot change under it: a snapshot is
+     * taken in one tick and then only read.
+     */
+    private int remember(VoxelSource world, BakedState state, int x, int y, int z) {
+        long key = (long) (x & 0x1FFFFF) << 42 | (long) (y & 0xFFFFF) << 22 | z & 0x3FFFFF;
+        int slot = (int) (key ^ key >>> 32) & FLUID_SLOTS - 1;
+        if (fluidKeys[slot] == key) return slot;
+
+        // Both at once, because the two read the same neighbours and a surface that is drawn needs each of them.
+        fluidCorners[slot] = FluidSurface.corners(world, state, x, y, z);
+        fluidFlows[slot] = FluidSurface.flow(world, state, x, y, z);
+        fluidKeys[slot] = key;
+        return slot;
+    }
+
+    /**
+     * Where the ray enters a fluid whose surface is tilted, or NaN if it misses.
+     *
+     * <p>The fluid is the space under a bilinear sheet through its four corner heights rather than a box, so the
+     * top is solved for instead of being one more slab. Bilinear and not a plane through the same four points:
+     * along any edge the sheet is the straight line between the two corners on it, which the neighbouring block
+     * draws as its own edge too, and that exact agreement is the whole reason the face between them can be dropped.
+     * A plane fitted to four corners that do not lie in one would leave a crack down every shared edge.
+     *
+     * <p>Substituting the ray into the sheet gives a quadratic, and it is only genuinely one where the four corners
+     * are a saddle - a stream that simply tilts one way solves as a line.
+     */
+    private double enterFluid(int corners, int blockX, int blockY, int blockZ,
+                              double originX, double originY, double originZ,
+                              double dx, double dy, double dz) {
+
+        double northWest = FluidSurface.northWest(corners);
+        double northEast = FluidSurface.northEast(corners);
+        double southEast = FluidSurface.southEast(corners);
+        double southWest = FluidSurface.southWest(corners);
+
+        double ox = originX - blockX;
+        double oy = originY - blockY;
+        double oz = originZ - blockZ;
+
+        // The sheet, as height over the block's own corner: north-west is the origin, x runs east and z runs south.
+        double base = northWest;
+        double alongX = northEast - northWest;
+        double alongZ = southWest - northWest;
+        double twist = northWest - northEast - southWest + southEast;
+
+        double tallest = Math.max(Math.max(northWest, northEast), Math.max(southEast, southWest));
+        double enter = Double.NEGATIVE_INFINITY;
+        double exit = Double.POSITIVE_INFINITY;
+        int enterAxis = -1;
+        boolean enterFromLow = true;
+
+        for (int axis = 0; axis < 3; axis++) {
+            double origin = axis == 0 ? ox : axis == 1 ? oy : oz;
+            double direction = axis == 0 ? dx : axis == 1 ? dy : dz;
+            double high = axis == 1 ? tallest : 1;
+
+            if (Math.abs(direction) < 1e-12) {
+                if (origin < 0 || origin > high) return Double.NaN;
+                continue;
+            }
+
+            double inverse = 1 / direction;
+            double first = -origin * inverse;
+            double second = (high - origin) * inverse;
+            double near = Math.min(first, second);
+            if (near > enter) {
+                enter = near;
+                enterAxis = axis;
+                enterFromLow = direction > 0;
+            }
+            exit = Math.min(exit, Math.max(first, second));
+        }
+
+        if (exit < enter || exit < 0 || enterAxis < 0) return Double.NaN;
+
+        double start = Math.max(enter, 0);
+        double at = start;
+        Direction face = sideOf(enterAxis, enterFromLow);
+
+        // Where the ray comes in over the surface it has not reached the fluid yet - a side face is only fluid up to
+        // the sheet, and above that the ray carries on to meet the top from outside. That is the same test that
+        // makes a stream's step look like tilted water rather than a wall.
+        if (above(base, alongX, alongZ, twist, ox + dx * start, oy + dy * start, oz + dz * start)) {
+            at = crossing(
+                    -twist * dx * dz,
+                    dy - alongX * dx - alongZ * dz - twist * (ox * dz + oz * dx),
+                    oy - base - alongX * ox - alongZ * oz - twist * ox * oz,
+                    start, exit
+            );
+            if (Double.isNaN(at)) return Double.NaN;
+
+            face = Direction.UP;
+        }
+
+        boxFace = face;
+        boxHitX = (ox + dx * at) * 16;
+        boxHitY = (oy + dy * at) * 16;
+        boxHitZ = (oz + dz * at) * 16;
+        return at;
+    }
+
+    /** Whether a point is over the sheet rather than in the fluid under it. */
+    private static boolean above(double base, double alongX, double alongZ, double twist, double x, double y, double z) {
+        return y > base + alongX * x + alongZ * z + twist * x * z;
+    }
+
+    /** The first crossing of the sheet in range, of a quadratic that is a line whenever the corners are not a saddle. */
+    private static double crossing(double square, double linear, double constant, double start, double exit) {
+        if (Math.abs(square) < 1e-12) {
+            if (Math.abs(linear) < 1e-12) return Double.NaN;
+
+            double at = -constant / linear;
+            return at >= start && at <= exit ? at : Double.NaN;
+        }
+
+        double discriminant = linear * linear - 4 * square * constant;
+        if (discriminant < 0) return Double.NaN;
+
+        double root = Math.sqrt(discriminant);
+        double first = (-linear - root) / (2 * square);
+        double second = (-linear + root) / (2 * square);
+        if (first > second) {
+            double swap = first;
+            first = second;
+            second = swap;
+        }
+
+        if (first >= start && first <= exit) return first;
+
+        return second >= start && second <= exit ? second : Double.NaN;
+    }
+
+    private static Direction sideOf(int axis, boolean fromLow) {
+        return switch (axis) {
+            case 0 -> fromLow ? Direction.WEST : Direction.EAST;
+            case 1 -> fromLow ? Direction.DOWN : Direction.UP;
+            default -> fromLow ? Direction.NORTH : Direction.SOUTH;
+        };
     }
 
     /**
@@ -717,6 +936,26 @@ public final class RayTracer {
         float su = (float) (drawn.u1() + u / 16 * (drawn.u2() - drawn.u1()));
         float sv = (float) (drawn.v1() + v / 16 * (drawn.v2() - drawn.v1()));
         return atlas.get(drawn.texture()).sample(su, sv, drawn.rotation());
+    }
+
+    /**
+     * A moving fluid's surface, drawn with the flowing texture turned to face downhill.
+     *
+     * <p>The client's own mapping: the face takes a half-size window of the sprite, centred and turned by the flow
+     * angle, so the lines in the texture run the way the water does. Half-size is what keeps the window inside the
+     * sprite at every angle - turned about its middle, a square of that size never reaches an edge.
+     */
+    private int flowing(BakedState state, float angle, double localX, double localZ) {
+        double across = Math.cos(angle) * 0.25;
+        double down = Math.sin(angle) * 0.25;
+
+        // The face in -1 to 1 about its middle, which is the space the window is stated in.
+        double east = localX / 8 - 1;
+        double south = localZ / 8 - 1;
+
+        float u = (float) (0.5 + across * east + down * south);
+        float v = (float) (0.5 + across * south - down * east);
+        return atlas.get(state.fluidFlow()).sample(u * 16, v * 16, 0);
     }
 
     /**

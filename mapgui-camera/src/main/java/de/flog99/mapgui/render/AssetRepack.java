@@ -56,13 +56,24 @@ final class AssetRepack {
     static final String MESH_FILE = "mapgui-meshes.json";
 
     /**
-     * Bumped whenever {@link #wanted} keeps something new, or {@link #MESH_FILE} changes shape.
+     * Which texture each of a mob's coats wears, read out of the client's own renderers and kept here for the same
+     * reason as {@link #MESH_FILE}: it is Mojang's, and nothing Mojang-derived is committed or shipped.
+     */
+    static final String COAT_FILE = RendererCoats.FILE;
+
+    /**
+     * Bumped whenever {@link #wanted} keeps something new, or either extracted file changes shape.
      *
      * <p>A cached subset is keyed by Minecraft version and nothing else, so without this a server that fetched one
      * before a subtree was added goes on using it forever - and the symptom is a hole in the picture rather than an
      * error.
+     *
+     * <p><b>Renaming a mesh counts.</b> {@link #MESH_FILE} is keyed by the spec string {@link EntityMeshes} asks
+     * for, so changing one - marking it a block entity, say - looks to a cached pack like a mesh that is simply not
+     * there, and the mob falls back to its bounding box. Which reads as the model having broken rather than as the
+     * cache being old, and costs an afternoon.
      */
-    static final int SUBSET_REVISION = 11;
+    static final int SUBSET_REVISION = 13;
 
     private AssetRepack() {
     }
@@ -98,10 +109,20 @@ final class AssetRepack {
                 kept++;
             }
 
-            byte[] meshes = source.getEntry(MeshExtractor.MODEL_CLASS) == null ? null : meshes(jar);
+            boolean client = source.getEntry(MeshExtractor.MODEL_CLASS) != null;
+
+            byte[] meshes = client ? meshes(jar) : null;
             if (meshes != null) {
                 target.putNextEntry(new ZipEntry(MESH_FILE));
                 target.write(meshes);
+                target.closeEntry();
+                kept++;
+            }
+
+            byte[] coats = client ? coats(jar) : null;
+            if (coats != null) {
+                target.putNextEntry(new ZipEntry(COAT_FILE));
+                target.write(coats);
                 target.closeEntry();
                 kept++;
             }
@@ -125,6 +146,21 @@ final class AssetRepack {
             var extracted = MeshExtractor.extract(jar, AssetRepack.class.getClassLoader(), EntityMeshes.specs());
             return extracted.isEmpty() ? null : MeshCodec.write(extracted);
         } catch (IOException | ReflectiveOperationException | RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+
+    /**
+     * The coat tables, or null if this jar will not give them up.
+     *
+     * <p>Never fatal, for the same reason as the meshes: these come out of the client's renderers, which need
+     * Minecraft's shared libraries to link. A skew loses the odd coats and leaves every mob on the name rule.
+     */
+    private static byte[] coats(Path jar) {
+        try {
+            var extracted = RendererCoats.extract(jar, AssetRepack.class.getClassLoader(), EntityMeshes.types());
+            return extracted.isEmpty() ? null : RendererCoats.write(extracted);
+        } catch (IOException | RuntimeException | LinkageError e) {
             return null;
         }
     }

@@ -6,7 +6,9 @@ import de.flog99.mapgui.render.EmptySpace;
 import de.flog99.mapgui.render.Sky;
 import de.flog99.mapgui.render.VoxelSource;
 import org.bukkit.ChunkSnapshot;
+import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Waterlogged;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,6 +68,9 @@ final class SnapshotWorld implements VoxelSource {
      * number of states actually in view.
      */
     private final Map<BlockData, BakedState> states = new ConcurrentHashMap<>();
+
+    /** The same states again for the blocks standing under more of their own fluid, which fills them to the top. */
+    private final Map<BlockData, BakedState> flooded = new ConcurrentHashMap<>();
 
     private final BiomeTints tints;
 
@@ -141,7 +146,51 @@ final class SnapshotWorld implements VoxelSource {
         if (chunk.isSectionEmpty((y - minY) >> 4)) return BakedState.EMPTY;
 
         BlockData data = chunk.getBlockData(x & 15, y, z & 15);
-        return states.computeIfAbsent(data, key -> models.bake(key.getAsString()));
+        if (!holdsFluid(data)) {
+            return states.computeIfAbsent(data, key -> models.bake(key.getAsString()));
+        }
+
+        // Only the surface of a body of fluid is short, so this needs the block above and cannot be answered from
+        // the state alone. Two caches rather than a compound key, since the answer is one bit and states repeat.
+        boolean covered = holdsFluid(above(x, y, z));
+        Map<BlockData, BakedState> cache = covered ? flooded : states;
+        return cache.computeIfAbsent(data, key -> models.bake(key.getAsString(), covered));
+    }
+
+    /**
+     * The block's own answer rather than its model's, which is what a fluid's corner heights are averaged against.
+     *
+     * <p>Cheaper than {@link #stateAt} as well as righter: no baking and no cache, since solidity is a property of
+     * the material and the fluid arithmetic asks about eight neighbours per surface block.
+     */
+    @Override
+    public boolean solidAt(int x, int y, int z) {
+        ChunkSnapshot chunk = chunkAt(x, z);
+        if (chunk == null || y < minY || y > maxY) return false;
+        if (chunk.isSectionEmpty((y - minY) >> 4)) return false;
+
+        return chunk.getBlockData(x & 15, y, z & 15).getMaterial().isSolid();
+    }
+
+    /** Null above the world or outside what was captured, which both read as nothing standing there. */
+    private BlockData above(int x, int y, int z) {
+        ChunkSnapshot chunk = chunkAt(x, z);
+        if (chunk == null || y + 1 > maxY) return null;
+
+        return chunk.getBlockData(x & 15, y + 1, z & 15);
+    }
+
+    /**
+     * Whether a block is fluid as far as its neighbour below is concerned - the fluid itself, or a block standing
+     * in some. A waterlogged stair over water holds the pool up just as another water block would.
+     */
+    private static boolean holdsFluid(BlockData data) {
+        if (data == null) return false;
+
+        Material material = data.getMaterial();
+        if (material == Material.WATER || material == Material.LAVA) return true;
+
+        return data instanceof Waterlogged logged && logged.isWaterlogged();
     }
 
     /**

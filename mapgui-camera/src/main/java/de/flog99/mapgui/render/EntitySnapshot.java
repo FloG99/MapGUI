@@ -202,7 +202,46 @@ public record EntitySnapshot(
         // Head yaw and pitch are the body's: an item is not a head part, so nothing here turns with the head, and
         // saying so plainly beats carrying values that have no effect.
         return new EntitySnapshot(holder.x(), holder.y(), holder.z(), holder.bodyYaw(), holder.bodyYaw(), 0,
-                holder.scale(), sprite.model().inHand(arm, pose), sprite.texture(), sprite.tint());
+                holder.scale(), sprite.model().onJoint(arm, pose, false), sprite.texture(), sprite.tint());
+    }
+
+    /** The part vanilla hangs a head layer off, and the only name it looks one up by. */
+    private static final String HEAD = "head";
+
+    /**
+     * A block worn on a mob's head, which is how a snow golem carries its pumpkin.
+     *
+     * <p>Not equipment and not a held item: vanilla draws it as a further pass over the head part, so it turns with
+     * the head rather than with the body - which is why this keeps the wearer's head yaw and pitch where
+     * {@link #held} drops them.
+     *
+     * @param block one layer from {@link ItemModels#held}, already resolved to a shape and a texture
+     */
+    public static EntitySnapshot onHead(EntitySnapshot wearer, EntitySnapshot block, ItemPoses.Pose pose) {
+        return on(wearer, HEAD, block, pose, true);
+    }
+
+    /**
+     * A block carried on some other part, which is how a sulfur cube shows what has been put inside it.
+     *
+     * @param head whether it turns with the wearer's head, which a pumpkin does and a block in a body does not
+     */
+    public static EntitySnapshot on(EntitySnapshot wearer, String part, EntitySnapshot block,
+                                    ItemPoses.Pose pose, boolean head) {
+        if (block == null || pose == null) return null;
+
+        EntityModel.Joint joint = wearer.model().joint(part);
+        if (joint == null) return null;
+
+        // Both head angles run backwards on a block, and only on a block: a mob's mesh is built flipped and turned
+        // back the right way, a block model is built the right way round to begin with, so a turn stated in the
+        // first space goes the other way in the second. Left and right swap, up and down swap, and forward stays
+        // forward - which is exactly what the two mirrored axes do and nothing a single wrong sign would.
+        float turned = head ? 2 * wearer.bodyYaw() - wearer.headYaw() : wearer.headYaw();
+        float tilted = head ? -wearer.pitch() : wearer.pitch();
+
+        return new EntitySnapshot(wearer.x(), wearer.y(), wearer.z(), wearer.bodyYaw(), turned,
+                tilted, wearer.scale(), block.model().onJoint(joint, pose, head), block.texture(), block.tint());
     }
 
     /**
