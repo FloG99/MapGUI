@@ -226,14 +226,17 @@ final class MobEquipment {
      * captain's head like a standard rather than flat on top of it.
      *
      * <p>The item's translation comes through the layer's own five eighths, since the layer scales before the item
-     * places itself; its scale multiplies. Neither axis changes sign on the way here - by the time the item's
-     * transform applies, the layer has already turned the frame the right way up.
+     * places itself; its scale multiplies. Its depth changes sign on the way here and its height does not: by the
+     * time the item's own transform applies, the layer's {@code scale(s, -s, -s)} has turned the frame the right way
+     * up but left it looking the other way along Z. So a banner's seven sixteenths, which the assets state as
+     * forward, is what puts one behind the head - and it stays behind it when the head turns, because the head is
+     * what it hangs off.
      *
      * @param stated {@code {x, y, z, scale}} from the item's own {@code head} transform
      */
     private static ItemPoses.Pose onHead(float[] stated) {
         return new ItemPoses.Pose(
-                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, stated[2] * ON_HEAD_SCALE},
+                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, -stated[2] * ON_HEAD_SCALE},
                 new float[]{0, (float) Math.PI, 0},
                 ON_HEAD_SCALE * stated[3]);
     }
