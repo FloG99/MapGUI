@@ -43,6 +43,9 @@ surface is `mapgui-api` and `mapgui-layout`.
 - **Layers you can see into.** An entity texel is carried at its texture's own alpha instead of being rounded to
   solid, and the ray walks on to whatever is behind it in the same mesh. A slime's inner cube, its eyes, and the
   block put inside a sulfur cube were all sitting behind a shell that had been drawn opaque.
+- **A sneaking player is drawn sneaking**, in the client's own numbers: the torso tips over its own neck so the hips
+  go back, the head drops under it, and the legs slide back to stay beneath. Armor follows, which needed the legs
+  split out of the torso into parts of their own - the shape vanilla has always had.
 - **Dropped items turn** as the client turns them, by age rather than facing the camera.
 - The sulfur cube is drawn at its own size and height. Its model is the one built around its middle rather than hung
   off a neck, so the standard lift put it a block up and at twice its size.

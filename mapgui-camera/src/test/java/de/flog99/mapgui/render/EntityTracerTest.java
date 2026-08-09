@@ -108,7 +108,7 @@ class EntityTracerTest {
     @Test
     void theHeadTurnsIndependentlyOfTheBody() {
         TestWorld world = world();
-        EntitySnapshot lookingWest = new EntitySnapshot(0.5, 0, 0.5, 0, 90, 0, 1f, EntityModel.player(false, SkinLayers.ALL), "skin");
+        EntitySnapshot lookingWest = new EntitySnapshot(0.5, 0, 0.5, 0, 90, 0, 1f, EntityModel.player(false, SkinLayers.ALL, false), "skin");
 
         assertPatch(0xFFFF0000, pixel(world, lookingWest, from(-3, 0.5, 270)), "the face has turned west with the head");
         assertNotPatch(0xFFFF0000, pixel(world, lookingWest, from(0.5, 4, 180)), "and no longer looks south");
@@ -120,11 +120,11 @@ class EntityTracerTest {
         TestWorld world = world();
 
         // Body east, head turned back to face south.
-        EntitySnapshot twisted = new EntitySnapshot(0.5, 0, 0.5, 270, 0, 0, 1f, EntityModel.player(false, SkinLayers.ALL), "skin");
+        EntitySnapshot twisted = new EntitySnapshot(0.5, 0, 0.5, 270, 0, 0, 1f, EntityModel.player(false, SkinLayers.ALL, false), "skin");
         assertPatch(0xFFFF0000, pixel(world, twisted, from(0.5, 4, 180)), "the head faces south, so the face is");
 
         // Body north, head turned to the east.
-        EntitySnapshot looking = new EntitySnapshot(0.5, 0, 0.5, 180, 270, 0, 1f, EntityModel.player(false, SkinLayers.ALL), "skin");
+        EntitySnapshot looking = new EntitySnapshot(0.5, 0, 0.5, 180, 270, 0, 1f, EntityModel.player(false, SkinLayers.ALL, false), "skin");
         assertPatch(0xFFFF0000, pixel(world, looking, from(4, 0.5, 90)), "and here it faces east");
     }
 
@@ -247,6 +247,46 @@ class EntityTracerTest {
 
         assertPatch(0xFF808080, pixel(world, dressed(jacketOff), atChest()), "jacket off, so the chest");
         assertPatch(0xFF00FF00, pixel(world, dressed(jacketOff), from(0.5, 4, 180)), "and the hat is still on");
+    }
+
+    /**
+     * Sneaking is a pose and not a lower position: the torso tips over its own neck so the hips go back, the head
+     * drops under it, and the legs slide back to stay beneath. Drawing a sneaking player upright is the thing that
+     * gives away that a picture is not the game.
+     */
+    @Test
+    void aSneakingPlayerTipsForwardRatherThanStandingLower() {
+        EntityModel standing = EntityModel.player(false, SkinLayers.ALL, false);
+        EntityModel sneaking = EntityModel.player(false, SkinLayers.ALL, true);
+
+        assertTrue(sneaking.height() < standing.height(), "a sneaking player does not stand as tall");
+        assertEquals(0f, part(standing, "body").xRot(), "an upright torso is not turned at all");
+
+        // Negative is forward here. The client leans it by a positive half radian in a frame whose y runs the other
+        // way, and taking its number across unchanged would sit the player back on their heels.
+        assertTrue(part(sneaking, "body").xRot() < 0, "and a sneaking one is tipped forward over its neck");
+        assertTrue(part(sneaking, "right_leg").z() > part(standing, "right_leg").z(), "with the legs back under it");
+    }
+
+    /**
+     * The crouch shifts a part rather than placing it, which is what lets the one method pose both a player and the
+     * armor worn over him: the player's parts are authored flat and armor's hang under a root, so a height means
+     * different places in the two while a shift means the same. Placing them put a player's leg armor on his head.
+     */
+    @Test
+    void crouchingShiftsAPartRatherThanPlacingIt() {
+        MeshPart leg = MeshPart.at("right_leg", 2, 12, 0, List.of(), List.of());
+        MeshPart root = new MeshPart("root", false, 0, 24, 0, 0, 0, 0, 1, 1, 1, List.of(), List.of(leg));
+
+        MeshPart posed = EntityModel.of(List.of(root)).crouched().parts().getFirst().children().getFirst();
+
+        assertEquals(12f, posed.y(), "a part under a root keeps the height its own parent measures it from");
+        assertTrue(posed.z() > 0, "and is still moved back, which is what the crouch does to a leg");
+    }
+
+    private static MeshPart part(EntityModel model, String name) {
+        return model.parts().stream().filter(part -> part.name().equals(name)).findFirst()
+                .orElseThrow(() -> new AssertionError("no part called " + name));
     }
 
     @Test

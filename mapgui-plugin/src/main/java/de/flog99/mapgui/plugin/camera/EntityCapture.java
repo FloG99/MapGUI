@@ -105,7 +105,7 @@ final class EntityCapture {
         if (skin == null) return null;
 
         EntitySnapshot body = EntitySnapshot.player(at.getX(), at.getY(), at.getZ(), bodyYaw(player), at.getYaw(),
-                at.getPitch(), skins.isSlim(player), skins.layersOf(player), skin);
+                at.getPitch(), skins.isSlim(player), skins.layersOf(player), skin, player.isSneaking());
 
         List<EntitySnapshot> drawn = new ArrayList<>();
         drawn.add(body);

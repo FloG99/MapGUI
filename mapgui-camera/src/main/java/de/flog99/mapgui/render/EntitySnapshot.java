@@ -67,7 +67,16 @@ public record EntitySnapshot(
 
     /** A player, whose head turns, whose arms may be slim, and who chooses which skin layers to wear. */
     public static EntitySnapshot player(double x, double y, double z, float bodyYaw, float headYaw, float pitch, boolean slim, SkinLayers layers, String texture) {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, 1f, EntityModel.player(slim, layers), texture);
+        return player(x, y, z, bodyYaw, headYaw, pitch, slim, layers, texture, false);
+    }
+
+    /**
+     * @param crouching whether they are sneaking, which tips the torso forward and drops the head under it rather
+     *                  than merely lowering the whole player
+     */
+    public static EntitySnapshot player(double x, double y, double z, float bodyYaw, float headYaw, float pitch,
+                                        boolean slim, SkinLayers layers, String texture, boolean crouching) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, 1f, EntityModel.player(slim, layers, crouching), texture);
     }
 
     /**
@@ -164,13 +173,24 @@ public record EntitySnapshot(
      * @param mesh a name from the equipment table - {@code armor/chest}, {@code pig_saddle}
      */
     public static EntitySnapshot worn(EntitySnapshot base, String mesh, String texture) {
+        return worn(base, mesh, texture, false);
+    }
+
+    /**
+     * @param crouching whether the wearer is sneaking, which moves a piece as well as turning it - the rotations
+     *                  below come across on their own, and a helmet that only turned would float where the head
+     *                  would have been standing
+     */
+    public static EntitySnapshot worn(EntitySnapshot base, String mesh, String texture, boolean crouching) {
         EntityModel model = EntityMeshes.worn(mesh);
         if (model == null) return null;
 
         // Standing the way the mob under it stands, which the piece's own mesh cannot know: one armor mesh is worn by
-        // every humanoid and is posed as a plain one.
+        // every humanoid and is posed as a plain one. The crouch goes on first, since posing over it then agrees on
+        // the rotations rather than adding a second lean to them.
+        EntityModel worn = crouching ? model.crouched() : model;
         return new EntitySnapshot(base.x(), base.y(), base.z(), base.bodyYaw(), base.headYaw(), base.pitch(),
-                base.scale(), model.posedLike(base.model()), texture);
+                base.scale(), worn.posedLike(base.model()), texture);
     }
 
     /** The parts vanilla puts an item in, and the only two names it looks them up by. */

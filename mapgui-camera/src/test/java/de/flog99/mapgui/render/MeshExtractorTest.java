@@ -233,7 +233,7 @@ class MeshExtractorTest {
         assertNotNull(baked, "the client's own player mesh did not bake");
 
         MeshPart clients = baked.getFirst();
-        EntityModel ours = EntityModel.player(false, SkinLayers.ALL);
+        EntityModel ours = EntityModel.player(false, SkinLayers.ALL, false);
 
         for (String limb : List.of("right_arm", "left_arm", "right_leg", "left_leg")) {
             boolean right = limb.startsWith("right");

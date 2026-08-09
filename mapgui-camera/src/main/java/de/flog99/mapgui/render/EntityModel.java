@@ -117,6 +117,10 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
      *
      * <p>Names rather than positions, because vanilla builds armor from the humanoid body and gives the parts the
      * same names. A part the other model does not have keeps its own pose, which is how a saddle comes through.
+     *
+     * <p>Rotations only. Where a part sits cannot be carried across, because the two models need not hang their
+     * parts off the same parents: an absolute height copied onto a part measured from its own parent's is added to
+     * that parent's again, which put a player's leg armor on his head.
      */
     EntityModel posedLike(EntityModel other) {
         Map<String, float[]> poses = new HashMap<>();
@@ -212,7 +216,7 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
      * <p>Authored rather than extracted because the layers are a per-player choice: vanilla's player mesh carries
      * all six of them as parts it hides at render time, and hiding is not something a baked mesh remembers.
      */
-    static EntityModel player(boolean slim, SkinLayers layers) {
+    static EntityModel player(boolean slim, SkinLayers layers, boolean crouching) {
         float armWidth = slim ? 3 : 4;
 
         List<MeshCube> head = new ArrayList<>();
@@ -222,28 +226,88 @@ record EntityModel(List<MeshPart> parts, float height, float radius, boolean cul
         }
 
         List<MeshCube> body = new ArrayList<>();
-        body.add(MeshCube.box(-4, 12, -2, 8, 12, 4, 16, 16, 64, 64, 0));
+        body.add(MeshCube.box(-4, -12, -2, 8, 12, 4, 16, 16, 64, 64, 0));
         if (layers.jacket()) {
-            body.add(MeshCube.box(-4, 12, -2, 8, 12, 4, 16, 32, 64, 64, OVERLAY_GROW));
+            body.add(MeshCube.box(-4, -12, -2, 8, 12, 4, 16, 32, 64, 64, OVERLAY_GROW));
         }
 
         // Legs, with the right leg's patch on the player's right, which is +X. Reading it the other way round dresses
         // a player in their own mirror image.
-        body.add(MeshCube.box(0, 0, -2, 4, 12, 4, 0, 16, 64, 64, 0));
-        if (layers.rightPants()) {
-            body.add(MeshCube.box(0, 0, -2, 4, 12, 4, 0, 32, 64, 64, OVERLAY_GROW));
-        }
-        body.add(MeshCube.box(-4, 0, -2, 4, 12, 4, 16, 48, 64, 64, 0));
-        if (layers.leftPants()) {
-            body.add(MeshCube.box(-4, 0, -2, 4, 12, 4, 0, 48, 64, 64, OVERLAY_GROW));
-        }
-
-        return of(List.of(
-                MeshPart.of("body", List.copyOf(body)),
+        EntityModel standing = of(List.of(
+                MeshPart.at("body", 0, PLAYER_NECK, 0, List.copyOf(body), List.of()),
                 MeshPart.at("head", 0, PLAYER_NECK, 0, List.copyOf(head), List.of()),
+                leg("right_leg", LEG_PIVOT, 0, 16, 0, 32, layers.rightPants()),
+                leg("left_leg", -LEG_PIVOT, 16, 48, 0, 48, layers.leftPants()),
                 arm("right_arm", ARM_PIVOT, armWidth, -1, 40, 16, 40, 32, layers.rightSleeve()),
                 arm("left_arm", -ARM_PIVOT, armWidth, 1 - armWidth, 32, 48, 48, 48, layers.leftSleeve())
         ));
+
+        return crouching ? standing.crouched() : standing;
+    }
+
+    /**
+     * This model sneaking, in the client's own numbers off {@code HumanoidModel}: the torso tips over its own neck,
+     * the head drops under it, and the legs slide back to stay beneath.
+     *
+     * <p>Shifts rather than places, and by part name, which is what lets one method pose both a player and the armor
+     * worn over him. The two do not hang their parts off the same parents - the player's are authored flat and the
+     * armor's are extracted under a root - so a height means different places in each while a shift means the same.
+     *
+     * <p>The numbers are turned round into this frame, which is the one extracted meshes come out in: a mob's model
+     * hangs downward off its neck and is drawn flipped, so vanilla's <i>plus</i> y is <i>down</i> here and an x
+     * rotation changes sign with it. Z does not, since the flip leaves it alone.
+     */
+    EntityModel crouched() {
+        return of(crouch(parts), culled);
+    }
+
+    private static List<MeshPart> crouch(List<MeshPart> parts) {
+        List<MeshPart> out = new ArrayList<>(parts.size());
+        for (MeshPart part : parts) {
+            MeshPart posed = switch (part.name()) {
+                case "head" -> part.moved(0, -CROUCH_HEAD_DROP, 0);
+                case "body" -> part.moved(0, -CROUCH_DROP, 0).withRotation(-CROUCH_LEAN, part.yRot(), part.zRot());
+                case "right_arm", "left_arm" -> part.moved(0, -CROUCH_DROP, 0)
+                        .withRotation(part.xRot() - CROUCH_ARM_LEAN, part.yRot(), part.zRot());
+                case "right_leg", "left_leg" -> part.moved(0, 0, CROUCH_LEG_BACK);
+                default -> part;
+            };
+            out.add(posed.withChildren(crouch(posed.children())));
+        }
+        return List.copyOf(out);
+    }
+
+    /** How far the torso and the arms drop, in the pixels a mesh is measured in. The head goes further. */
+    private static final float CROUCH_DROP = 3.2f;
+
+    private static final float CROUCH_HEAD_DROP = 4.2f;
+
+    /** Radians, since a part's rotations are. Half of one is a good way over. */
+    private static final float CROUCH_LEAN = 0.5f;
+
+    private static final float CROUCH_ARM_LEAN = 0.4f;
+
+    /** The legs go back rather than down, which is what keeps the feet under a torso that has tipped forward. */
+    private static final float CROUCH_LEG_BACK = 4;
+
+    /** Vanilla's own {@code ±1.9} rounded to the middle of the leg, which is where this model's boxes already sit. */
+    private static final float LEG_PIVOT = 2;
+
+    /** The hip, half way up a player, which a leg hangs from and is measured down from. */
+    private static final float LEG_TOP = 12;
+
+    /**
+     * One leg, as a part of its own rather than cubes in the torso, because crouching moves the legs and the torso
+     * differently - the torso tips forward and the legs stay upright and slide back under it.
+     */
+    private static MeshPart leg(String name, float x, int u, int v, int overlayU, int overlayV, boolean pants) {
+        List<MeshCube> cubes = new ArrayList<>();
+        cubes.add(MeshCube.box(-2, -LEG_TOP, -2, 4, 12, 4, u, v, 64, 64, 0));
+        if (pants) {
+            cubes.add(MeshCube.box(-2, -LEG_TOP, -2, 4, 12, 4, overlayU, overlayV, 64, 64, OVERLAY_GROW));
+        }
+
+        return MeshPart.at(name, x, LEG_TOP, 0, List.copyOf(cubes), List.of());
     }
 
     /**

@@ -13,6 +13,7 @@ import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Snowman;
 import org.bukkit.entity.Mob;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -54,13 +55,16 @@ final class MobEquipment {
         EquipmentAssets equipment = assets.equipment();
         List<EntitySnapshot> layers = new ArrayList<>();
 
+        // Armor moves with a sneaking player and a saddle does not, since only the humanoid pieces share the body
+        // whose parts the crouch shifts.
+        boolean crouching = entity instanceof Player player && player.isSneaking();
         ARMOR.forEach((slot, mesh) -> add(layers, base, atlas, equipment, mesh,
-                slot == EquipmentSlot.LEGS ? "humanoid_leggings" : "humanoid", worn.getItem(slot)));
+                slot == EquipmentSlot.LEGS ? "humanoid_leggings" : "humanoid", worn.getItem(slot), crouching));
 
         // The animals, whose layer is named after the animal rather than after its shape: a pig saddle is not a horse
         // saddle and neither is drawn from the other mesh.
-        add(layers, base, atlas, equipment, saddleMesh(type), type + "_saddle", worn.getItem(EquipmentSlot.SADDLE));
-        add(layers, base, atlas, equipment, bodyMesh(type), type + "_body", worn.getItem(EquipmentSlot.BODY));
+        add(layers, base, atlas, equipment, saddleMesh(type), type + "_saddle", worn.getItem(EquipmentSlot.SADDLE), false);
+        add(layers, base, atlas, equipment, bodyMesh(type), type + "_body", worn.getItem(EquipmentSlot.BODY), false);
 
         // One skeleton in twenty is left-handed, and vanilla poses a held item by the arm rather than by the hand.
         boolean rightHanded = !leftHanded(entity);
@@ -181,14 +185,14 @@ final class MobEquipment {
      * the asset - undyed, the greyscale base draws as iron.
      */
     private static void add(List<EntitySnapshot> into, EntitySnapshot base, TextureAtlas atlas,
-                            EquipmentAssets equipment, String mesh, String layer, ItemStack item) {
+                            EquipmentAssets equipment, String mesh, String layer, ItemStack item, boolean crouching) {
         String asset = asset(item);
         if (asset == null) return;
 
         for (EquipmentAssets.Pass pass : equipment.of(asset, layer)) {
             if (!atlas.has(pass.texture())) continue;
 
-            EntitySnapshot piece = EntitySnapshot.worn(base, mesh, pass.texture());
+            EntitySnapshot piece = EntitySnapshot.worn(base, mesh, pass.texture(), crouching);
             if (piece == null) continue;
 
             int dye = pass.undyed() == 0 ? 0 : dyed(item, pass.undyed());
