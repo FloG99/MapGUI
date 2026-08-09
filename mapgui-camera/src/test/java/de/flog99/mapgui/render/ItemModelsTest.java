@@ -110,12 +110,17 @@ class ItemModelsTest {
         assertEquals(TestWorld.SKY, pixel(world, sprite(0), alsoFromTheNorth), "and the clear half likewise");
     }
 
-    /** The four edges carry no patch, so a quad seen from the side is not drawn as a smeared line of sprite. */
+/**
+     * Seen from the side a sprite is its own rim: the outermost column of the picture, one texel thick.
+     *
+     * <p>Which is what the extrusion is for. An icon is a picture a pixel deep and the client draws that pixel, so a
+     * held bow seen edge on is a thin line of colour rather than nothing at all.
+     */
     @Test
-    void aSpriteSeenEdgeOnIsNotDrawn() {
+    void aSpriteSeenEdgeOnIsItsOwnRim() {
         TestWorld world = world();
 
-        assertEquals(TestWorld.SKY, pixel(world, sprite(0), new CameraView(3, 0.25, 0.5, 90, 0, 70, 64)), "edge on");
+        assertPatch(SPRITE, pixel(world, sprite(0), new CameraView(3, 0.25, 0.5, 90, 0, 70, 64)), "edge on");
     }
 
     /** Which is the whole reason the capture works out a yaw: turned to the camera, the quad is a picture again. */

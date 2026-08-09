@@ -67,8 +67,11 @@ record MeshCube(
      * inside its frame wants {@link SpriteShape} instead.
      */
     static MeshCube sprite(float x, float y, float z, float width, float height, float thickness) {
-        return sprite(x, y, z, width, height, thickness, 0, 0, 1, 1);
+        return sprite(x, y, z, width, height, thickness, 0, 0, 1, 1, SIXTEENTH / 2, SIXTEENTH / 2);
     }
+
+    /** One texel of the sixteen an item icon is authored in, for a caller that does not know the real resolution. */
+    private static final float SIXTEENTH = 1 / 16f;
 
     /**
      * One box of a sprite, carrying a stated rectangle of the icon rather than the whole of it.
@@ -78,25 +81,39 @@ record MeshCube(
      * around nothing: a sword's blade only reaches its frame at the tip, which is exactly where the extrusion showed.
      * Built as several boxes over the picture's own bands instead, each rim face lands against real pixels.
      *
-     * @param u1 the rectangle in texture coordinates, normalized, {@code u1} and {@code v1} the smaller ends
+     * <p>A rim face is a single line of the texture, so which line it lands on is decided by a coordinate rather than
+     * averaged over one - and a texture is sampled by flooring, so the far edge of a rectangle names the texel
+     * <i>past</i> it. Left there, the right and bottom rim of every box read whatever is next door: nothing at all on
+     * anything a texel wide, which is a bow's string and most of what is thin in an icon. So the rim is taken half a
+     * texel inside the rectangle, where it can only land on the box's own picture.
+     *
+     * @param u1    the rectangle in texture coordinates, normalized, {@code u1} and {@code v1} the smaller ends
+     * @param halfU half of one texel of this icon, normalized, and {@code halfV} the same down it
      */
     static MeshCube sprite(float x, float y, float z, float width, float height, float thickness,
-                           float u1, float v1, float u2, float v2) {
+                           float u1, float v1, float u2, float v2, float halfU, float halfV) {
 
         float[][] faces = new float[6][];
         // The rim: east lies against the low end of u because the front reads its u against x, up against the top of
         // v, and each opposite face against the other end of its own rectangle.
-        faces[Direction.EAST.ordinal()] = column(u1, v1, v2);
-        faces[Direction.WEST.ordinal()] = column(u2, v1, v2);
-        faces[Direction.UP.ordinal()] = row(v1, u1, u2);
-        faces[Direction.DOWN.ordinal()] = row(v2, u1, u2);
-        faces[Direction.NORTH.ordinal()] = patch(u1, v1, u2 - u1, v2 - v1, 1, 1, false, false);
+        faces[Direction.EAST.ordinal()] = column(u1 + halfU, v1 + halfV, v2 - halfV);
+        faces[Direction.WEST.ordinal()] = column(u2 - halfU, v1 + halfV, v2 - halfV);
+        faces[Direction.UP.ordinal()] = row(v1 + halfV, u1 + halfU, u2 - halfU);
+        faces[Direction.DOWN.ordinal()] = row(v2 - halfV, u1 + halfU, u2 - halfU);
+        // The picture faces are inset by the same half texel, and for the same reason: their u runs backwards, so the
+        // corner the sampler can reach exactly is the rectangle's far end and would name the texel past it.
+        float insetU = u1 + halfU;
+        float insetV = v1 + halfV;
+        float acrossInset = Math.max(0, u2 - u1 - 2 * halfU);
+        float downInset = Math.max(0, v2 - v1 - 2 * halfV);
+
+        faces[Direction.NORTH.ordinal()] = patch(insetU, insetV, acrossInset, downInset, 1, 1, false, false);
         // The back reads its u the other way, which is vanilla's own {@code NORTH_FACE_UVS} of (16, 0, 0, 16) against
         // the front's (0, 0, 16, 16). It is what a flat thing does: from behind you see the picture mirrored, and both
         // sides show the same texture column at the same point on the quad. Drawn un-reversed on both faces a sprite
         // reads correctly from one side and mirrored from the other - which nobody notices on a dropped apple and
         // everybody notices on a held bow.
-        faces[Direction.SOUTH.ordinal()] = patch(u1, v1, u2 - u1, v2 - v1, 1, 1, false, true);
+        faces[Direction.SOUTH.ordinal()] = patch(insetU, insetV, acrossInset, downInset, 1, 1, false, true);
 
         return new MeshCube(x, y, z, x + width, y + height, z + thickness, faces);
     }

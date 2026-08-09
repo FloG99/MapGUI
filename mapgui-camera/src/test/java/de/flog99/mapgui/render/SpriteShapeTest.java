@@ -101,19 +101,19 @@ class SpriteShapeTest {
     /**
      * Each box reads its own rectangle of the icon, which is what stops the picture being scrambled.
      *
-     * <p>Checked against the whole-frame quad, since the two have to agree wherever they overlap: a box covering the
-     * top left texel has to read the top left of the texture and not the whole of it shrunk.
+     * <p>A box covering the top left texel has to read the top left of the texture and not the whole of it shrunk.
+     * Its rectangle is that texel inset by half a texel at each edge, which for a box one texel wide leaves every
+     * corner on the texel's own middle - the only coordinate that can only ever floor to this texel and no other.
      */
     @Test
     void aBoxReadsItsOwnCornerOfThePicture() {
         MeshCube corner = shapeOf(icon(row("#"))).getFirst();
         float[] front = corner.face(Direction.NORTH);
 
-        // Texel (0, 0) is one sixteenth of the texture at the low end of u and v. Across zero takes the high u.
-        assertEquals(1 / 16f, front[MeshCube.corner(false, false) * 2], 1e-5, "u at across zero");
-        assertEquals(0f, front[MeshCube.corner(true, false) * 2], 1e-5, "u at across one");
-        assertEquals(0f, front[MeshCube.corner(false, false) * 2 + 1], 1e-5, "v at down zero");
-        assertEquals(1 / 16f, front[MeshCube.corner(false, true) * 2 + 1], 1e-5, "v at down one");
+        for (int slot = 0; slot < 4; slot++) {
+            assertEquals(0.5f / 16, front[slot * 2], 1e-5, "u of corner " + slot);
+            assertEquals(0.5f / 16, front[slot * 2 + 1], 1e-5, "v of corner " + slot);
+        }
     }
 
     /** An icon with nothing in it is still drawn as something, which is what the whole-frame quad is left for. */
@@ -124,6 +124,36 @@ class SpriteShapeTest {
         assertEquals(1, boxes.size());
         assertEquals(0f, boxes.getFirst().minX(), 1e-4);
         assertEquals(16f, boxes.getFirst().maxX(), 1e-4);
+    }
+
+    /**
+     * Every rim face of a box a texel wide reads that texel, and not the empty one beside it.
+     *
+     * <p>The bug this exists for was a bow, whose string runs corner to corner a pixel at a time. A rim face is one
+     * line of the texture, so which line it lands on comes from a single coordinate - and a texture is sampled by
+     * flooring, so a rectangle's far edge names the texel <i>past</i> it. The right and bottom rims of every box
+     * therefore read whatever was next door, which on a diagonal is nothing, and half of the string vanished
+     * whenever it was seen even slightly edge on.
+     */
+    @Test
+    void everyRimOfATexelWideBoxReadsThatTexel() {
+        // A diagonal, so that no box has a neighbour on any side that could stand in for its own picture.
+        Texture diagonal = icon(row("#..."), row(".#.."), row("..#."), row("...#"));
+        List<MeshCube> boxes = shapeOf(diagonal);
+        assertEquals(4, boxes.size(), "one box per texel of the string");
+
+        for (MeshCube box : boxes) {
+            for (Direction side : Direction.values()) {
+                float[] corners = box.faces()[side.ordinal()];
+                assertNotNull(corners, side + " should be drawn");
+
+                for (int corner = 0; corner < 4; corner++) {
+                    int drawn = diagonal.sample(corners[corner * 2] * 16, corners[corner * 2 + 1] * 16);
+                    assertTrue((drawn >>> 24) >= 128,
+                            side + " corner " + corner + " reads a clear texel, so that face draws nothing");
+                }
+            }
+        }
     }
 
     /**

@@ -95,6 +95,12 @@ surface is `mapgui-api` and `mapgui-layout`.
   combinations, so the client ships two greyscale bodies and six greyscale patterns and colours them per fish - which
   is exactly what happens here now, composited into one texture. Every one of them used to be the same plain
   `tropical_a`.
+- Fixed: **a bow lost most of its string, and every thin thing in an item lost pixels with it.** An icon is extruded
+  into a box per run of opaque texels, and each box's rim is a single line of the texture - so which line it lands on
+  comes from one coordinate. A texture is sampled by flooring, so a rectangle's far edge names the texel *past* it,
+  and the right and bottom rim of every box read whatever was next door. On a bow's diagonal string, where every box
+  is one texel, next door is nothing. The rim now sits half a texel inside its own rectangle, where it can only land
+  on the box's own picture. A sprite seen edge on is its own rim now rather than nothing at all.
 - Fixed: **the overworld's haze started in the middle of the shot.** It faded over the far 45% of the view, which on
   a 96 block capture began going white at 53 blocks. The client fades over the last `clamp(distance / 10, 4, 64)`
   blocks and leaves everything nearer alone - the overworld's own fog runs to a thousand blocks and is nothing a
