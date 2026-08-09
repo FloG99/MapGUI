@@ -205,7 +205,11 @@ final class MobEquipment {
             // Two meshes come back - the pole and crossbar, and the cloth - and only the cloth is dyed and patterned.
             EntitySnapshot cloth = woven != null && BannerCloth.BASE.equals(layer.texture()) ? layer.texture(woven) : layer;
 
-            EntitySnapshot flown = EntitySnapshot.onHead(base, cloth, pose);
+            // On the head part but square to the body. Vanilla carries it with the head, and this cannot: a block
+            // worn on a head is drawn with the head's turn reversed, since a block model's axes run the other way to
+            // a mob's - which is invisible on a pumpkin, sitting on the crown where every way round looks the same,
+            // and swings a banner right off the back of the head and round to the front.
+            EntitySnapshot flown = EntitySnapshot.on(base, ON_HEAD_PART, cloth, pose, false);
             if (flown != null) {
                 into.add(flown);
             }
@@ -226,20 +230,21 @@ final class MobEquipment {
      * captain's head like a standard rather than flat on top of it.
      *
      * <p>The item's translation comes through the layer's own five eighths, since the layer scales before the item
-     * places itself; its scale multiplies. Its depth changes sign on the way here and its height does not: by the
-     * time the item's own transform applies, the layer's {@code scale(s, -s, -s)} has turned the frame the right way
-     * up but left it looking the other way along Z. So a banner's seven sixteenths, which the assets state as
-     * forward, is what puts one behind the head - and it stays behind it when the head turns, because the head is
-     * what it hangs off.
+     * places itself; its scale multiplies. Neither axis changes sign: a mob's front is its {@code -Z} here - measured
+     * off an illager's own nose, which its mesh builds sticking out of the head at exactly that - so a banner's seven
+     * sixteenths of forward is what stands one behind the head.
      *
      * @param stated {@code {x, y, z, scale}} from the item's own {@code head} transform
      */
     private static ItemPoses.Pose onHead(float[] stated) {
         return new ItemPoses.Pose(
-                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, -stated[2] * ON_HEAD_SCALE},
+                new float[]{stated[0] * ON_HEAD_SCALE, HEAD_DROP + stated[1] * ON_HEAD_SCALE, stated[2] * ON_HEAD_SCALE},
                 new float[]{0, (float) Math.PI, 0},
                 ON_HEAD_SCALE * stated[3]);
     }
+
+    /** The part a head layer hangs off, and the only name the client looks one up by. */
+    private static final String ON_HEAD_PART = "head";
 
     /** A quarter of a block down the head, in entity pixels, and the five eighths the layer draws at. */
     private static final float HEAD_DROP = 4;
