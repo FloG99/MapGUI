@@ -9,7 +9,9 @@ import de.flog99.mapgui.render.ItemModels;
 import de.flog99.mapgui.render.ItemPoses;
 import de.flog99.mapgui.render.TextureAtlas;
 import org.bukkit.entity.Entity;
+import org.bukkit.DyeColor;
 import org.bukkit.Material;
+import org.bukkit.block.banner.Pattern;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Fox;
 import org.bukkit.entity.MushroomCow;
@@ -23,6 +25,7 @@ import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MainHand;
+import org.bukkit.inventory.meta.BannerMeta;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +83,7 @@ final class MobEquipment {
 
         wear(layers, base, assets, entity);
         sprout(layers, base, assets, entity);
+        hoist(layers, base, assets, worn.getItem(EquipmentSlot.HEAD));
         carry(layers, base, assets, skins, entity, worn.getItemInMainHand());
         decorate(layers, base, atlas, equipment, entity);
         contains(layers, base, assets, type, worn.getItem(EquipmentSlot.BODY));
@@ -177,6 +181,52 @@ final class MobEquipment {
             }
         }
     }
+
+    /**
+     * A banner worn on the head, which is what marks a raid captain.
+     *
+     * <p>Not armour, whatever slot it is in: a banner carries no {@code equippable} component, so the armour path
+     * above resolves nothing for it. The client draws it as {@code CustomHeadLayer} draws anything that is not a
+     * skull - the item's own shape, a quarter of a block down the head, turned about and at five eighths.
+     *
+     * <p>Its cloth is woven per stack like a block banner's, since an ominous banner is nine patterns and nothing in
+     * the assets holds that picture.
+     */
+    private static void hoist(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets, ItemStack head) {
+        if (head == null || head.isEmpty() || !head.getType().name().endsWith(BANNER)) return;
+
+        DyeColor color = dyeOf(head.getType().name());
+        List<Pattern> patterns = head.getItemMeta() instanceof BannerMeta meta ? meta.getPatterns() : List.of();
+        String woven = assets.atlas().dyed(BannerCloth.layersOf(color, patterns, assets));
+
+        for (EntitySnapshot layer : assets.items().held(head.getType().getKey().asString())) {
+            // Two meshes come back - the pole and crossbar, and the cloth - and only the cloth is dyed and patterned.
+            EntitySnapshot cloth = woven != null && BannerCloth.BASE.equals(layer.texture()) ? layer.texture(woven) : layer;
+
+            EntitySnapshot flown = EntitySnapshot.onHead(base, cloth, ON_HEAD);
+            if (flown != null) {
+                into.add(flown);
+            }
+        }
+    }
+
+    private static final String BANNER = "_BANNER";
+
+    /** {@code WHITE_BANNER} to {@code WHITE}, since a banner's base colour is the item and not a component. */
+    private static DyeColor dyeOf(String material) {
+        try {
+            return DyeColor.valueOf(material.substring(0, material.length() - BANNER.length()));
+        } catch (IllegalArgumentException notADye) {
+            return null;
+        }
+    }
+
+    /**
+     * Where {@code CustomHeadLayer} puts anything that is not a skull: a quarter of a block down the head, turned to
+     * face back the way the head does, at five eighths. The client's own numbers, in the units a pose is stated in.
+     */
+    private static final ItemPoses.Pose ON_HEAD =
+            new ItemPoses.Pose(new float[]{0, 4, 0}, new float[]{0, (float) Math.PI, 0}, 0.625f);
 
     /**
      * The three mushrooms growing on a mooshroom, which are three copies of the mushroom's own block model rather

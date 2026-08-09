@@ -254,37 +254,9 @@ final class BlockEntityCapture {
         return List.of(pole, woven == null ? cloth : cloth.texture(woven));
     }
 
-    /**
-     * The cloth as its layers, bottom first: the base in the banner's own dye, then a mask per pattern in the dye it
-     * was made with.
-     *
-     * <p>A pattern this version carries no texture for is left out rather than drawn as a checkerboard, since one
-     * unknown layer should cost its own stripe and not the whole flag - and a layer painted over the others is exactly
-     * where a checkerboard would do the most damage.
-     */
+    /** The cloth as its layers, which a banner on a raid captain's head is woven from too - see {@link BannerCloth}. */
     private static List<TextureAtlas.Dyed> patterns(Banner state, MobAssets assets) {
-        List<TextureAtlas.Dyed> layers = new ArrayList<>();
-        layers.add(new TextureAtlas.Dyed(BANNER_BASE, dye(state.getBaseColor())));
-
-        for (Pattern pattern : state.getPatterns()) {
-            // Through the registry rather than off the constant, since a datapack may add a pattern and the constants
-            // are on their way out.
-            NamespacedKey key = RegistryAccess.registryAccess()
-                    .getRegistry(RegistryKey.BANNER_PATTERN).getKey(pattern.getPattern());
-            if (key == null) continue;
-
-            String mask = "entity/banner/" + key.getKey();
-            if (assets.atlas().has(mask)) {
-                layers.add(new TextureAtlas.Dyed(mask, dye(pattern.getColor())));
-            }
-        }
-        return List.copyOf(layers);
-    }
-
-    private static final String BANNER_BASE = "entity/banner/base";
-
-    private static int dye(DyeColor color) {
-        return color == null ? 0 : Tints.dye(color.name().toLowerCase(Locale.ROOT));
+        return BannerCloth.layersOf(state.getBaseColor(), state.getPatterns(), assets);
     }
 
     /**

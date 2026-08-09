@@ -82,6 +82,10 @@ surface is `mapgui-api` and `mapgui-layout`.
   combinations, so the client ships two greyscale bodies and six greyscale patterns and colours them per fish - which
   is exactly what happens here now, composited into one texture. Every one of them used to be the same plain
   `tropical_a`.
+- **A raid captain wears its banner.** A banner carries no `equippable` component whatever slot it is in, so the
+  armour path resolved nothing for one and a captain went bare-headed. It is drawn as the client draws anything that
+  is not a skull on a head - the item's own shape, a quarter of a block down and at five eighths - with its cloth
+  woven per stack, which an ominous banner's nine patterns need.
 - **A mooshroom grows its mushrooms.** Three copies of the mushroom's own block model, two on the back and one on the
   head, at the client's own offsets - they are not on the cow's mesh at all, which is why a mooshroom came out as a
   plain red cow.
