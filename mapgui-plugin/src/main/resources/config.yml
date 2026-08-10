@@ -76,6 +76,10 @@ cursor:
   #
   # A screen that turns its cursor off never restricts the head either way - there is nothing to aim at,
   # and neither does a map in the offhand: that one is glanced at while the player looks at the world.
+  #
+  # The cursor appears in the middle of the map every time, and does not move while it is hidden. On, your
+  # head is turned to the middle of the range with it. Off, it starts nearer an edge when you are already
+  # looking far up or down, since there would be no head movement left to bring it back the other way.
   clamp-pitch: true
 
 terrain:

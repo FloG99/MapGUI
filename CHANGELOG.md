@@ -7,6 +7,24 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Running a server
 
+- Fixed: **bamboo came out almost black.** Its leaves were multiplied by the biome's foliage green like an oak's, but
+  they are already green on disk - 72,117,25 against the flat grey 144 an oak leaf is drawn as - so the tint applied a
+  second time took them to 13,85,1 and a grove photographed as a dark hedge. Bamboo now draws at its own color, like
+  cherry and azalea leaves.
+
+- Fixed: **a hidden cursor moved with the player's head.** Looking around while it was hidden dragged it along, so it
+  came back somewhere the player never put it. It now holds still and **appears in the middle of the map every
+  time**, however it went away - the screen losing the mouse, or `cursor()` returning false for a while, which is how
+  a viewfinder shows a pointer only while sneaking. With `clamp-pitch` on the head goes to mid range with it, and the
+  player's next move ends that, so a screen never holds a head against them. Off, it starts nearer an edge for a
+  player already looking far up or down, who has no head movement left to bring it back the other way.
+
+- Fixed: **a trident or a shield in a hand was drawn a block and a half to one side.** The shapes the client draws in
+  code arrive in the frame a mesh is built in, which is a half circle from the one a block model is built in, and the
+  turn between them was never applied. It went unseen on the other eleven because their definitions centre them in the
+  item's box - a banner, a head, a chest all turn onto themselves - where a trident and a shield state no translation
+  at all, sit against the box corner, and so swing their whole length across it.
+
 - **How far out leaves close up is now a setting**, `camera.leaves.near-blocks` and `camera.leaves.far-blocks`,
   where it was two constants in the tracer. It was only ever a guess at one capture size: a leaf texel falls below a
   capture pixel at a distance that depends on how wide and how large you shoot, so a big frame with a narrow field of
