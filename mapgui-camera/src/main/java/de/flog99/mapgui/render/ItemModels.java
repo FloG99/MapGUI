@@ -221,6 +221,12 @@ public final class ItemModels {
      * <p>The texture is what the definition names where it names one and the mesh's own otherwise, which for a player
      * head is only the default - whose face it wears is the stack's business, and the caller swaps it in with
      * {@link EntitySnapshot#texture}.
+     *
+     * <p>Half turned after the placing, for the reason {@link #builtIn} is: a mesh faces the other way to a block
+     * model, and what reads one of these next expects what a block model produces. Invisible on the ones whose
+     * definition centres them in the box - a banner, a head, a chest all turn about their own middle - and a block
+     * and a half out on the two that state no translation at all, a trident and a shield, which sit against the box
+     * corner and so swing their whole length across it.
      */
     private List<EntitySnapshot> special(String item) {
         ItemDefinitions.Special drawn = blocks.specialOf(item);
@@ -237,7 +243,7 @@ public final class ItemModels {
             if (mesh == null || built == null) continue;
 
             EntitySnapshot layer = snapshot(0, 0, 0, 0,
-                    specials.computeIfAbsent(type, key -> built.placedBy(drawn)),
+                    specials.computeIfAbsent(type, key -> built.placedBy(drawn).halfTurned()),
                     textureOf(drawn, mesh.texture()));
 
             int dye = type.endsWith(DYED) && drawn.color() != null ? Tints.dye(drawn.color()) : 0;

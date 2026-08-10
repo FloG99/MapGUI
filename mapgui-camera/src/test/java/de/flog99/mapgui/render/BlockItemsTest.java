@@ -325,6 +325,67 @@ class BlockItemsTest {
         assertEquals(6, sidesOf(layers.getFirst()).size(), "one texture on all six sides");
     }
 
+    /**
+     * A shape the client draws in code arrives facing the way a block model faces.
+     *
+     * <p>A mesh and a block model are a half circle apart, and everything downstream of here expects what a block
+     * model produces. The two this shows up on are the trident and the shield, the only specials whose definition
+     * states no translation: they sit against the box corner rather than about its middle, so a missing half turn
+     * swings their whole length across the box and puts a drowned's trident a block and a half to one side.
+     *
+     * <p>The mesh here is a marker in one half of the box and nowhere near its middle, since a shape centred on the
+     * middle turns onto itself and would pass either way.
+     */
+    @Test
+    void aShapeTheClientDrawsInCodeIsTurnedToFaceTheWayABlockModelDoes() throws IOException {
+        definition("spear", """
+                {"model": {"type": "minecraft:special", "base": "minecraft:item/spear",
+                    "model": {"type": "minecraft:trident"}}}
+                """);
+        texture("entity/trident/trident");
+
+        // After the stack, which installs whatever meshes its own base carries. Built the way the extractor stores a
+        // mob-space one: X and Y flipped, and stood up off the ground.
+        ItemModels items = baked();
+        EntityMeshes.install(Map.of("object.projectile.TridentModel#createLayer",
+                List.of(MeshPart.of("spike", List.of(MeshCube.plain(-8, MeshExtractor.GROUND, 0, 8, 2, 2))))));
+
+        List<EntitySnapshot> layers = items.held("spear");
+
+        assertEquals(1, layers.size());
+        float[] box = boundsOf(layers.getFirst().model());
+        assertEquals(8, box[0], 0.01f, "the near half of the box comes out as the far half");
+        assertEquals(16, box[1], 0.01f);
+    }
+
+    /** Least and greatest X the geometry of a model reaches, walking the part offsets and turns down the tree. */
+    private static float[] boundsOf(EntityModel model) {
+        float[] box = {Float.MAX_VALUE, -Float.MAX_VALUE};
+        reach(model.parts(), 0, Turns.none(), box);
+        return box;
+    }
+
+    private static void reach(List<MeshPart> parts, float x, float[] turn, float[] box) {
+        for (MeshPart part : parts) {
+            float[] offset = Turns.apply(turn, part.x(), part.y(), part.z());
+            float at = x + offset[0];
+            float[] turned = Turns.times(turn, Turns.part(part.xRot(), part.yRot(), part.zRot()));
+
+            for (MeshCube cube : part.cubes()) {
+                for (float cx : new float[]{cube.minX(), cube.maxX()}) {
+                    for (float cy : new float[]{cube.minY(), cube.maxY()}) {
+                        for (float cz : new float[]{cube.minZ(), cube.maxZ()}) {
+                            float reached = at + Turns.apply(turned, cx, cy, cz)[0];
+                            box[0] = Math.min(box[0], reached);
+                            box[1] = Math.max(box[1], reached);
+                        }
+                    }
+                }
+            }
+            reach(part.children(), at, turned, box);
+        }
+    }
+
     /** And a definition the client draws in code - a banner, a shulker box - is read without throwing. */
     @Test
     void aDefinitionThatNamesNoModelIsNotReadAsOne() throws IOException {
