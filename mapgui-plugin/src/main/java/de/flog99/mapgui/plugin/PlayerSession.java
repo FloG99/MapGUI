@@ -662,8 +662,35 @@ final class PlayerSession implements Session {
 
     private void centreCursor() {
         cursorX = width() / 2.0;
-        cursorY = height() / 2.0;
+        cursorY = startRow();
     }
+
+    /**
+     * The row the cursor appears at: the middle, moved toward an edge if the head no longer has the travel to reach
+     * the other one. Looking straight down is the case it is for - the pitch stops at 90, so a cursor starting mid
+     * map could never be brought any lower and half the screen would be out of reach.
+     *
+     * <p>Only unclamped. Clamped, the head is put mid range with the cursor, so every row is reachable by construction.
+     */
+    private double startRow() {
+        if (clampPitch()) return height() / 2.0;
+
+        return startRow(height(), plugin.config().minPitch(), plugin.config().maxPitch(),
+                player.getLocation().getPitch());
+    }
+
+    /** Package-private for {@code CursorStartTest}, which is what pins the reach at either end of the pitch. */
+    static double startRow(int height, float minPitch, float maxPitch, float pitch) {
+        double middle = height / 2.0;
+        double perDegree = height / (double) (maxPitch - minPitch);
+        double lowest = (height - 1) - (PITCH_LIMIT - pitch) * perDegree;
+        double highest = (pitch + PITCH_LIMIT) * perDegree;
+
+        return clamp(middle, Math.max(0, lowest), Math.min(height - 1, highest));
+    }
+
+    /** How far the client lets a head tip either way, which is what bounds the cursor travel left in each direction. */
+    private static final float PITCH_LIMIT = 90;
 
     /** The screen decides if it has an opinion, otherwise the server does. Never while the mouse is elsewhere. */
     private boolean clampPitch() {

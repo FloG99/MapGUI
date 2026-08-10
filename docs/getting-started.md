@@ -150,7 +150,8 @@ so their aim is left alone. Movement is never restricted in any case.
 The cursor appears in the middle of the map every time and does not move while it is hidden, so where it turns
 up never depends on what the player was doing without it. That covers both ways it goes away: the screen losing
 the mouse, and `cursor()` returning false for a while. Clamped, their head goes to the middle of the pitch range
-with it; unclamped, nothing moves their head.
+with it; unclamped, nothing moves their head, so it starts nearer an edge when they are already looking far up or
+down - there would be no head movement left to bring it back the other way.
 
 ### The wheel, when nothing scrollable is under it
 
