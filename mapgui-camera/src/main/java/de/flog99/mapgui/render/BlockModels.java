@@ -244,10 +244,12 @@ public final class BlockModels {
             case "pink_petals", "wildflowers" -> stated == 0 ? Tints.NONE : Tints.GRASS;
             // Dead rather than green, which is what the third colormap is for.
             case "leaf_litter", "pale_oak_leaves" -> Tints.DRY_FOLIAGE;
-            // Already coloured on disk rather than grey, so the client leaves them alone. Bamboo states a tintindex
-            // and is drawn at its own colour anyway: its leaves are a dark green on disk where a tinted texture is
-            // authored pale, so multiplying them by the biome's foliage takes them to near black.
-            case "cherry_leaves", "azalea_leaves", "flowering_azalea_leaves", "stonecutter", "bamboo" -> Tints.NONE;
+            // Painted on disk rather than greyscale, so the client draws them as they are. Bamboo's leaves are a
+            // finished dark green, and the biome's foliage over the top takes them to near black.
+            case "cherry_leaves", "azalea_leaves", "flowering_azalea_leaves", "bamboo" -> Tints.NONE;
+            // Not foliage at all: only its saw blade states a tintindex, and vanilla colors nothing on this block -
+            // so without the entry the fallback below would draw a grey blade grass green.
+            case "stonecutter" -> Tints.NONE;
             default -> id.endsWith("_leaves") || id.equals("vine") ? Tints.FOLIAGE : Tints.GRASS;
         };
     }
