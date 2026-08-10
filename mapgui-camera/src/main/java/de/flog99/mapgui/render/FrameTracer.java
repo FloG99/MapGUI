@@ -41,13 +41,21 @@ public final class FrameTracer implements AutoCloseable {
     private final ThreadLocal<RayTracer> tracers;
 
     public FrameTracer(Textures atlas) {
-        this(atlas, threadsFor(Runtime.getRuntime().availableProcessors()));
+        this(atlas, Canopy.DEFAULT);
+    }
+
+    public FrameTracer(Textures atlas, Canopy canopy) {
+        this(atlas, canopy, threadsFor(Runtime.getRuntime().availableProcessors()));
     }
 
     FrameTracer(Textures atlas, int threads) {
+        this(atlas, Canopy.DEFAULT, threads);
+    }
+
+    FrameTracer(Textures atlas, Canopy canopy, int threads) {
         this.atlas = atlas;
         this.threads = threads;
-        this.tracers = ThreadLocal.withInitial(() -> new RayTracer(atlas));
+        this.tracers = ThreadLocal.withInitial(() -> new RayTracer(atlas, canopy));
         this.pool = threads > 1 ? Executors.newFixedThreadPool(threads, named()) : null;
     }
 

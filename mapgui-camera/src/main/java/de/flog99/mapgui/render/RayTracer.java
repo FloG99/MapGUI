@@ -113,12 +113,6 @@ public final class RayTracer {
      */
     private static final double DECAL_BIAS = 1e-4;
 
-    /** Where a leaf's gaps start closing, in blocks: roughly where one of its texels drops below one pixel. */
-    static final double CANOPY_NEAR = 16;
-
-    /** Where a canopy is solid. Past this a forest is a surface rather than a thousand leaves with sky between. */
-    static final double CANOPY_FAR = 50;
-
     /**
      * Where water fog begins, in blocks, and vanilla's own number rather than a nudge for effect. Starting behind the
      * camera is what tints everything in the frame rather than only the distance: a block against the lens is already
@@ -157,6 +151,7 @@ public final class RayTracer {
     private static final double FOGGY_AIR_CAP = 192;
 
     private final Textures atlas;
+    private final Canopy canopy;
     private final EntityTracer entityTracer;
 
     /** Off only so that a test can render the same scene both ways and compare, since it must come out identical. */
@@ -209,11 +204,20 @@ public final class RayTracer {
     private float[] lights = LIGHT;
 
     public RayTracer(Textures atlas) {
-        this(atlas, true);
+        this(atlas, Canopy.DEFAULT);
+    }
+
+    public RayTracer(Textures atlas, Canopy canopy) {
+        this(atlas, canopy, true);
     }
 
     RayTracer(Textures atlas, boolean skipEmpty) {
+        this(atlas, Canopy.DEFAULT, skipEmpty);
+    }
+
+    RayTracer(Textures atlas, Canopy canopy, boolean skipEmpty) {
         this.atlas = atlas;
+        this.canopy = canopy;
         this.skipEmpty = skipEmpty;
         this.entityTracer = new EntityTracer(atlas);
     }
@@ -559,7 +563,7 @@ public final class RayTracer {
             if (alpha == 0) {
                 // A gap in a distant canopy is smaller than the pixel looking through it, so what is behind it gets a
                 // share of that pixel rather than one of its own. Filling the gap with the leaf color is that share.
-                float fill = state.leaves() ? canopyFill(hit) : 0;
+                float fill = state.leaves() ? canopy.fill(hit) : 0;
                 if (fill <= 0) {
                     continue;
                 }
@@ -981,19 +985,6 @@ public final class RayTracer {
         float u = (float) (0.5 + across * east + down * south);
         float v = (float) (0.5 + across * south - down * east);
         return atlas.get(state.fluidFlow()).sample(u * 16, v * 16);
-    }
-
-    /**
-     * How much of a leaf gap is filled in at this distance, 0 to 1. A resolution problem rather than a stylistic
-     * one: past {@link #CANOPY_NEAR} a leaf texel is smaller than a pixel, so a gap has no pixel of its own to be
-     * seen through and drawing it as all gap makes a distant forest read as sky with twigs in it.
-     *
-     * <p>It closes over the texture's own average, which is what the client arrives at by mipmapping.
-     */
-    private static float canopyFill(double distance) {
-        if (distance <= CANOPY_NEAR) return 0;
-
-        return (float) Math.min(1, (distance - CANOPY_NEAR) / (CANOPY_FAR - CANOPY_NEAR));
     }
 
     /** Fades toward the sky over the far stretch, so the distance cap is a haze rather than an edge. */
