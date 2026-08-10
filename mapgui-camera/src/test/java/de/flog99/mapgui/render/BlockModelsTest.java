@@ -518,7 +518,8 @@ class BlockModelsTest {
      */
     @Test
     void tintIndexResolvesPerBlock() throws IOException {
-        for (String block : List.of("grass_block", "oak_leaves", "spruce_leaves", "birch_leaves", "cherry_leaves", "vine")) {
+        for (String block : List.of("grass_block", "oak_leaves", "spruce_leaves", "birch_leaves", "cherry_leaves",
+                "vine", "bamboo")) {
             blockstate(block, "{\"variants\": {\"\": {\"model\": \"block/tinted\"}}}");
         }
         model("tinted", """
@@ -535,6 +536,9 @@ class BlockModelsTest {
         assertEquals(Tints.EVERGREEN, tintOn(models, "spruce_leaves"), "spruce is a fixed green in vanilla");
         assertEquals(Tints.BIRCH, tintOn(models, "birch_leaves"));
         assertEquals(Tints.NONE, tintOn(models, "cherry_leaves"), "pink already, so the client leaves it alone");
+        // Its leaves average 72,117,25 on disk where oak's average a flat grey 144: already the green they are drawn
+        // at, so the foliage color would take them to 13,85,1 and a bamboo grove would photograph as a black hedge.
+        assertEquals(Tints.NONE, tintOn(models, "bamboo"), "bamboo leaves are green on disk, not grey");
 
         assertNotEquals(0, Tints.fixed(Tints.EVERGREEN), "a fixed tint needs no world to resolve it");
         assertEquals(0, Tints.fixed(Tints.GRASS), "and a biome one does");
