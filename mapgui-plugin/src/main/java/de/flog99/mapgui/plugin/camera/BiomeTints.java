@@ -63,10 +63,6 @@ final class BiomeTints {
         return answer;
     }
 
-    /**
-     * @param index a {@link Tints} index the world has to answer
-     * @return packed ARGB to multiply the face by
-     */
     /** What water fogs everything to in this biome, for a camera that is under some. */
     int waterFogOf(Biome biome) {
         return tintFor(biome).waterFog();
@@ -82,6 +78,10 @@ final class BiomeTints {
         return tintFor(biome).waterSight();
     }
 
+    /**
+     * @param index a {@link Tints} index the world has to answer
+     * @return packed ARGB to multiply the face by
+     */
     int of(Biome biome, int index) {
         BiomeColors.Tint tint = tintFor(biome);
 

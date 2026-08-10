@@ -62,6 +62,15 @@ final class SnapshotCache {
 
     private final long lifetimeNanos;
 
+    /**
+     * What a live view may reuse a column for, by how far off it is. Far more generous than a photograph gets,
+     * because being wrong here lasts until the next frame and the next frame is coming anyway.
+     */
+    private final ReuseWindow live;
+
+    /** The longest anything may be served for, which is the still lifetime when a server set a longer one. */
+    private final long longestNanos;
+
     private long hits;
     private long lookups;
 
@@ -69,16 +78,46 @@ final class SnapshotCache {
         this(LIFETIME_NANOS);
     }
 
-    /**
-     * @param lifetimeNanos how long a column may be served for, or zero to keep nothing at all
-     */
     SnapshotCache(long lifetimeNanos) {
-        this.lifetimeNanos = Math.max(0, lifetimeNanos);
+        this(lifetimeNanos, CameraTuning.Reuse.CHUNKS);
     }
 
-    /** Whether this will hold anything, for the log line that says how a capture is being taken. */
+    /**
+     * @param lifetimeNanos how long a column may be served to a still capture, or zero to copy it again every time
+     * @param live          what a viewfinder frame may reuse one for, which is graded by distance and never shorter
+     *                      than what a still is already allowed
+     */
+    SnapshotCache(long lifetimeNanos, ReuseWindow live) {
+        this.lifetimeNanos = Math.max(0, lifetimeNanos);
+        this.live = live;
+        this.longestNanos = Math.max(this.lifetimeNanos, live.longestNanos());
+    }
+
+    /** Whether this will hold anything. Always, unless a server has switched off both windows. */
     boolean enabled() {
+        return longestNanos > 0;
+    }
+
+    /** Whether a still photograph reuses anything, which is the part a server opts into. */
+    boolean enabledForStills() {
         return lifetimeNanos > 0;
+    }
+
+    /**
+     * How old a column may be for this capture, which for a live view depends on how far away it is.
+     *
+     * <p>Staleness is only worth what it hides - see {@link ReuseWindow}, which is the rule and this is the reading
+     * of it. Since the columns a frustum wants grow with distance, nearly all of them get nearly all of the window.
+     *
+     * <p>A still is flat and stays flat. Its staleness is not corrected by a frame that follows, because none does.
+     *
+     * @param chunksAway rings out from the column the camera is in
+     */
+    long allowedAgeNanos(boolean viewfinder, int chunksAway) {
+        if (!viewfinder) return lifetimeNanos;
+
+        // Never less than a still is already allowed, or turning the still window up would turn the live one down.
+        return Math.max(lifetimeNanos, live.allowedAgeNanos(chunksAway));
     }
 
     /**
@@ -86,15 +125,18 @@ final class SnapshotCache {
      *            of one frame is judged against the same instant
      * @return null if this column was never copied, or was copied too long ago to stand behind
      */
-    synchronized ChunkSnapshot get(UUID world, int chunkX, int chunkZ, long now) {
+    synchronized ChunkSnapshot get(UUID world, int chunkX, int chunkZ, long now, long allowedAgeNanos) {
         if (!enabled()) return null;
+        // Counted even when this column was never eligible, so the hit rate is a fraction of the columns a capture
+        // actually wanted rather than of the ones it was already going to reuse.
         lookups++;
+        if (allowedAgeNanos <= 0) return null;
 
         Key key = new Key(world, chunkX, chunkZ);
         Held entry = held.get(key);
         if (entry == null) return null;
 
-        if (now - entry.takenAt() > lifetimeNanos) {
+        if (now - entry.takenAt() > allowedAgeNanos) {
             held.remove(key);
             return null;
         }
@@ -127,7 +169,8 @@ final class SnapshotCache {
     synchronized void expire(long now) {
         Iterator<Map.Entry<Key, Held>> each = held.entrySet().iterator();
         while (each.hasNext()) {
-            if (now - each.next().getValue().takenAt() > lifetimeNanos) {
+            // The longer of the two, or a still-only server would throw away what the live views are still using.
+            if (now - each.next().getValue().takenAt() > longestNanos) {
                 each.remove();
             }
         }

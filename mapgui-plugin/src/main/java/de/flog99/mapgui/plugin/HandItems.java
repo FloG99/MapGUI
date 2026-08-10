@@ -4,6 +4,8 @@ import de.flog99.mapgui.GuiCatalog;
 import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.MapIds;
 import de.flog99.mapgui.Screen;
+import io.papermc.paper.datacomponent.DataComponentTypes;
+import io.papermc.paper.datacomponent.item.MapId;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -78,10 +80,10 @@ final class HandItems {
         }
 
         ItemStack item = new ItemStack(Material.FILLED_MAP);
+        // The id vanilla renders by. Deliberately not a MapView: nothing about this map exists on the server, so
+        // there is no view to attach and no id for the world to keep.
+        item.setData(DataComponentTypes.MAP_ID, MapId.mapId(MapIds.next()));
         item.editMeta(MapMeta.class, meta -> {
-            // The id vanilla renders by. Deliberately not a MapView: nothing about this map exists on the server,
-            // so there is no view to attach and no id for the world to keep.
-            meta.setMapId(MapIds.next());
             meta.getPersistentDataContainer().set(guiKey, PersistentDataType.STRING, gui);
             meta.getPersistentDataContainer().set(focusKey, PersistentDataType.STRING, hand.focus().name());
         });
@@ -118,15 +120,16 @@ final class HandItems {
      */
     static ItemStack blank(int mapId) {
         ItemStack item = new ItemStack(Material.FILLED_MAP);
-        item.editMeta(MapMeta.class, meta -> meta.setMapId(mapId));
+        item.setData(DataComponentTypes.MAP_ID, MapId.mapId(mapId));
         return item;
     }
 
     /** The map id stamped into an item, or -1 for anything that is not a map with one. */
     static int mapIdOf(@Nullable ItemStack item) {
-        if (item == null || item.getType() != Material.FILLED_MAP || !item.hasItemMeta()) return -1;
+        if (item == null || item.getType() != Material.FILLED_MAP) return -1;
 
-        return item.getItemMeta() instanceof MapMeta meta && meta.hasMapId() ? meta.getMapId() : -1;
+        MapId stamped = item.getData(DataComponentTypes.MAP_ID);
+        return stamped == null ? -1 : stamped.id();
     }
 
     /** Reconciles every online player against what they are holding. */

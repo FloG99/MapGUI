@@ -43,8 +43,28 @@ final class CaptureBudget {
      */
     private static final long IDLE_NANOS = TimeUnit.SECONDS.toNanos(1);
 
-    /** How much of a new measurement replaces the old one. A copy varies with direction and with what is cached. */
-    private static final double SMOOTHING = 0.25;
+    /**
+     * How much of a new measurement replaces the old one when a capture came in <b>dearer</b> than expected.
+     *
+     * <p>Gentle, because one expensive frame is usually a camera swung at a valley for a moment rather than a new
+     * normal, and reacting to each of those would make the rate flutter.
+     */
+    private static final double SMOOTHING_UP = 0.25;
+
+    /**
+     * And when it came in <b>cheaper</b>. Much faster, and the asymmetry is the point.
+     *
+     * <p>The two errors are not each other's mirror. Guessing too <i>low</i> corrects itself at once: the next
+     * capture is measured and says so. Guessing too <i>high</i> starves its own correction - a cost estimate that
+     * is ten times the truth cuts the rate to a tenth, and a tenth of the frames is a tenth of the measurements
+     * that would put it right, so the mistake outlives itself.
+     *
+     * <p>Which is exactly what a cold start looked like. The first capture copies the whole world with nothing in
+     * the chunk cache and costs tens of milliseconds; the estimate climbs to match; and then reuse makes captures
+     * cheap again while the rate sits at a fraction of a frame a second, reporting itself held by a budget it was
+     * spending a tenth of. Coming down fast makes that a capture or two rather than ten seconds.
+     */
+    private static final double SMOOTHING_DOWN = 0.6;
 
     /** No more often than a tick, since nothing it reads can change faster and the division is the expensive part. */
     private static final long ALLOCATE_EVERY_NANOS = TimeUnit.SECONDS.toNanos(1) / TICKS_PER_SECOND;
@@ -64,6 +84,9 @@ final class CaptureBudget {
         private long lastFrame;
         private double costNanos = ASSUMED_NANOS;
         private double fps;
+
+        /** Set when this view was told yes and cleared by the capture that followed, so a still cannot claim it. */
+        private boolean owed;
     }
 
     /**
@@ -72,8 +95,7 @@ final class CaptureBudget {
      * @param usedMillisPerTick what the rates handed out add up to, which is the figure {@link #maxMillisPerTick}
      *                          only means anything against - well under it means the ceiling is what is binding
      */
-    record Live(int viewers, double slowestFps, double fastestFps, double usedMillisPerTick, double maxMillisPerTick,
-                int fpsCeiling) {
+    record Live(int viewers, double slowestFps, double fastestFps, double usedMillisPerTick) {
     }
 
     CaptureBudget(double millisPerTick, int fpsCeiling) {
@@ -125,20 +147,65 @@ final class CaptureBudget {
         if (now - viewer.lastFrame < interval) return false;
 
         viewer.lastFrame = now;
+        viewer.owed = true;
         return true;
     }
 
     /**
-     * What a capture from this player's eye actually cost the tick, which is what the next division is made of.
+     * Whether the next capture for this player is the one a yes was just given for.
      *
-     * <p>Fed by every capture rather than only by paced ones: the cost of copying the world around somebody is the
-     * same whoever asked for it, and a still taken mid-view is a free measurement.
+     * <p>What separates a paced frame from a still taken by the same person, which matters twice. A still is not
+     * measured into the view's cost - a 256-pixel photograph copies a far wider frustum than a 64-pixel viewfinder,
+     * so letting one into the average would slow that player's view for a second over a capture that was never part
+     * of it. And a capture nobody asked permission for is outside the budget entirely, which the report says out
+     * loud rather than quietly counting as if the budget had allowed it.
+     */
+    boolean claimPaced(UUID player) {
+        Viewer viewer = viewers.get(player);
+        if (viewer == null || !viewer.owed) return false;
+
+        viewer.owed = false;
+        return true;
+    }
+
+    /**
+     * What a paced capture from this player's eye actually cost the tick, which is what the next division is made of.
+     *
+     * <p>Only the paced ones. What a capture costs is a function of how wide and how far it was asked to see, so a
+     * still at a different size is a measurement of something else - see {@link #claimPaced}.
      */
     void spent(UUID player, long mainNanos) {
         Viewer viewer = viewers.get(player);
         if (viewer == null) return;
 
-        viewer.costNanos = viewer.costNanos * (1 - SMOOTHING) + mainNanos * SMOOTHING;
+        double weight = mainNanos < viewer.costNanos ? SMOOTHING_DOWN : SMOOTHING_UP;
+        viewer.costNanos = viewer.costNanos * (1 - weight) + mainNanos * weight;
+    }
+
+    /** The budget an admin set, for a report that has to say which of the two limits is the binding one. */
+    double maxMillisPerTick() {
+        return maxMillisPerTick;
+    }
+
+    int fpsCeiling() {
+        return fpsCeiling;
+    }
+
+    /**
+     * What this one player's view is being allowed, or 0 when they have not asked lately.
+     *
+     * <p>Divided again first, the way {@link #live} is. Otherwise this reports the last division rather than the
+     * current one - and the moment somebody asks is usually the moment something has just changed, which is the
+     * one time a stale answer is worst.
+     */
+    double frameRate(UUID player) {
+        long now = clock.getAsLong();
+        allocate(now);
+
+        Viewer viewer = viewers.get(player);
+        if (viewer == null || now - viewer.lastAsked >= IDLE_NANOS) return 0;
+
+        return viewer.fps;
     }
 
     /** Null when nobody is looking through one, since a report about no viewers is a line to learn to skip. */
@@ -163,7 +230,7 @@ final class CaptureBudget {
         }
 
         double perTick = nanosPerSecond / TICKS_PER_SECOND / 1_000_000;
-        return counted == 0 ? null : new Live(counted, slowest, fastest, perTick, maxMillisPerTick, fpsCeiling);
+        return counted == 0 ? null : new Live(counted, slowest, fastest, perTick);
     }
 
     /**

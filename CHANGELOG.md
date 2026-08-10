@@ -7,6 +7,155 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Running a server
 
+- **How far out leaves close up is now a setting**, `camera.leaves.near-blocks` and `camera.leaves.far-blocks`,
+  where it was two constants in the tracer. It was only ever a guess at one capture size: a leaf texel falls below a
+  capture pixel at a distance that depends on how wide and how large you shoot, so a big frame with a narrow field of
+  view had its canopies filling in well before they needed to. **The near end now defaults to 0** rather than 16,
+  which closes the gaps from the lens out - a distant hillside goes solid without a band of haze standing in front of
+  it, and a tree at arm's length is a twentieth filled, which nothing can see. Set `near-blocks` back to 16 to keep
+  the sky visible through an oak overhead.
+
+- **Every number the camera trades truth for speed with is now yours to set**, under `camera.reuse:` and
+  `camera.limits:` in config.yml. Each of the three caches takes a near window, a far window and the two distances
+  its ramp runs between; the two caps take a count each. All default to what the camera already used, so the section
+  can stay out of your config file. `camera.reuse-chunks-for-ms` still works and now reads as
+  `camera.reuse.chunks.stills-for-ms`.
+- **Tile entities are graded by distance now**, like the columns and the entities, rather than one flat half second
+  whether a chest was under your feet or sixty blocks off. Half a second to two, over 16 to 64 blocks.
+- Fixed: **the tile entity cap dropped arbitrary ones rather than the furthest.** It was applied per column as well
+  as overall, so a chest wall in the chunk you stand in spent the whole budget and the chunk beside it drew nothing -
+  and within a column it cut in the chunk's own order, which is no order at all. Every column in range is now
+  gathered before the cap keeps the nearest. The cap defaults to 512 rather than 64, since it is a backstop against
+  a scene nobody planned for and not a budget.
+- **The performance reports say what things are.** `mobs` is *entities*, `copy` is *blocks*, `fittings` is *tile
+  entities*, `columns` is *chunks*, `main thread` is *costs the server*, `worst single` is *slowest frame*. Each
+  stage carries what it went through beside what it cost, on one line rather than two, and the section counts are
+  gone - they measured something only a renderer could act on. `CameraStats.Copy#columnsEach` is `chunksEach`.
+- The map id on a hand item goes through `DataComponentTypes.MAP_ID` rather than the deprecated
+  `MapMeta#setMapId`. Same component either way, and still not a `MapView`, since nothing about these maps exists
+  on the server.
+
+- **What a mob looks like is kept between captures. Where it is standing never is.** A chest can be held outright
+  because it does not move; a mob cannot, since a stale one is drawn where it is not. But nothing expensive about a
+  mob is its position - the cost is the shape, which is a part tree, nine equipment slots, its variant and its skin,
+  and none of that changes frame to frame. So the shape is held and the six numbers saying where it stands are read
+  fresh every capture. What can lag is a mob's *appearance*: the sword it just drew, an archer's levelled arms, a
+  sneaking player's crouch. Graded by distance like the columns, a tenth of a second up close out to two seconds at
+  the far end, and live views only. On `CameraStats` as `mobsReusedPercent`.
+
+- **A mob is culled by its own box now, not by the sixteen-block column it stands in.** A two-block ball against the
+  same four side planes, so a mob anywhere in a column the frame merely clips is no longer built - and building one
+  is a part tree, its equipment, its variant and its skin. Two blocks because what is drawn reaches past the mob: a
+  banner on a head, a pike in a hand. Pinned by the sweep the column test already had, marching every pixel of a
+  frame at five pitches and five yaws.
+
+- **The entity gather culls before it sorts, rather than after.** A box query in a village comes back with everything
+  in a 128-block cube - dropped items, paintings, frames, the lot - and all of it went through the comparator before
+  a linear pass cut it to the handful actually in shot. Worse, the comparator asked each entity for its `Location`
+  twice per comparison, and every one of those allocates, so ordering a list that was about to be thrown away cost
+  `n log n` allocations. Each entity's position is now read once and carried through the range test, the frame test
+  and the sort.
+- **The tick half of a capture is reported in three stages rather than two** - the copy, the mobs, and what is
+  bolted to the world - with a count beside each. One timer over both gathers could only say that "entities" were
+  slow, which is two problems with entirely different answers: fewer mobs in shot against fewer chests in range.
+  On `CameraStats` as `mobMillisEach` / `mobsEach` and `blockEntityMillisEach` / `blockEntitiesEach`.
+
+- **What a column's block entities draw is kept between captures, the way the column itself is.** A chest does not
+  move, and a sign changes when somebody edits it rather than every tick - so rebuilding all of them every frame was
+  the same waste the chunk copy used to be, and the fix is the same: held per column, for half a second. Flat rather
+  than graded by distance like the columns are, because the grading pays there only because the columns a frustum
+  wants grow with distance - block entities are capped at 64 within four chunks, where that ramp has barely begun.
+  Nothing that animates is on this path: an item frame, whether it holds a map filling in or one of MapGUI's own
+  walls playing, is an *entity*, and the entity path holds nothing between captures at all.
+- **Block entities are no longer copied out of the whole square around the camera, every frame.** The gather walked
+  a 9x9 of columns and called `getTileEntities()` on each, which builds a full `BlockState` - the block's inventory
+  and data included - for every tile entity in the column, and then threw nearly all of them away: most block
+  entities are drawn from their own block model and need nothing here, so the 64 cap almost never tripped and a
+  village of chests, barrels and lecterns was materialised in full on every capture. Three fixes, all before
+  anything is built: the columns are frustum-culled like the chunk copy, the corners of that square are dropped
+  (they are ninety blocks out where the limit is sixty-four), and the remaining columns are asked with Paper's
+  predicate form, which tests the block's position without building a `BlockState` at all.
+
+- Fixed: **a live view could sit at a fraction of a frame a second for ten seconds after it opened**, reporting
+  itself held by a budget it was spending a tenth of. The cost estimate is what divides the budget, and the first
+  capture of a cold camera copies the whole world with nothing cached, so the estimate climbed to match - then the
+  cache warmed, captures got cheap, and the estimate stayed high. Which is self-sustaining rather than merely wrong:
+  a view throttled to a tenth of its rate delivers a tenth of the measurements that would correct it. The estimate
+  now falls fast and rises gently, because the two errors are not mirrors - guessing too low is corrected by the
+  very next capture, where guessing too high starves its own correction.
+- Fixed: `Camera#frameRate(player)` reported the previous division rather than the current one, which mattered most
+  at exactly the moment somebody asks - when something has just changed.
+
+- **Entities out of frame are no longer built.** A capture searched the sphere around the camera and snapshotted
+  everything it found - a part tree each, with equipment, pose and skin - and then the trace threw away everything
+  the frame was not pointed at. A camera sees about a quarter of what surrounds it, so most of that work was always
+  discarded. They are now tested against the same frustum the chunk copy culls columns with, at the same coarse
+  granularity, which is already proven not to drop a column a real ray arrives at.
+- **A capture draws the entities the photographer can actually see**, rather than a flat 64 blocks. That number was
+  a guess at "roughly where the client stops sending them" and it was a third short: the shipped tracking ranges are
+  96 blocks for mobs and 128 for players, so a photograph quietly left out a skeleton at eighty blocks that was in
+  plain view. Read per category from the server's own `entity-tracking-range`, trimmed by a tenth so nothing is drawn
+  that the client might not have been sent, and falling back to the old 64 on anything that will not answer.
+
+- **A live view no longer copies the world from scratch every frame.** Chunk reuse was off by default and stayed off
+  for viewfinders, so a preview at a player's full render distance re-copied 150-odd chunk columns several times a
+  second and spent an entire 1 ms/t budget on about three frames. The argument for keeping reuse opt-in is a good one
+  for a *photograph* - that one is kept, and a stale column is wrong forever. It barely applies to a live view, where
+  being wrong lasts until the next frame and the next frame is coming anyway. So a paced capture now reuses columns
+  whatever `reuse-chunks-for-ms` says, while a still is exact unless a server opts in.
+- **And that reuse is graded by distance rather than flat**, which is what makes it honest. Staleness is only worth
+  what it hides: the column a photographer stands in is most of the picture and is **never** reused, the ring around
+  it likewise, and from there the window ramps out to a second at about 190 blocks - where a changed block is a pixel
+  or two and nobody can tell it is late. It costs almost nothing to keep the near ring fresh, because the columns a
+  frustum wants grow with distance: the near few are a handful of the hundred-odd a wide capture copies, so a few
+  percent of the saving buys back the whole of the staleness anyone can see.
+- **The tick half of a capture is reported split into the copy and the entity gather**, and per capture as well as
+  per second. The rate a live view gets is the budget divided by what one capture costs, so that is the number that
+  explains a slow viewfinder - and the split says which half to go after, since a big copy wants a shorter
+  `max-distance` or reuse and a big gather wants fewer entities in shot. On `CameraStats` as `mainMillisEach`,
+  `copyMillisEach` and `entityMillisEach`.
+- **And why the copy cost that**, on `CameraStats.copy()`: how many chunk columns one capture went through, how many
+  of them came back from the cache instead of being copied, and how many of their sections held anything. Columns is
+  the driver and scales with `max-distance`; the reuse percentage is what says whether a live view is getting the
+  cache or re-copying the world every frame; and filled-against-total sections is the ceiling on what any smarter
+  copying could ever win, since a column is copied whole - Bukkit has no way to ask for part of one - but a section
+  of pure air costs almost nothing.
+
+- Fixed: **the capture queue had no bound, and a queued capture holds a copy of the world.** Every chunk column a
+  capture copied stays in memory until it is drawn - 167 `ChunkSnapshot`s at range 192 - so a plugin capturing faster
+  than the machine could trace did not fall behind, it ran the server out of heap. At most three may now be waiting,
+  and further captures are turned away *before* the copy rather than queued, so a capture that was never going to be
+  drawn in time no longer costs the tick that would have paid for it. The caller gets a null shot, which is the same
+  answer it already had to handle, and `/mapgui camera performance` counts them on their own line - turned away is
+  not failed, since nothing broke.
+- Fixed: **the capture pool said two threads and ran one.** A `ThreadPoolExecutor` only grows past its core size when
+  the queue refuses a task, and an unbounded queue never does. It is now written as the one thread it was, which is
+  also the right number: the tracer already spreads a single capture across every core, so a second concurrent trace
+  would contend for the same threads and hold a second copy of the world while it did.
+- Fixed: **numbers were formatted in the server's locale**, so a German-locale server read `0,34ms/t` where its
+  config.yml says `1.0`. Found by the first test written against the report.
+- Captures taken without asking `readyForFrame` are counted apart and reported on an `Unpaced` line. Pacing is
+  opt-in, so a budget can be set and completely ignored - and until now the report showed "no live views" beside a
+  busy camera, which reads as agreement rather than as a warning. Those captures also no longer feed the per-viewer
+  cost measurement: a 256-pixel still copies a far wider frustum than a 64-pixel viewfinder, so it was slowing that
+  player's live view over a frame that was never part of it.
+- **`/mapgui` only lists the branches this server has something to administer.** MapGUI is a library, so what it can
+  administer is whatever the plugins on top of it registered - and on a server that installed it for one camera,
+  `/mapgui hand` and `/mapgui wall` were two branches of commands about features that will never run, which is worse
+  than clutter: a tree full of things that answer "nothing to show" teaches an admin not to read it. Worked out
+  rather than configured, and it corrects itself as plugins load - `hand` appears once a GUI is registered, `wall`
+  once there is content to place or a wall already up, `camera` once anything asks the camera or textures are
+  installed. `commands.hide-unused: false` shows the lot.
+- **`commands.enabled: false` turns `/mapgui` off entirely**, never registering it rather than registering and
+  refusing, so nothing of MapGUI's appears in a tab completion. For a server whose plugin ships its own commands over
+  the API and does not want two ways to ask the same question.
+- **`Camera#stats()` hands over every number the built-in report prints**, and the built-in report is written against
+  nothing else - no private access on the side, which is how an API ends up missing the field somebody needed. Rates
+  and which plugin asked, main-thread cost per tick, the worst single capture, trace time, the queue, failures with
+  the last reason, and what the live views are being allowed against the two settings that decided it.
+  `Camera#frameRate(player)` adds the one figure a server-wide report cannot have: what *this* player's viewfinder is
+  getting. The camera example ships `/snapshot debug` built on both. See
+  [the same numbers, from code](docs/camera.md#the-same-numbers-from-code).
 - **A live camera view now costs the server what an admin gives it, however many people have one open.** Two settings,
   `camera.live.max-ms-per-tick` and `camera.live.max-fps`, and everything between them is spent: views take as many
   frames as the budget affords and stop at the ceiling. At the defaults, and a frame costing a millisecond of
@@ -16,7 +165,8 @@ surface is `mapgui-api` and `mapgui-layout`.
   a cheap view that would hit the ceiling on less than its share hands the rest to one that cannot. A plugin asks
   `camera().readyForFrame(player)` every tick it would like a frame; asking is what makes it a viewer, so there is
   nothing to open, nothing to close, and a screen that stops asking stops being divided by. Advisory rather than
-  enforced - it is the admin's tick either way, and `/mapgui camera timings` names whoever is spending it. See
+  enforced - it is the admin's tick either way, and `/mapgui camera performance` names whoever is spending it
+  and counts what it was not asked about. See
   [live views](docs/camera.md#live-views).
 - **`/mapgui camera performance` now reports what every capture on the server cost, whoever asked for it.** It used to be
   a per-player switch that pushed three lines of chat after each capture taken from *that* player's eye, which only

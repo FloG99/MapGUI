@@ -50,6 +50,9 @@ public final class ChunkFrustum {
     private final int worldMaxY;
     private final Side[] sides;
 
+    /** How long each side vector is, so a radius can be measured against a plane that is not a unit normal. */
+    private final double[] sideLengths;
+
     /**
      * @param worldMinY lowest block Y of the world being captured, {@code worldMaxY} the highest. The height test
      *                  is against the world rather than against nothing, since a Y range that misses it entirely
@@ -79,6 +82,11 @@ public final class ChunkFrustum {
                 side(tanHalf, forward, up, 1),
                 side(tanHalf, forward, up, -1)
         };
+        this.sideLengths = new double[sides.length];
+        for (int i = 0; i < sides.length; i++) {
+            Side side = sides[i];
+            sideLengths[i] = Math.sqrt(side.x() * side.x() + side.y() * side.y() + side.z() * side.z());
+        }
 
         double widest = 0;
         boolean degenerate = false;
@@ -118,6 +126,34 @@ public final class ChunkFrustum {
         return new Side(tanHalf * forward[0] + sign * axis[0],
                 tanHalf * forward[1] + sign * axis[1],
                 tanHalf * forward[2] + sign * axis[2]);
+    }
+
+    /**
+     * Whether anything inside a ball of {@code radius} around this point could land in the frame.
+     *
+     * <p>The same four planes, asked about something far smaller than a sixteen-block column - which is what stops a
+     * mob being built for every column the frame merely clips. Conservative like the column test: a ball that
+     * touches the frame at all is kept.
+     *
+     * <p><b>Not</b> occlusion. Only the trace knows what is in front of what, and by then it is off-thread.
+     */
+    public boolean mightSee(double x, double y, double z, double radius) {
+        double dx = x - eyeX;
+        double dy = y - eyeY;
+        double dz = z - eyeZ;
+
+        double reach = range + radius;
+        if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
+        if (everything) return true;
+
+        // Outside a plane by more than the ball reaches along its normal, and nothing in it can be in frame. The
+        // sides are not unit vectors, so each carries its own length to measure that slack against.
+        for (int i = 0; i < sides.length; i++) {
+            if (sides[i].x() * dx + sides[i].y() * dy + sides[i].z() * dz < -radius * sideLengths[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean mightSee(int chunkX, int chunkZ) {

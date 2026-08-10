@@ -286,16 +286,29 @@ Leaves close up with distance. Untouched they stay a cutout at any range, so a r
 the whole forest and comes out at the sky - and a hillside of trees photographs as a haze of twigs with daylight
 behind it, when the same hillside on screen is a solid green mass.
 
-That is a resolution problem rather than a taste one. A leaf texture is 16x16 across a one block face, so from about
-**16 blocks** out a single texel is smaller than a pixel of the capture, and a gap no longer has a pixel of its own to
-be seen through: what the pixel covers is part leaf and part gap. So from there the gaps fill in, over the texture's
-own average color across its drawn texels, reaching **fully opaque at 50 blocks**. The client arrives at the same
-place from the other direction, by mipmapping - a canopy at range is the average of what is in it.
+That is a resolution problem rather than a taste one. A leaf texture is 16x16 across a one block face, so past some
+distance a single texel is smaller than a pixel of the capture, and a gap no longer has a pixel of its own to be seen
+through: what the pixel covers is part leaf and part gap. So from there the gaps fill in, over the texture's own
+average color across its drawn texels, reaching fully opaque further out. The client arrives at the same place from
+the other direction, by mipmapping - a canopy at range is the average of what is in it.
 
-Near trees are untouched, which is the point of starting at 16 rather than at zero: standing under an oak you can see
-the sky through it, because there the texels really are bigger than the pixels. Only leaves do this. Every other
-cutout - bars, ladders, glass panes, grass - keeps its gaps at any distance, because you are never looking through a
-hundred of them at once.
+Where that crossover actually falls depends on the size and field of view the capture is taken at, so both ends are
+settings rather than the constants they started as:
+
+```yaml
+camera:
+  leaves:
+    near-blocks: 0
+    far-blocks: 50
+```
+
+`near-blocks: 0` closes the gaps from the lens out, so a distant canopy is solid with no band of haze in front of it -
+a tree at arm's length is a twentieth filled, which is not visible. Raising it leaves near trees alone instead, so
+standing under an oak you see the sky through it. A big capture with a narrow field of view resolves further and wants
+both pushed out; a half-size map wants them pulled in.
+
+Only leaves do this. Every other cutout - bars, ladders, glass panes, grass - keeps its gaps at any distance, because
+you are never looking through a hundred of them at once.
 
 ## Live views
 
@@ -337,6 +350,10 @@ One viewer does not get twenty times the frames for being alone, and the fourth 
 rather than costing you a quarter more. Either setting takes `0` to mean no limit of that kind - `max-ms-per-tick` at
 0 lets everybody have the ceiling however many there are, `max-fps` at 0 lets one lonely viewer take the whole budget.
 
+Only paced captures feed the measurement below, and only they count against the budget. A still taken by the same
+player is a capture of something else: a 256-pixel photograph copies a far wider frustum than a 64-pixel viewfinder,
+so letting one into the average would slow that player's view for a second over a frame that was never part of it.
+
 **What a frame costs is measured, per viewer.** A 64-pixel viewfinder pointed at a wall copies a fraction of what a
 128-pixel one pointed across a valley does, so the budget is divided as *time* rather than as frames, and a view that
 would hit the ceiling on less than its share hands the rest back to the ones that cannot. That is what makes it spend
@@ -344,12 +361,14 @@ the budget rather than merely respect it. The first frame or two of a new view a
 real measurements replace within a second.
 
 It is **advisory**. Nothing stops a plugin capturing without asking - it is the admin's tick either way, and
-[`/mapgui camera performance`](#what-to-watch) names whoever is spending it. That report also carries a `Live views` line
+[`/mapgui camera performance`](#what-to-watch) names whoever is spending it and counts those captures on an
+`Unpaced` line, so a budget being ignored does not look like a budget nothing needed. That report also carries a `Live views` line
 with what the viewers are getting and the two settings that decided it, since 6.7 fps means one thing when the budget
 ran out and quite another when the ceiling is 6.
 
 A still taken by a plugin that never asks is not paced at all, which is the intended behaviour: one photograph is one
-photograph. `reuse-chunks-for-ms` is worth turning on alongside a live view - see [what it costs](#what-it-costs).
+photograph. `camera.reuse.chunks.stills-for-ms` is worth turning on alongside a live view - see
+[reuse and caps](#reuse-and-caps).
 
 ## What it costs
 
@@ -469,14 +488,25 @@ yaws, six eye heights and off-origin coordinates: **14.5 million chunk-hits reac
 Three mutations of the bounds - negative slack, a 10% tighter range, the wrong corner of the column - each fail four
 of those tests, so the sweep is not passing by being vacuous.
 
-There is also `camera.reuse-chunks-for-ms`, which serves a chunk copied for one capture to another taken within that
-window: over 90% reuse for a player walking and shooting, which is most of the copy gone. It is **off by default**,
-because it is the only fast path here that is not exact. There is no way to know a chunk has changed - block events
-miss pistons, fluid, growth, explosions and every other plugin, and a chunk holds light as well as blocks, so a torch
-placed in the chunk next door changes this one without ever touching it. So it is a timer rather than a guarantee, and
-a capture can show a block as it was up to that long ago. Worth turning on for a live view or a burst of shots, where
-the alternative is copying the same chunks twenty times a second; not worth it for one photograph, which is why the
-default is zero.
+### Reuse and caps
+
+Three things are kept between captures, all of them under `camera.reuse:` - copied **chunks**, what a column's
+**tile entities** draw, and what an **entity looks like**. Together they are most of the copy and most of the gather
+gone: over 90% chunk reuse for a player walking and shooting.
+
+They are the only fast paths here that are not exact. There is no way to know something has changed - block events
+miss pistons, fluid, growth, explosions and every other plugin; a chunk holds light as well as blocks, so a torch
+placed next door changes it without being touched; and nothing reports that a mob has drawn its sword. So each is a
+timer rather than a guarantee, and each ramps with distance, because staleness is only worth what it hides: what is
+at your feet is most of the picture, what is at the horizon is a few pixels.
+
+Two asymmetries are worth knowing. A **still photograph** reuses nothing unless you ask - `stills-for-ms` is zero by
+default, since a photograph is kept and no frame follows to correct it. And an **entity's position is never reused**,
+whatever the window says: only its shape is held, so a reused mob is always drawn where it actually is, and what can
+lag is the sword it just drew or a player's crouch.
+
+`camera.limits:` caps what one capture may draw at all, so a mob farm or a storage room in shot cannot fill a frame.
+Both keep the nearest, so what gets dropped is whatever was furthest away.
 
 None of this makes a smaller `size` help the copy: the trace gets cheaper and the copy does not.
 
@@ -506,24 +536,34 @@ whether a server is in trouble, which is a much shorter question, so it answers 
 ```
 Camera - what captures are costing, over the last few seconds
 Captures  3.2/s   PhotoBooth 3.0/s, Surveillance 0.2/s
-Main thread  0.34ms/t  0.7% of a tick   worst single 4.1ms
+Costs the server  0.34ms/t  0.7% of every tick   slowest frame 4.1ms
+Each capture  6.8ms on the tick   blocks 6.0ms (152 chunks, 78% reused), entities 0.5ms (8, 62% reused), tile entities 0.3ms (4)
 Live views  3 viewers at 6.7 fps   0.92 of 1.0ms/t, 10 fps cap
 ```
 
 - **Captures, and by whom.** Rate is the multiplier on everything else, and the plugin names are the actionable half
   of it - a camera is always somebody's, and turning one down means turning down whatever asked for it.
-- **Main thread.** The only number that can cost TPS, and the one to watch. Per **tick** rather than per second,
+- **Costs the server.** The only number that can cost TPS, and the one to watch. Per **tick** rather than per second,
   since that is the unit a server is read in and the unit `camera.live.max-ms-per-tick` is written in, so the two can
   be held against each other directly. A tick is 50 ms: under 1% of it is nothing, 5% is a server you can feel.
+- **Each capture**, split into the three stages that have different answers. **Blocks** is chunk columns copied and
+  wants a shorter `max-distance`; **entities** is what is standing in shot; **tile entities** is chests and signs.
+  Each carries what it went through beside what it cost, because a slow stage is either a lot of things or expensive
+  things, and the reuse percentages say whether the caches are doing their job - see [reuse](#reuse-and-caps).
 - **Live views**, when any are open: what they are getting, and what the rates handed out add up to against what
   they were allowed. The pair is what says *which* of the two settings is binding - well under the budget means the
   fps cap is what is holding them, and the budget is not the number to change.
-- **Worst single.** An average of 2 ms with one 40 ms copy in it is a stutter a player saw, and the average hides it.
-  This is the same `copy` a `follow` line reports, kept because one long tick is a different problem from a busy one.
-- **Waiting**, when anything is. Captures are traced one at a time off an unbounded queue - the trace itself is what
-  uses several threads - so a plugin asking for captures faster than the machine can trace them shows up as a queue
-  that only goes up. It is the one line that says "over capacity" rather than "busy", and it is left out entirely
-  when the queue is empty.
+- **Slowest frame.** An average of 2 ms with one 40 ms copy in it is a stutter a player saw, and the average hides it.
+  Kept because one long tick is a different problem from a busy one.
+- **Waiting**, when anything is. Captures are traced one at a time, since the trace itself already spreads across
+  every core, and at most three may be copied and waiting. A plugin asking for more than the machine can draw sees
+  the queue fill and then **turned away**: further captures are refused before the copy rather than queued, and the
+  caller gets a null shot. The bound is for memory rather than latency - a queued capture holds the chunk snapshot
+  of every column it copied, 167 of them at range 192, so an unbounded queue runs a server out of heap rather than
+  merely falling behind. Both lines are left out when nothing is waiting.
+- **Unpaced**, when a budget is set and something is capturing without asking for it. Pacing is opt-in: a plugin
+  that never calls `readyForFrame` is never paced, and without this line an admin who set `max-ms-per-tick` would
+  see "no live views" beside a camera capturing twenty times a second and read it as agreement.
 
 Failures get a line here and on `/mapgui status`, which is the only place they show at all: a camera that throws on
 every capture logs to the console and otherwise looks exactly like a camera nothing is using.
@@ -531,6 +571,28 @@ every capture logs to the console and otherwise looks exactly like a camera noth
 There is no bandwidth figure, on purpose. A capture sends nothing - what reaches a client is the map frame a screen
 paints it into, and [`/mapgui performance`](performance.md) already counts those bytes under whatever wall or player
 received them. Counting them twice would only make the camera look expensive in a currency it does not spend.
+
+### The same numbers, from code
+
+Every figure above comes out of `CameraStats`, and the built-in command has no private access to any of it:
+
+```java
+CameraStats stats = MapGui.get().camera().stats();
+```
+
+Which is deliberate. A built-in command working from a wider view than the API offers is how an API ends up missing
+the field somebody needed - so `/mapgui camera performance` is written against exactly what your own debugging
+command can get. Rates, per-tick cost, the slowest single capture, each stage with what it went through, trace time, the queue, failures with
+the last reason, which plugin asked, and what the live views are being allowed against the two settings that decided
+it. Plus one that is per player rather than server-wide, for a plugin debugging its own viewfinder:
+
+```java
+double fps = MapGui.get().camera().frameRate(player);
+```
+
+The camera example ships `/snapshot debug` built on nothing else, for a server that turns MapGUI's own commands off
+with `commands.enabled: false` and would rather have one place to look - see
+[`SnapshotDebug`](../examples/camera/src/main/java/de/flog99/mapgui/examples/camera/SnapshotDebug.java).
 
 Nothing has to be switched on for any of this; it is counted whether anybody is looking or not, over a rolling few
 seconds, and a `/mapgui reload` starts it over.

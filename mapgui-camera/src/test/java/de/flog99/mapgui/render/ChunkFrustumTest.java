@@ -41,6 +41,98 @@ class ChunkFrustumTest {
     }
 
     /**
+     * The sweep the column test gets, for the ball test: every pixel of a frame is marched, and anything a ray
+     * passes within a hair of has to survive. A cull that drops a mob a ray reaches deletes it from the picture,
+     * which is the one failure worth spending a test like this on.
+     */
+    private static void assertKeepsEveryPointAnyRayReaches(CameraView view, int size, double radius, String where) {
+        ChunkFrustum frustum = frustumFor(view);
+        double[] direction = new double[3];
+
+        for (int py = 0; py < size; py++) {
+            for (int px = 0; px < size; px++) {
+                view.direction(px, py, size, size, direction);
+                for (double along = STEP; along <= DISTANCE; along += STEP) {
+                    double x = EYE_X + direction[0] * along;
+                    double y = EYE_Y + direction[1] * along;
+                    double z = EYE_Z + direction[2] * along;
+                    if (y < MIN_Y || y > MAX_Y) continue;
+
+                    assertTrue(frustum.mightSee(x, y, z, radius),
+                            where + ": a ray reaches " + x + "," + y + "," + z + " and it was culled");
+                }
+            }
+        }
+    }
+
+    /** Anything a ray touches has to survive, at every angle, or a mob vanishes from a photograph. */
+    @Test
+    void theBallTestKeepsEverythingAnyRayReaches() {
+        for (float pitch : new float[]{-90, -45, 0, 30, 90}) {
+            for (float yaw : new float[]{0, 37, 90, 180, 271}) {
+                assertKeepsEveryPointAnyRayReaches(at(yaw, pitch), 24, 0, "yaw " + yaw + " pitch " + pitch);
+            }
+        }
+    }
+
+    /** Behind the camera is the whole point of culling, so it has to actually say no to something. */
+    @Test
+    void itDropsWhatIsBehindTheCamera() {
+        ChunkFrustum frustum = frustumFor(at(0, 0));
+
+        // Yaw 0 faces +z in Minecraft, so -z is squarely behind.
+        assertFalse(frustum.mightSee(EYE_X, EYE_Y, EYE_Z - 40, 2), "40 blocks behind should be dropped");
+        assertTrue(frustum.mightSee(EYE_X, EYE_Y, EYE_Z + 40, 2), "and 40 in front kept");
+    }
+
+    /** Past the range there is nothing to trace, whatever direction it is in. */
+    @Test
+    void itDropsWhatIsBeyondTheRange() {
+        ChunkFrustum frustum = frustumFor(at(0, 0));
+
+        assertFalse(frustum.mightSee(EYE_X, EYE_Y, EYE_Z + DISTANCE + 10, 2));
+        assertTrue(frustum.mightSee(EYE_X, EYE_Y, EYE_Z + DISTANCE - 10, 2));
+    }
+
+    /**
+     * The radius is slack in the keeping direction. A point just outside the frame is dropped on its own and kept
+     * once it is the centre of something big enough to reach in - which is what covers a banner on a head.
+     */
+    @Test
+    void theRadiusOnlyEverKeepsMore() {
+        ChunkFrustum frustum = frustumFor(at(0, 0));
+
+        // Out to the side at 20 blocks, past the edge of a 70 degree frame.
+        double x = EYE_X + 20;
+        double z = EYE_Z + 20;
+
+        assertFalse(frustum.mightSee(x, EYE_Y, z, 0), "the point itself is outside the frame");
+        assertTrue(frustum.mightSee(x, EYE_Y, z, 12), "a ball wide enough to reach in is kept");
+    }
+
+    /**
+     * Tighter than culling by the column it stands in, which is the reason for it: a chunk is sixteen blocks, so
+     * the column test keeps a mob anywhere in any column the frame so much as clips.
+     */
+    @Test
+    void itIsTighterThanTheColumnItStandsIn() {
+        ChunkFrustum frustum = frustumFor(at(0, 0));
+        int kept = 0;
+        int keptAsColumns = 0;
+
+        for (int x = -60; x <= 60; x += 3) {
+            for (int z = -60; z <= 60; z += 3) {
+                double atX = EYE_X + x;
+                double atZ = EYE_Z + z;
+                if (frustum.mightSee(atX, EYE_Y, atZ, 2)) kept++;
+                if (frustum.mightSee((int) Math.floor(atX) >> 4, (int) Math.floor(atZ) >> 4)) keptAsColumns++;
+            }
+        }
+
+        assertTrue(kept < keptAsColumns, "the ball test kept " + kept + " where the column test kept " + keptAsColumns);
+    }
+
+    /**
      * Marches every pixel of a {@code size} square frame and fails if the frustum drops a column any of them was
      * over while inside the world.
      *

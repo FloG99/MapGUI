@@ -94,6 +94,23 @@ public interface Camera {
     boolean readyForFrame(Player player);
 
     /**
+     * How many frames a second this player's live view is currently being allowed, or 0 if they have none open.
+     *
+     * <p>The companion to {@link #readyForFrame}, for a plugin that wants to say so on its own screen - or to work
+     * out why a viewfinder that was smooth a minute ago is not. It moves as other people open and close theirs.
+     */
+    double frameRate(Player player);
+
+    /**
+     * What every capture on this server has cost over the last few seconds, whoever asked for it.
+     *
+     * <p>The same reading {@code /mapgui camera performance} prints, from the same method - so a debugging command
+     * of your own can show whatever part of it you care about without MapGUI having to guess in advance which part
+     * that is. Cheap enough to call from a command; it is a snapshot of counters that were being kept anyway.
+     */
+    CameraStats stats();
+
+    /**
      * Loads the textures now rather than on the first capture.
      *
      * @return false if a download is already running, or if {@code camera.assets.download} is off and there is

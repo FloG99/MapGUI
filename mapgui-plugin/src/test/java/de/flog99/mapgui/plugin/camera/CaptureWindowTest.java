@@ -25,7 +25,7 @@ class CaptureWindowTest {
     @Test
     void theSecondInProgressIsNotCountedYet() {
         CaptureWindow window = window();
-        window.captured(4 * MS);
+        window.captured(4 * MS, 0, 0, true);
 
         assertEquals(0, window.read().captures());
 
@@ -41,7 +41,7 @@ class CaptureWindowTest {
     @Test
     void aRateIsSpreadOverTheWholeWindowRatherThanTheBusySeconds() {
         CaptureWindow window = window();
-        window.captured(4 * MS);
+        window.captured(4 * MS, 0, 0, true);
         second += 3;
 
         assertEquals(0.25, window.read().perSecond(), 0.001);
@@ -51,7 +51,7 @@ class CaptureWindowTest {
     @Test
     void anythingOlderThanTheWindowFallsOut() {
         CaptureWindow window = window();
-        window.captured(4 * MS);
+        window.captured(4 * MS, 0, 0, true);
 
         second += 4;
         assertEquals(1, window.read().captures());
@@ -64,10 +64,10 @@ class CaptureWindowTest {
     @Test
     void theWorstCaptureIsKeptApartFromTheAverage() {
         CaptureWindow window = window();
-        window.captured(2 * MS);
-        window.captured(30 * MS);
+        window.captured(2 * MS, 0, 0, true);
+        window.captured(30 * MS, 0, 0, true);
         second++;
-        window.captured(2 * MS);
+        window.captured(2 * MS, 0, 0, true);
         second++;
 
         CaptureWindow.Load load = window.read();
@@ -83,8 +83,8 @@ class CaptureWindowTest {
     @Test
     void traceIsAveragedOverTheOnesThatFinished() {
         CaptureWindow window = window();
-        window.captured(MS);
-        window.captured(MS);
+        window.captured(MS, 0, 0, true);
+        window.captured(MS, 0, 0, true);
         window.traced(100 * MS);
         second++;
 
@@ -96,10 +96,71 @@ class CaptureWindowTest {
     @Test
     void theTickShareIsAgainstTheThousandMillisecondsASecondHolds() {
         CaptureWindow window = window();
-        window.captured(40 * MS);
+        window.captured(40 * MS, 0, 0, true);
         second++;
 
         assertEquals(1.0, window.read().tickPercent(), 0.001);
+    }
+
+    /**
+     * A capture that never asked to be paced is counted apart, so a budget nothing is honouring can be said out
+     * loud rather than looking like a budget nothing needed.
+     */
+    @Test
+    void capturesThatDidNotAskAreCountedApartFromTheOnesThatDid() {
+        CaptureWindow window = window();
+        window.captured(MS, 0, 0, true);
+        window.captured(MS, 0, 0, false);
+        window.captured(MS, 0, 0, false);
+        second++;
+
+        CaptureWindow.Load load = window.read();
+        assertEquals(3, load.captures());
+        assertEquals(1, load.paced());
+        assertEquals(0.5, load.unpacedPerSecond(), 0.001);
+    }
+
+    /**
+     * A capture turned away for want of a thread is not a capture that failed. Nothing broke, so it is counted on
+     * its own - and it still means the window is not idle, or being over capacity would report as being quiet.
+     */
+    @Test
+    void capturesTurnedAwayAreCountedApartFromFailures() {
+        CaptureWindow window = window();
+        window.turnedAway();
+        second++;
+
+        CaptureWindow.Load load = window.read();
+        assertEquals(1, load.dropped());
+        assertEquals(0, load.failed());
+        assertEquals(0, load.captures());
+        assertFalse(load.idle());
+    }
+
+    /** The tick half is split, since a big copy and a big entity gather want different things done about them. */
+    @Test
+    void copyAndEntityTimeAreCountedApart() {
+        CaptureWindow window = window();
+        window.captured(4 * MS, MS, 0, true);
+        window.captured(6 * MS, 3 * MS, 0, true);
+        second++;
+
+        CaptureWindow.Load load = window.read();
+        assertEquals(5 * MS, load.copyNanosEach());
+        assertEquals(2 * MS, load.mobNanosEach());
+        assertEquals(7 * MS, load.mainNanosEach());
+    }
+
+    /** A tick is a twentieth of a second, and the budget an admin sets is written per tick. */
+    @Test
+    void theMainThreadCostIsAlsoReadablePerTick() {
+        CaptureWindow window = window();
+        window.captured(20 * MS, 0, 0, true);
+        second++;
+
+        CaptureWindow.Load load = window.read();
+        assertEquals(5 * MS, load.mainNanosPerSecond());
+        assertEquals(MS / 4, load.mainNanosPerTick());
     }
 
     /** A camera that only fails is not idle, or the one state worth reporting would be the one that reports nothing. */

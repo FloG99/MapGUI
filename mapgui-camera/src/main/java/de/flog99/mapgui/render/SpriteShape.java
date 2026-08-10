@@ -104,7 +104,8 @@ final class SpriteShape {
         int height = icon.height();
         if (width <= 0 || height <= 0 || icon.argb().length < width * height) return null;
 
-        @SuppressWarnings("unchecked")
+        // Raw on the right, since Java will not let a generic array be created any other way.
+        @SuppressWarnings({"unchecked", "rawtypes"})
         List<Run>[] rows = new List[height];
         for (int row = 0; row < height; row++) {
             rows[row] = runsIn(icon, row, width);

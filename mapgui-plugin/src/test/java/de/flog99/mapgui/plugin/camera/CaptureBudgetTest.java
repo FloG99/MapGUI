@@ -158,6 +158,60 @@ class CaptureBudgetTest {
         assertEquals(10, budget.live().fastestFps(), 0.01);
     }
 
+    /**
+     * The cold start. One capture with nothing in the chunk cache costs tens of milliseconds, the estimate climbs
+     * to match, and the rate collapses - and then reuse makes captures cheap again while the estimate is still the
+     * only thing deciding the rate. Coming down has to be quick, because a throttled view is measured rarely and
+     * the estimate that throttled it can only be corrected by the measurements it is suppressing.
+     */
+    @Test
+    void aCostEstimateLeftHighByAColdStartComesBackDownWithinAFewCaptures() {
+        CaptureBudget budget = budget(1.0, 10);
+        UUID one = UUID.randomUUID();
+
+        // Four expensive frames, the way a cold cache delivers them, to leave the estimate high.
+        for (int i = 0; i < 4; i++) {
+            budget.readyForFrame(one);
+            budget.spent(one, 60 * MS);
+            now += TICK;
+        }
+        assertTrue(budget.frameRate(one) < 2, "an expensive view should be throttled while it is expensive");
+
+        // Now the cache is warm and they cost a millisecond. Count the frames it takes to notice.
+        int frames = 0;
+        while (budget.frameRate(one) < 8 && frames < 40) {
+            if (budget.readyForFrame(one)) {
+                budget.spent(one, MS);
+                frames++;
+            }
+            now += TICK;
+        }
+
+        assertTrue(frames <= 6, "should recover in a handful of captures, took " + frames);
+    }
+
+    /**
+     * And the other way is deliberately slower: one costly frame is usually a camera swung at a valley for a
+     * moment, and chasing each of those would make the rate flutter for everybody sharing the budget.
+     */
+    @Test
+    void oneExpensiveCaptureDoesNotCollapseTheRateAtOnce() {
+        CaptureBudget budget = budget(1.0, 10);
+        UUID one = UUID.randomUUID();
+
+        budget.readyForFrame(one);
+        budget.spent(one, MS);
+        now += TICK;
+
+        double before = budget.frameRate(one);
+        budget.readyForFrame(one);
+        budget.spent(one, 60 * MS);
+        now += TICK;
+
+        assertTrue(budget.frameRate(one) < before, "it should react");
+        assertTrue(budget.frameRate(one) > 1, "but not all the way in one frame: " + budget.frameRate(one));
+    }
+
     @Test
     void nobodyLookingIsReportedAsNothingRatherThanAsZeroViewers() {
         assertNull(budget(1.0, 10).live());

@@ -1,7 +1,11 @@
 package de.flog99.mapgui.plugin;
 
 import de.flog99.mapgui.HandOptions;
+import de.flog99.mapgui.plugin.camera.CameraTuning;
+import de.flog99.mapgui.plugin.camera.ReuseWindow;
+import de.flog99.mapgui.plugin.camera.TrackingRanges;
 import de.flog99.mapgui.render.CameraView;
+import de.flog99.mapgui.render.Canopy;
 import de.flog99.mapgui.ui.Animator;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
@@ -32,11 +36,9 @@ public record MapGuiConfig(
         List<String> cameraPacks,
         boolean cameraAllowVersionMismatch,
         boolean cameraFollowServerPacks,
-        float cameraFov,
-        int cameraDistance,
-        int cameraReuseChunksMillis,
-        double cameraLiveMaxMillis,
-        int cameraLiveMaxFps) {
+        CameraTuning cameraTuning,
+        boolean commandsEnabled,
+        boolean commandsHideUnused) {
 
     public static MapGuiConfig from(FileConfiguration config) {
         int fps = clampFps(config.getInt("animations.fps", Animator.MAX_FPS));
@@ -63,13 +65,74 @@ public record MapGuiConfig(
                 List.copyOf(config.getStringList("camera.assets.packs")),
                 config.getBoolean("camera.assets.allow-version-mismatch", false),
                 config.getBoolean("camera.assets.follow-server-packs", true),
+                camera(config),
+                config.getBoolean("commands.enabled", true),
+                config.getBoolean("commands.hide-unused", true)
+        );
+    }
+
+    /** The numbers under {@code camera:}, together, since they are read together and passed on together. */
+    private static CameraTuning camera(FileConfiguration config) {
+        return new CameraTuning(
                 (float) config.getDouble("camera.fov", CameraView.DEFAULT_FOV),
                 Math.max(1, config.getInt("camera.max-distance", 96)),
-                // Zero by default: reusing a copied chunk is the only fast path the camera has that is not exact.
-                Math.max(0, config.getInt("camera.reuse-chunks-for-ms", 0)),
+                Math.max(1, config.getDouble("camera.max-entity-distance", TrackingRanges.DEFAULT_MAX)),
                 // Both floor at zero, which each read as "no limit of this kind" rather than as "no frames".
                 Math.max(0, config.getDouble("camera.live.max-ms-per-tick", 1.0)),
-                Math.max(0, config.getInt("camera.live.max-fps", 10))
+                Math.max(0, config.getInt("camera.live.max-fps", 10)),
+                canopy(config),
+                reuse(config),
+                limits(config)
+        );
+    }
+
+    /**
+     * How far out leaves fill in. Both keys floor at zero and {@link Canopy} keeps the far one behind the near one,
+     * so a pair written the wrong way round is a hard switch at one distance rather than a division by zero.
+     */
+    private static Canopy canopy(FileConfiguration config) {
+        return new Canopy(
+                config.getDouble("camera.leaves.near-blocks", Canopy.DEFAULT.near()),
+                config.getDouble("camera.leaves.far-blocks", Canopy.DEFAULT.far())
+        );
+    }
+
+    /**
+     * How long each of the three caches may serve what it holds.
+     *
+     * <p>Every one of these is left out of config.yml by anybody who has not needed it, so each falls back to the
+     * default the cache would have used anyway - which is why the defaults are read off {@link CameraTuning.Reuse}
+     * rather than written here as a second set of numbers to keep in step.
+     */
+    private static CameraTuning.Reuse reuse(FileConfiguration config) {
+        return new CameraTuning.Reuse(
+                // Zero by default: reusing a copied chunk for a photograph is the only fast path the camera has
+                // that is not exact, and a photograph is kept. The key it was under before is still read, so a
+                // server that turned it on keeps what it asked for.
+                Math.max(0, config.getInt("camera.reuse.chunks.stills-for-ms",
+                        Math.max(0, config.getInt("camera.reuse-chunks-for-ms", 0)))),
+                window(config, "camera.reuse.chunks", "chunks", CameraTuning.Reuse.CHUNKS),
+                window(config, "camera.reuse.tile-entities", "blocks", CameraTuning.Reuse.BLOCK_ENTITIES),
+                window(config, "camera.reuse.entities", "blocks", CameraTuning.Reuse.MOBS)
+        );
+    }
+
+    /** @param unit what this window measures distance in, which is the word its two distance keys are named after */
+    private static ReuseWindow window(FileConfiguration config, String path, String unit, ReuseWindow fallback) {
+        return ReuseWindow.ofMillis(
+                config.getInt(path + ".near-ms", fallback.nearMillis()),
+                config.getInt(path + ".far-ms", fallback.farMillis()),
+                config.getDouble(path + ".near-" + unit, fallback.near()),
+                config.getDouble(path + ".far-" + unit, fallback.far())
+        );
+    }
+
+    private static CameraTuning.Limits limits(FileConfiguration config) {
+        CameraTuning.Limits defaults = CameraTuning.Limits.defaults();
+        return new CameraTuning.Limits(
+                Math.max(0, config.getInt("camera.limits.max-entities", defaults.mobs())),
+                Math.max(0, config.getInt("camera.limits.max-tile-entities", defaults.blockEntities())),
+                Math.max(0, config.getDouble("camera.limits.tile-entity-distance", defaults.blockEntityDistance()))
         );
     }
 

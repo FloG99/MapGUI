@@ -1,6 +1,7 @@
 package de.flog99.mapgui.plugin.camera;
 
 import de.flog99.mapgui.camera.EntityAngles;
+import de.flog99.mapgui.render.ChunkFrustum;
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.ItemPoses;
 import de.flog99.mapgui.render.Tints;
@@ -39,6 +40,7 @@ import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -47,43 +49,135 @@ import java.util.Set;
 /**
  * Copies the entities in view out of the server, in the same tick as the blocks.
  *
- * <p>Everything the trace needs is read here and nothing is held: no {@code Entity} reference survives, because
- * the trace runs off the main thread and an entity can die, move or unload while it does.
+ * <p>Everything the trace needs is read here and no {@code Entity} reference survives, because the trace runs off the
+ * main thread and an entity can die, move or unload while it does. What can outlive a capture is a mob's built
+ * shape, held by id in {@link MobCache} - snapshots, which is the same copied-out data the trace already works from.
  *
  * <p>Which texture an individual wears is {@link MobTextures}, and what it wears over that is {@link MobEquipment}.
  * What is left here is which entities are in the picture and how each one stands.
  */
 final class EntityCapture {
 
-    /** Past this an entity is a couple of pixels on a map, and roughly where the client stops sending them. */
-    private static final double MAX_DISTANCE = 64;
-
-    /** A cap, so a mob farm in frame cannot turn one capture into thousands of box tests. Nearest first. */
-    private static final int MAX_ENTITIES = 48;
+    /**
+     * How far what is drawn for an entity reaches past its own point, in blocks. Generous on purpose: it covers a
+     * banner on a head or a pike in a hand, and it is a cull rather than a bound on what may be drawn - too large
+     * keeps a mob nobody sees, too small clips a banner out of frame.
+     */
+    private static final double REACH = 2;
 
     private EntityCapture() {
     }
 
-    static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, FramedMaps maps, EntityAngles angles, boolean includeSelf) {
-        List<Entity> nearby = new ArrayList<>(viewer.getWorld().getNearbyEntities(eye, MAX_DISTANCE, MAX_DISTANCE, MAX_DISTANCE));
-        nearby.sort((left, right) -> Double.compare(left.getLocation().distanceSquared(eye), right.getLocation().distanceSquared(eye)));
+    /** One entity that survived the culling, with the distance that decided it, so nothing is measured twice. */
+    private record Near(Entity entity, Location at, double distanceSquared) {
+    }
 
-        List<EntitySnapshot> snapshots = new ArrayList<>();
-        for (Entity entity : nearby) {
-            if (snapshots.size() >= MAX_ENTITIES) break;
-            if (entity.equals(viewer) && !includeSelf) {
-                continue;
-            }
-            // An ender dragon is nine entities, and every one of its eight hitboxes answers "ender_dragon" - so drawn
+    /**
+     * @param ranges  how far this server sends each kind of entity, so a capture holds what the photographer sees
+     * @param frustum the columns the frame can reach, or null to keep everything around the camera
+     * @param shapes  what earlier captures already built for a mob, or null to build every one of them again
+     * @param live    whether this is a viewfinder frame, which is what earns the reuse
+     * @param most    models one capture may build, so a mob farm in frame cannot turn it into thousands. Nearest
+     *                first, so what is dropped is what was furthest away
+     */
+    static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, FramedMaps maps,
+                                     EntityAngles angles, TrackingRanges ranges, ChunkFrustum frustum,
+                                     MobCache shapes, boolean live, int most, boolean includeSelf) {
+        double search = ranges.widest();
+
+        // Culled first and sorted second. A box query in a village comes back with everything, and sorting it all
+        // put entities about to be thrown away through a comparator that allocated two Locations per comparison.
+        List<Near> near = new ArrayList<>();
+        for (Entity entity : viewer.getWorld().getNearbyEntities(eye, search, search, search)) {
+            if (entity.equals(viewer) && !includeSelf) continue;
+            // An ender dragon is nine entities and every one of its eight hitboxes answers "ender_dragon", so drawn
             // as they come they are nine dragons stacked. The client treats the parts as hitboxes, so this does too.
-            if (entity instanceof ComplexEntityPart) {
-                continue;
-            }
+            if (entity instanceof ComplexEntityPart) continue;
 
-            snapshots.addAll(upended(entity, snapshotsOf(entity, skins, assets, maps, angles)));
+            // Asked once and carried: wanted to cull by range, to cull by frame, and to order what is left.
+            Location at = entity.getLocation();
+            double away = distanceSquared(at, eye);
+
+            // Out of range is one the photographer's own client was never sent. Out of frame is one the camera is
+            // not pointed at, which is most of what a search returns since a camera sees a quarter of its
+            // surroundings - and every one of those used to be built in full and thrown away by the trace.
+            double range = ranges.forEntity(entity);
+            if (away > range * range) continue;
+            if (frustum != null && !frustum.mightSee(at.getX(), at.getY() + REACH, at.getZ(), REACH)) continue;
+
+            near.add(new Near(entity, at, away));
+        }
+        near.sort(Comparator.comparingDouble(Near::distanceSquared));
+
+        // Once for the whole capture, so every mob is judged for staleness against the same instant.
+        long now = System.nanoTime();
+        MobCache reusing = live ? shapes : null;
+        if (reusing != null) {
+            reusing.expire(now);
+        }
+
+        // Counting entities rather than the layers they came to, which is what {@code max-entities} says and what
+        // bounds the work: one mob in armour is half a dozen snapshots and one part tree.
+        int built = 0;
+        List<EntitySnapshot> snapshots = new ArrayList<>();
+        for (Near found : near) {
+            if (built++ >= most) break;
+
+            snapshots.addAll(drawn(found, skins, assets, maps, angles, reusing, now));
         }
 
         return snapshots;
+    }
+
+    /**
+     * What one entity is drawn as - built now, or an earlier capture's shape stood back up where it is now.
+     *
+     * <p>Only a living one is ever reused, and only its look: see {@link MobCache}. The rest bake something that
+     * changes every tick - a dropped item's spin, a frame's map - so there is nothing in them worth holding.
+     */
+    private static List<EntitySnapshot> drawn(Near found, SkinCache skins, MobAssets assets, FramedMaps maps,
+                                              EntityAngles angles, MobCache shapes, long now) {
+        Entity entity = found.entity();
+        Location at = found.at();
+        String type = entity.getType().name().toLowerCase(Locale.ROOT);
+        boolean reusable = shapes != null && entity instanceof LivingEntity;
+
+        if (reusable) {
+            MobCache.Built held = shapes.get(entity.getUniqueId(),
+                    shapes.allowedAgeNanos(Math.sqrt(found.distanceSquared())), now);
+            if (held != null) {
+                float[] pose = pose(entity, at, type);
+                return held.standing(at.getX(), at.getY(), at.getZ(), pose[0], pose[1], pose[2]);
+            }
+        }
+
+        MobCache.Built built = shapeOf(entity, at, type, skins, assets, angles);
+        if (built == null) return upended(entity, loose(entity, at, type, skins, assets, maps));
+
+        if (reusable) {
+            shapes.put(entity.getUniqueId(), built, now);
+        }
+        return built.all();
+    }
+
+    /**
+     * Where this entity's body and head point, as body yaw, head yaw and pitch. One rule rather than two, since a
+     * shape built at one pose and stood back up at another has to be handed the same three angles both times.
+     */
+    private static float[] pose(Entity entity, Location at, String type) {
+        float body = bodyYaw(entity);
+        if (entity instanceof Player) return new float[]{body, at.getYaw(), at.getPitch()};
+
+        return new float[]{body, headYaw(type, body, at.getYaw() + halfTurn(entity)), at.getPitch()};
+    }
+
+    /** Not {@link Location#distanceSquared}, which throws across worlds and is measured here on the same one. */
+    private static double distanceSquared(Location at, Location eye) {
+        double dx = at.getX() - eye.getX();
+        double dy = at.getY() - eye.getY();
+        double dz = at.getZ() - eye.getZ();
+
+        return dx * dx + dy * dy + dz * dz;
     }
 
     /**
@@ -100,12 +194,23 @@ final class EntityCapture {
     private static List<EntitySnapshot> upended(Entity entity, List<EntitySnapshot> drawn) {
         if (drawn.isEmpty() || !MobNames.upsideDown(entity)) return drawn;
 
-        float pivot = (float) (entity.getHeight() + UPENDED_CLEARANCE) * BLOCK / 2;
+        float pivot = pivotOf(entity);
         List<EntitySnapshot> turned = new ArrayList<>(drawn.size());
         for (EntitySnapshot one : drawn) {
             turned.add(one.tilted(0, HALF_CIRCLE, pivot));
         }
         return List.copyOf(turned);
+    }
+
+    /** The same for a shape rather than a list, so the turn is held with the rest of what the mob looks like. */
+    private static MobCache.Built upended(Entity entity, MobCache.Built built) {
+        if (built == null || !MobNames.upsideDown(entity)) return built;
+
+        return built.tilted(0, HALF_CIRCLE, pivotOf(entity));
+    }
+
+    private static float pivotOf(Entity entity) {
+        return (float) (entity.getHeight() + UPENDED_CLEARANCE) * BLOCK / 2;
     }
 
     /** What the client lifts an upended mob by over its own height, so its feet clear the ground it stood on. */
@@ -116,17 +221,24 @@ final class EntityCapture {
     private static final float HALF_CIRCLE = (float) Math.PI;
 
     /**
-     * The snapshots one entity is drawn from, nearly always one and empty for an entity that is not drawn at all.
-     * More than one only for a mob wearing a second layer, since a snapshot samples one texture.
+     * The shape a player or a mob is drawn from, or null for anything that is neither - and for a type with no
+     * authored mesh, or a player whose skin has not come down. Those fall through to {@link #loose}.
      */
-    private static List<EntitySnapshot> snapshotsOf(Entity entity, SkinCache skins, MobAssets assets, FramedMaps maps, EntityAngles angles) {
-        Location at = entity.getLocation();
-        String type = entity.getType().name().toLowerCase(Locale.ROOT);
+    private static MobCache.Built shapeOf(Entity entity, Location at, String type, SkinCache skins,
+                                          MobAssets assets, EntityAngles angles) {
+        if (entity instanceof Player player) return upended(entity, playerShape(player, at, type, skins, assets));
+        if (entity instanceof Painting || entity instanceof ItemFrame || entity instanceof Item) return null;
 
-        if (entity instanceof Player player) {
-            List<EntitySnapshot> drawn = playerSnapshots(player, at, type, skins, assets);
-            if (drawn != null) return drawn;
-        } else if (entity instanceof Painting hung) {
+        return upended(entity, mobShape(entity, at, type, assets, skins, angles));
+    }
+
+    /**
+     * Everything not drawn from a mob mesh: a painting, a thing in a frame, a dropped item, and the bounding box
+     * that is the last resort for all of them. Never held, since each bakes in something that changes every tick.
+     */
+    private static List<EntitySnapshot> loose(Entity entity, Location at, String type, SkinCache skins,
+                                              MobAssets assets, FramedMaps maps) {
+        if (entity instanceof Painting hung) {
             List<EntitySnapshot> drawn = painting(hung, at, assets);
             if (!drawn.isEmpty()) return drawn;
         } else if (entity instanceof ItemFrame frame) {
@@ -141,36 +253,35 @@ final class EntityCapture {
                     return skins.faced(sprite, dropped.getItemStack());
                 }
             }
-        } else {
-            List<EntitySnapshot> drawn = mobSnapshots(entity, at, type, assets, skins, angles);
-            if (drawn != null) return drawn;
         }
 
         return boundingBox(entity, at, type, assets);
     }
 
     /** Null until the skin has come down, which takes a capture or two - better than somebody else's face. */
-    private static List<EntitySnapshot> playerSnapshots(Player player, Location at, String type, SkinCache skins, MobAssets assets) {
+    private static MobCache.Built playerShape(Player player, Location at, String type, SkinCache skins, MobAssets assets) {
         String skin = skins.nameFor(player);
         if (skin == null) return null;
 
-        EntitySnapshot body = EntitySnapshot.player(at.getX(), at.getY(), at.getZ(), bodyYaw(player), at.getYaw(),
-                at.getPitch(), skins.isSlim(player), skins.layersOf(player), skin, player.isSneaking());
+        float[] pose = pose(player, at, type);
+        EntitySnapshot body = EntitySnapshot.player(at.getX(), at.getY(), at.getZ(), pose[0], pose[1], pose[2],
+                skins.isSlim(player), skins.layersOf(player), skin, player.isSneaking());
 
-        List<EntitySnapshot> drawn = new ArrayList<>();
-        drawn.add(body);
-        drawn.addAll(MobEquipment.wornBy(player, body, type, assets, skins));
-        return drawn;
+        List<EntitySnapshot> worn = new ArrayList<>();
+        List<EntitySnapshot> held = new ArrayList<>();
+        worn.add(body);
+        MobEquipment.wornBy(player, body, type, assets, skins, worn, held);
+        return new MobCache.Built(worn, held);
     }
 
     /** Null for a type with no authored shape, which is the caller's cue to fall back to a bounding box. */
-    private static List<EntitySnapshot> mobSnapshots(Entity entity, Location at, String type, MobAssets assets, SkinCache skins, EntityAngles angles) {
+    private static MobCache.Built mobShape(Entity entity, Location at, String type, MobAssets assets, SkinCache skins, EntityAngles angles) {
         String variant = MobTextures.variantOf(entity, type);
-        float body = bodyYaw(entity);
+        float[] pose = pose(entity, at, type);
         EntitySnapshot authored = EntitySnapshot.mob(
                 type, variant,
                 at.getX(), at.getY(), at.getZ(),
-                body, headYaw(type, body, at.getYaw() + halfTurn(entity)), at.getPitch(),
+                pose[0], pose[1], pose[2],
                 scaleOf(entity), isBaby(entity)
         );
         if (authored == null) return null;
@@ -180,12 +291,13 @@ final class EntityCapture {
         EntitySnapshot bare = swimming(entity, hideUnworn(entity, authored.texture(skin)), type, angles);
         EntitySnapshot dressed = arms == null ? bare : arms.on(bare);
 
-        List<EntitySnapshot> drawn = new ArrayList<>();
-        drawn.add(dressed);
-        drawn.addAll(wornLayers(entity, dressed, type, variant));
-        drawn.addAll(MobEquipment.wornBy(entity, dressed, type, assets, skins));
-        drawn.addAll(carried(entity, dressed, assets));
-        return drawn;
+        List<EntitySnapshot> worn = new ArrayList<>();
+        List<EntitySnapshot> held = new ArrayList<>();
+        worn.add(dressed);
+        worn.addAll(wornLayers(entity, dressed, type, variant));
+        MobEquipment.wornBy(entity, dressed, type, assets, skins, worn, held);
+        held.addAll(carried(entity, dressed, assets));
+        return new MobCache.Built(worn, held);
     }
 
     /**

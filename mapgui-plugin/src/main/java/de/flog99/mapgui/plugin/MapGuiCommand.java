@@ -59,20 +59,21 @@ final class MapGuiCommand {
     }
 
     static LiteralCommandNode<CommandSourceStack> build(MapGuiPlugin plugin, SessionManager sessions,
-                                                        WallManager walls, Supplier<List<Component>> performance) {
+                                                        WallManager walls, CommandSurface surface,
+                                                        Supplier<List<Component>> performance) {
         return Commands.literal("mapgui")
                 // Hidden from anyone who could not run a single thing under it, rather than gated on one
                 // permission that would then have to be granted to reach any of the others.
-                .requires(source -> ALL.stream().anyMatch(sub -> allowed(source.getSender(), sub)))
+                .requires(source -> ALL.stream().anyMatch(sub -> shows(source.getSender(), sub, surface)))
                 .executes(context -> {
-                    help(context.getSource().getSender());
+                    help(context.getSource().getSender(), surface);
                     return Command.SINGLE_SUCCESS;
                 })
-                .then(HandCommand.hand(sessions, HAND.permission()))
-                .then(WallCommand.wall(walls, WALL.permission()))
+                .then(HandCommand.hand(sessions, source -> shows(source.getSender(), HAND, surface)))
+                .then(WallCommand.wall(walls, source -> shows(source.getSender(), WALL, surface)))
                 // The plugin rather than the two objects: a reload replaces the service, and a command tree that
                 // captured the old one would quietly go on driving something nothing else can see.
-                .then(CameraCommand.camera(plugin, CAMERA.permission()))
+                .then(CameraCommand.camera(plugin, source -> shows(source.getSender(), CAMERA, surface)))
                 .then(status(plugin, sessions, walls))
                 .then(performance(performance))
                 .then(reload(plugin))
@@ -83,11 +84,28 @@ final class MapGuiCommand {
         return sender.hasPermission(sub.permission());
     }
 
+    /**
+     * Permission, and then whether this server has anything for the branch to administer.
+     *
+     * <p>Two different questions with the same answer for a reader - the command is not there - and they are kept
+     * apart on purpose: no permission means somebody decided you may not, and nothing to administer means there is
+     * nothing to decide about. Only the second one can change while the server is up.
+     */
+    private static boolean shows(CommandSender sender, Sub sub, CommandSurface surface) {
+        if (!allowed(sender, sub)) return false;
+
+        if (sub == HAND) return surface.hand();
+        if (sub == WALL) return surface.wall();
+        if (sub == CAMERA) return surface.camera();
+
+        return true;
+    }
+
     /** Only what the reader can actually run, since a list of things that answer "no permission" helps nobody. */
-    private static void help(CommandSender sender) {
+    private static void help(CommandSender sender, CommandSurface surface) {
         List<Listing.Choice> choices = new ArrayList<>();
         for (Sub sub : ALL) {
-            if (allowed(sender, sub)) {
+            if (shows(sender, sub, surface)) {
                 choices.add(new Listing.Choice("/mapgui " + sub.name(), sub.description()));
             }
         }
@@ -122,7 +140,7 @@ final class MapGuiCommand {
                     }
                     context.getSource().getSender().sendMessage(line);
 
-                    Component camera = CameraReport.trouble(plugin.camera());
+                    Component camera = CameraReport.trouble(plugin.camera().stats());
                     if (camera != null) {
                         context.getSource().getSender().sendMessage(camera);
                     }

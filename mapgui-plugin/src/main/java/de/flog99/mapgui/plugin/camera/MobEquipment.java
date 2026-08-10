@@ -27,7 +27,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MainHand;
 import org.bukkit.inventory.meta.BannerMeta;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -52,42 +51,49 @@ final class MobEquipment {
     private MobEquipment() {
     }
 
-    /** Every layer this entity wears over {@code base}, empty for the many that wear nothing. */
-    static List<EntitySnapshot> wornBy(Entity entity, EntitySnapshot base, String type, MobAssets assets, SkinCache skins) {
-        if (!(entity instanceof LivingEntity living)) return List.of();
+    /**
+     * Every layer this entity wears over {@code base}, and nothing for the many that wear none.
+     *
+     * <p>Into two lists because the two turn differently: what is worn is drawn on the mob's own parts and follows
+     * the head, where an item in a hand is posed off the arm and follows the body. Only {@link MobCache} cares,
+     * since it stands a shape back up later and has to know which angle each layer was taking.
+     *
+     * @param worn adds to, for the layers that turn with the head, and {@code held} for the ones that turn with the body
+     */
+    static void wornBy(Entity entity, EntitySnapshot base, String type, MobAssets assets, SkinCache skins,
+                       List<EntitySnapshot> worn, List<EntitySnapshot> held) {
+        if (!(entity instanceof LivingEntity living)) return;
 
-        EntityEquipment worn = living.getEquipment();
-        if (worn == null) return List.of();
+        EntityEquipment dressed = living.getEquipment();
+        if (dressed == null) return;
 
         TextureAtlas atlas = assets.atlas();
         EquipmentAssets equipment = assets.equipment();
-        List<EntitySnapshot> layers = new ArrayList<>();
 
         // Armor moves with a sneaking player and a saddle does not, since only the humanoid pieces share the body
         // whose parts the crouch shifts.
         boolean crouching = entity instanceof Player player && player.isSneaking();
-        ARMOR.forEach((slot, mesh) -> add(layers, base, atlas, equipment, mesh,
-                slot == EquipmentSlot.LEGS ? "humanoid_leggings" : "humanoid", worn.getItem(slot), crouching));
+        ARMOR.forEach((slot, mesh) -> add(worn, base, atlas, equipment, mesh,
+                slot == EquipmentSlot.LEGS ? "humanoid_leggings" : "humanoid", dressed.getItem(slot), crouching));
 
         // The animals, whose layer is named after the animal rather than after its shape: a pig saddle is not a horse
         // saddle and neither is drawn from the other mesh.
-        add(layers, base, atlas, equipment, saddleMesh(type), type + "_saddle", worn.getItem(EquipmentSlot.SADDLE), false);
+        add(worn, base, atlas, equipment, saddleMesh(type), type + "_saddle", dressed.getItem(EquipmentSlot.SADDLE), false);
         // Body armor names its layer after the shape rather than after the animal, which is the same answer for all
         // but the three that borrow another's mesh: a trader llama's carpet is a llama's, on a llama's body.
-        add(layers, base, atlas, equipment, bodyMesh(type), bodyMesh(type), worn.getItem(EquipmentSlot.BODY), false);
+        add(worn, base, atlas, equipment, bodyMesh(type), bodyMesh(type), dressed.getItem(EquipmentSlot.BODY), false);
 
         // One skeleton in twenty is left-handed, and vanilla poses a held item by the arm rather than by the hand.
         boolean rightHanded = !leftHanded(entity);
-        hold(layers, base, assets, skins, worn.getItemInMainHand(), rightHanded);
-        hold(layers, base, assets, skins, worn.getItemInOffHand(), !rightHanded);
+        hold(held, base, assets, skins, dressed.getItemInMainHand(), rightHanded);
+        hold(held, base, assets, skins, dressed.getItemInOffHand(), !rightHanded);
 
-        wear(layers, base, assets, entity);
-        sprout(layers, base, assets, entity);
-        hoist(layers, base, assets, worn.getItem(EquipmentSlot.HEAD));
-        carry(layers, base, assets, skins, entity, worn.getItemInMainHand());
-        decorate(layers, base, atlas, equipment, entity);
-        contains(layers, base, assets, type, worn.getItem(EquipmentSlot.BODY));
-        return layers;
+        wear(worn, base, assets, entity);
+        sprout(worn, base, assets, entity);
+        hoist(worn, base, assets, dressed.getItem(EquipmentSlot.HEAD));
+        carry(worn, base, assets, skins, entity, dressed.getItemInMainHand());
+        decorate(worn, base, atlas, equipment, entity);
+        contains(worn, base, assets, type, dressed.getItem(EquipmentSlot.BODY));
     }
 
     /**

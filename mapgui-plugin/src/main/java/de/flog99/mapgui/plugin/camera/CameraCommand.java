@@ -24,9 +24,9 @@ public final class CameraCommand {
     private CameraCommand() {
     }
 
-    public static ArgumentBuilder<CommandSourceStack, ?> camera(MapGuiPlugin plugin, String permission) {
+    public static ArgumentBuilder<CommandSourceStack, ?> camera(MapGuiPlugin plugin, java.util.function.Predicate<CommandSourceStack> allowed) {
         return Commands.literal("camera")
-                .requires(source -> source.getSender().hasPermission(permission))
+                .requires(allowed)
                 .executes(context -> {
                     status(context.getSource().getSender(), plugin);
                     return Command.SINGLE_SUCCESS;
@@ -50,7 +50,7 @@ public final class CameraCommand {
                         }))
                 .then(Commands.literal("performance")
                         .executes(context -> {
-                            for (Component line : CameraReport.lines(plugin.camera())) {
+                            for (Component line : CameraReport.lines(plugin.camera().stats())) {
                                 context.getSource().getSender().sendMessage(line);
                             }
                             return Command.SINGLE_SUCCESS;

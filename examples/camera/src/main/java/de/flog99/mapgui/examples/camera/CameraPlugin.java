@@ -49,6 +49,14 @@ public final class CameraPlugin extends JavaPlugin implements Listener {
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 }))
+                        // Its own, over the API, so a server can turn MapGUI's whole /mapgui tree off with
+                        // commands.enabled: false and still have somewhere to look when captures feel expensive.
+                        .then(Commands.literal("debug")
+                                .requires(source -> source.getSender().hasPermission("mapgui.example.camera.debug"))
+                                .executes(context -> {
+                                    SnapshotDebug.print(context.getSource().getSender());
+                                    return Command.SINGLE_SUCCESS;
+                                }))
                         .build(), "Capture what you are looking at onto a map")
         );
     }

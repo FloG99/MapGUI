@@ -37,19 +37,83 @@ class SnapshotCacheTest {
 
     /**
      * The default, and the one the shipped config chooses: reuse is the only shortcut the camera has that can show a
-     * block as it was a moment ago, so it is opt-in. Off has to mean holding nothing, not merely serving nothing -
-     * otherwise a server that turned it off still pays the heap for it.
+     * block as it was a moment ago, so for a <b>photograph</b> it stays opt-in. That one is kept.
      */
     @Test
-    void aZeroLifetimeKeepsNothingAndServesNothing() {
+    void aZeroLifetimeServesNoStill() {
         SnapshotCache cache = new SnapshotCache(0);
 
-        assertFalse(cache.enabled());
+        assertFalse(cache.enabledForStills());
         cache.put(WORLD, 1, 1, column(), 0);
 
-        assertNull(cache.get(WORLD, 1, 1, 0), "a disabled cache must miss even at the instant of the put");
-        assertEquals(0, cache.size());
-        assertEquals(0, cache.lookups(), "a miss it was never going to hit is not a lookup worth counting");
+        assertNull(cache.get(WORLD, 1, 1, 0, cache.allowedAgeNanos(false, 0)), "off means off, even at the instant of the put");
+        // Counted even though it was never eligible. The rate is meant to read as "how much of what this capture
+        // wanted did it get for free", and leaving the ineligible columns out would make an off cache read 0/0.
+        assertEquals(1, cache.lookups());
+    }
+
+    /**
+     * A live view reuses whatever the stills setting says, because the argument against reuse barely applies to it:
+     * being wrong lasts until the next frame, and the next frame is coming. Without this a viewfinder copies a
+     * player's whole render distance several times a second and spends its entire budget doing it.
+     */
+    @Test
+    void aLiveViewReusesEvenWithStillsTurnedOff() {
+        SnapshotCache cache = new SnapshotCache(0);
+        ChunkSnapshot held = column();
+        cache.put(WORLD, 1, 1, held, 0);
+
+        assertTrue(cache.enabled());
+        assertSame(held, cache.get(WORLD, 1, 1, CameraTuning.Reuse.CHUNKS.farNanos(), cache.allowedAgeNanos(true, (int) CameraTuning.Reuse.CHUNKS.far())));
+        assertNull(cache.get(WORLD, 1, 1, 0, cache.allowedAgeNanos(false, 0)), "and the photograph is still exact");
+    }
+
+    /**
+     * The whole point of grading it: a column at the photographer's feet is most of the picture and is never
+     * reused, where one on the horizon is a couple of pixels and may be a second behind.
+     */
+    @Test
+    void howStaleAColumnMayBeDependsOnHowFarAwayItIs() {
+        SnapshotCache cache = new SnapshotCache(0);
+
+        assertEquals(CameraTuning.Reuse.CHUNKS.nearNanos(), cache.allowedAgeNanos(true, 0), "under the camera");
+        assertEquals(CameraTuning.Reuse.CHUNKS.nearNanos(), cache.allowedAgeNanos(true, (int) CameraTuning.Reuse.CHUNKS.near()));
+        assertEquals(CameraTuning.Reuse.CHUNKS.farNanos(), cache.allowedAgeNanos(true, (int) CameraTuning.Reuse.CHUNKS.far()));
+        assertEquals(CameraTuning.Reuse.CHUNKS.farNanos(), cache.allowedAgeNanos(true, 200), "and no further than that");
+
+        long middle = cache.allowedAgeNanos(true, ((int) CameraTuning.Reuse.CHUNKS.near() + (int) CameraTuning.Reuse.CHUNKS.far()) / 2);
+        assertTrue(middle > CameraTuning.Reuse.CHUNKS.nearNanos() && middle < CameraTuning.Reuse.CHUNKS.farNanos(),
+                "the ramp is a ramp, not a step");
+    }
+
+    /** A photograph is flat at whatever the server opted into: no frame follows it to correct anything. */
+    @Test
+    void aStillIsNotGradedByDistance() {
+        SnapshotCache cache = new SnapshotCache(0);
+
+        assertEquals(0, cache.allowedAgeNanos(false, 0));
+        assertEquals(0, cache.allowedAgeNanos(false, 200), "distance buys a still nothing");
+    }
+
+    /** Past its own window a live view copies again, or a viewfinder would drift arbitrarily far behind the world. */
+    @Test
+    void aLiveViewStillRefusesOnePastItsOwnWindow() {
+        SnapshotCache cache = new SnapshotCache(0);
+        cache.put(WORLD, 1, 1, column(), 0);
+
+        assertNull(cache.get(WORLD, 1, 1, CameraTuning.Reuse.CHUNKS.farNanos() + 1, cache.allowedAgeNanos(true, (int) CameraTuning.Reuse.CHUNKS.far())));
+    }
+
+    /** A server that asked for longer gets longer for both, since the live window is a floor rather than a ceiling. */
+    @Test
+    void aConfiguredLifetimeLongerThanTheLiveOneAppliesToBoth() {
+        long twoSeconds = CameraTuning.Reuse.CHUNKS.farNanos() * 4;
+        SnapshotCache cache = new SnapshotCache(twoSeconds);
+        ChunkSnapshot held = column();
+        cache.put(WORLD, 1, 1, held, 0);
+
+        assertSame(held, cache.get(WORLD, 1, 1, twoSeconds, cache.allowedAgeNanos(false, 0)));
+        assertSame(held, cache.get(WORLD, 1, 1, twoSeconds, cache.allowedAgeNanos(true, (int) CameraTuning.Reuse.CHUNKS.far())));
     }
 
     @Test
@@ -59,8 +123,8 @@ class SnapshotCacheTest {
 
         cache.put(WORLD, 3, -4, held, 1000);
 
-        assertSame(held, cache.get(WORLD, 3, -4, 1000));
-        assertSame(held, cache.get(WORLD, 3, -4, 1000 + SnapshotCache.LIFETIME_NANOS));
+        assertSame(held, cache.get(WORLD, 3, -4, 1000, cache.allowedAgeNanos(false, 0)));
+        assertSame(held, cache.get(WORLD, 3, -4, 1000 + SnapshotCache.LIFETIME_NANOS, cache.allowedAgeNanos(false, 0)));
     }
 
     @Test
@@ -68,7 +132,7 @@ class SnapshotCacheTest {
         SnapshotCache cache = new SnapshotCache();
         cache.put(WORLD, 0, 0, column(), 1000);
 
-        assertNull(cache.get(WORLD, 0, 0, 1001 + SnapshotCache.LIFETIME_NANOS));
+        assertNull(cache.get(WORLD, 0, 0, 1001 + SnapshotCache.LIFETIME_NANOS, cache.allowedAgeNanos(false, 0)));
         assertTrue(cache.size() == 0, "a column it will not serve is a column it should not be holding");
     }
 
@@ -78,8 +142,8 @@ class SnapshotCacheTest {
         ChunkSnapshot held = column();
         cache.put(WORLD, 7, 7, held, 0);
 
-        assertNull(cache.get(OTHER_WORLD, 7, 7, 0));
-        assertSame(held, cache.get(WORLD, 7, 7, 0));
+        assertNull(cache.get(OTHER_WORLD, 7, 7, 0, cache.allowedAgeNanos(false, 0)));
+        assertSame(held, cache.get(WORLD, 7, 7, 0, cache.allowedAgeNanos(false, 0)));
     }
 
     @Test
@@ -90,9 +154,9 @@ class SnapshotCacheTest {
         cache.put(WORLD, 5, 9, here, 0);
         cache.put(WORLD, 9, 5, next, 0);
 
-        assertSame(here, cache.get(WORLD, 5, 9, 0));
-        assertSame(next, cache.get(WORLD, 9, 5, 0));
-        assertNull(cache.get(WORLD, 5, -9, 0));
+        assertSame(here, cache.get(WORLD, 5, 9, 0, cache.allowedAgeNanos(false, 0)));
+        assertSame(next, cache.get(WORLD, 9, 5, 0, cache.allowedAgeNanos(false, 0)));
+        assertNull(cache.get(WORLD, 5, -9, 0, cache.allowedAgeNanos(false, 0)));
     }
 
     @Test
@@ -101,7 +165,7 @@ class SnapshotCacheTest {
         cache.put(WORLD, 2, 2, column(), 0);
         cache.forget(WORLD, 2, 2);
 
-        assertNull(cache.get(WORLD, 2, 2, 0));
+        assertNull(cache.get(WORLD, 2, 2, 0, cache.allowedAgeNanos(false, 0)));
     }
 
     @Test
@@ -114,10 +178,10 @@ class SnapshotCacheTest {
         long now = 7 * (SnapshotCache.LIFETIME_NANOS / 4);
         cache.expire(now);
 
-        assertNull(cache.get(WORLD, 0, 0, now));
-        assertNull(cache.get(WORLD, 2, 0, now));
-        assertNotNull(cache.get(WORLD, 4, 0, now));
-        assertNotNull(cache.get(WORLD, 7, 0, now));
+        assertNull(cache.get(WORLD, 0, 0, now, cache.allowedAgeNanos(false, 0)));
+        assertNull(cache.get(WORLD, 2, 0, now, cache.allowedAgeNanos(false, 0)));
+        assertNotNull(cache.get(WORLD, 4, 0, now, cache.allowedAgeNanos(false, 0)));
+        assertNotNull(cache.get(WORLD, 7, 0, now, cache.allowedAgeNanos(false, 0)));
     }
 
     /** A player flying around must not pull the world into the heap, whatever the lifetime says. */
@@ -138,12 +202,12 @@ class SnapshotCacheTest {
         cache.put(WORLD, 0, 0, wanted, 0);
 
         for (int i = 1; i <= SnapshotCache.CAPACITY; i++) {
-            cache.get(WORLD, 0, 0, 0);
+            cache.get(WORLD, 0, 0, 0, cache.allowedAgeNanos(false, 0));
             cache.put(WORLD, i, i, column(), 0);
         }
 
-        assertSame(wanted, cache.get(WORLD, 0, 0, 0));
-        assertNull(cache.get(WORLD, 1, 1, 0), "the one nothing asked for again");
+        assertSame(wanted, cache.get(WORLD, 0, 0, 0, cache.allowedAgeNanos(false, 0)));
+        assertNull(cache.get(WORLD, 1, 1, 0, cache.allowedAgeNanos(false, 0)), "the one nothing asked for again");
     }
 
     /**
@@ -199,7 +263,7 @@ class SnapshotCacheTest {
                 }
 
                 copied++;
-                if (cache.get(WORLD, chunkX, chunkZ, 0) == null) {
+                if (cache.get(WORLD, chunkX, chunkZ, 0, cache.allowedAgeNanos(false, 0)) == null) {
                     cache.put(WORLD, chunkX, chunkZ, column(), 0);
                 }
             }

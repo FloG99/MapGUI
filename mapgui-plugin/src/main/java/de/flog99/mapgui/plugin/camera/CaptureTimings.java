@@ -1,5 +1,7 @@
 package de.flog99.mapgui.plugin.camera;
 
+import java.util.Locale;
+
 /**
  * What one capture cost, split the way the work itself is split.
  *
@@ -26,6 +28,6 @@ record CaptureTimings(int size, int number, int chunks, int filled, int sections
     }
 
     static String millis(long nanos) {
-        return String.format("%.1fms", nanos / 1_000_000.0);
+        return String.format(Locale.ROOT, "%.1fms", nanos / 1_000_000.0);
     }
 }

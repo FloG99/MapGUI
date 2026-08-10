@@ -1,6 +1,7 @@
 package de.flog99.mapgui.plugin.camera;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
+import de.flog99.mapgui.render.ChunkFrustum;
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.ItemPoses;
 import de.flog99.mapgui.render.TextureAtlas;
@@ -42,8 +43,10 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.Locale;
 import java.util.Map;
 
@@ -60,40 +63,130 @@ import java.util.Map;
  */
 final class BlockEntityCapture {
 
-    /** Past this a chest is a couple of pixels, and the same bound the entities use. */
-    private static final double MAX_DISTANCE = 64;
-
-    /** A cap for the same reason the entities have one: a storage room should not turn one capture into thousands. */
-    private static final int MAX_BLOCK_ENTITIES = 64;
-
     private BlockEntityCapture() {
     }
 
-    static List<EntitySnapshot> take(Location eye, MobAssets assets, SkinCache skins) {
+    /**
+     * @param frustum the columns the frame can reach, or null to scan the whole square around the camera
+     * @param cache   what earlier captures already drew, since a chest does not move
+     * @param live    whether this is a viewfinder frame, which is what earns the reuse
+     * @param range   how far these are gathered from, in blocks - past that a chest is a couple of pixels
+     * @param most    how many one capture may draw, nearest first, so a storage room cannot fill a frame
+     */
+    static List<EntitySnapshot> take(Location eye, MobAssets assets, SkinCache skins, ChunkFrustum frustum,
+                                     BlockEntityCache cache, boolean live, double range, int most) {
         World world = eye.getWorld();
-        int radius = (int) Math.ceil(MAX_DISTANCE / 16);
+        int radius = (int) Math.ceil(range / 16);
         int originX = eye.getBlockX() >> 4;
         int originZ = eye.getBlockZ() >> 4;
+        UUID worldId = world.getUID();
 
-        List<EntitySnapshot> drawn = new ArrayList<>();
-        double limit = MAX_DISTANCE * MAX_DISTANCE;
+        long now = System.nanoTime();
+        cache.expire(now);
 
-        for (int x = originX - radius; x <= originX + radius && drawn.size() < MAX_BLOCK_ENTITIES; x++) {
-            for (int z = originZ - radius; z <= originZ + radius && drawn.size() < MAX_BLOCK_ENTITIES; z++) {
+        double limit = range * range;
+        List<Near> columns = new ArrayList<>();
+
+        for (int x = originX - radius; x <= originX + radius; x++) {
+            for (int z = originZ - radius; z <= originZ + radius; z++) {
                 // Never loaded here: a chunk the server does not have is one the trace already draws through.
-                if (!world.isChunkLoaded(x, z)) continue;
+                if (!world.isChunkLoaded(x, z)) {
+                    cache.forget(worldId, x, z);
+                    continue;
+                }
+                // The frame reaches a quarter of what is around the camera, and the corners of this square are
+                // ninety blocks out where the limit is sixty-four. Both tests are on the column, before anything
+                // in it has been looked at.
+                if (frustum != null && !frustum.mightSee(x, z)) continue;
 
-                for (BlockState state : world.getChunkAt(x, z).getTileEntities()) {
-                    if (drawn.size() >= MAX_BLOCK_ENTITIES) break;
+                // Measured once and carried: to cull by range, to order the columns, and to grade the reuse.
+                double away = gapTo(x, z, eye);
+                if (away * away > limit) continue;
 
-                    Block block = state.getBlock();
-                    if (block.getLocation().distanceSquared(eye) > limit) continue;
+                columns.add(new Near(x, z, away));
+            }
+        }
+        List<EntitySnapshot> drawn = new ArrayList<>();
+        for (Near at : columns) {
+            List<EntitySnapshot> column = cache.get(worldId, at.chunkX(), at.chunkZ(), now, live, at.away());
+            if (column == null) {
+                column = drawColumn(world, at.chunkX(), at.chunkZ(), assets, skins, PER_COLUMN);
+                cache.put(worldId, at.chunkX(), at.chunkZ(), column, now);
+            }
 
-                    drawn.addAll(snapshotOf(block, state, assets, skins));
+            // Held unfiltered and measured here, because the photographer moves between frames and a list
+            // built against where they were standing would be wrong for where they are now.
+            for (EntitySnapshot state : column) {
+                if (near(state, eye, limit)) {
+                    drawn.add(state);
                 }
             }
         }
-        return drawn;
+
+        return nearest(drawn, eye, most);
+    }
+
+    /**
+     * The cap, applied once across the whole frame. Applied per column instead, the chest wall in the chunk you are
+     * standing in spent the entire budget and the chunk beside it drew nothing - and within a column it cut in the
+     * chunk's own order, which is no order at all.
+     */
+    static List<EntitySnapshot> nearest(List<EntitySnapshot> drawn, Location eye, int most) {
+        if (drawn.size() <= most) return drawn;
+
+        drawn.sort(Comparator.comparingDouble(state -> distanceSquared(state, eye)));
+        return new ArrayList<>(drawn.subList(0, most));
+    }
+
+    /**
+     * A column of its own may hold this many. Only a backstop against a chunk packed floor to ceiling: the real cap
+     * is {@code camera.limits.max-tile-entities}, applied across the whole frame once everything is in hand.
+     */
+    private static final int PER_COLUMN = 4096;
+
+    /** One column worth looking in, with the distance that decided it, so nothing is measured twice. */
+    private record Near(int chunkX, int chunkZ, double away) {
+    }
+
+    /**
+     * Everything drawable in one column, without regard to where the camera is.
+     *
+     * <p>The predicate is the point of this call. Its plain form builds a {@code BlockState} - a whole copy, with
+     * the block's inventory and data - for every tile entity in the column, and nearly all of them are thrown away
+     * again: most block entities are drawn from their own block model and need nothing here. Filtering on the block
+     * reaches its position without building anything, and {@code false} skips the snapshot entirely.
+     */
+    private static List<EntitySnapshot> drawColumn(World world, int chunkX, int chunkZ, MobAssets assets, SkinCache skins, int most) {
+        List<EntitySnapshot> column = new ArrayList<>();
+
+        for (BlockState state : world.getChunkAt(chunkX, chunkZ)
+                .getTileEntities(block -> column.size() < most, false)) {
+            if (column.size() >= most) break;
+
+            column.addAll(snapshotOf(state.getBlock(), state, assets, skins));
+        }
+        return column;
+    }
+
+    /** How far the nearest corner of this column is from the eye, horizontally, in blocks. */
+    private static double gapTo(int chunkX, int chunkZ, Location eye) {
+        double gapX = Math.max(0, Math.max((chunkX << 4) - eye.getX(), eye.getX() - ((chunkX << 4) + 15)));
+        double gapZ = Math.max(0, Math.max((chunkZ << 4) - eye.getZ(), eye.getZ() - ((chunkZ << 4) + 15)));
+
+        return Math.hypot(gapX, gapZ);
+    }
+
+    /** Read off the snapshot's own coordinates, since asking a block for a Location allocates one per candidate. */
+    private static boolean near(EntitySnapshot state, Location eye, double limit) {
+        return distanceSquared(state, eye) <= limit;
+    }
+
+    private static double distanceSquared(EntitySnapshot state, Location eye) {
+        double dx = state.x() - eye.getX();
+        double dy = state.y() - eye.getY();
+        double dz = state.z() - eye.getZ();
+
+        return dx * dx + dy * dy + dz * dz;
     }
 
     /** Empty for the great many block entities that are drawn from their own block model and need nothing here. */

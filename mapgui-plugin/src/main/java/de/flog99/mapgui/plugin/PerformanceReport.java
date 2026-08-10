@@ -55,7 +55,7 @@ final class PerformanceReport {
 
     /** The plugin rather than the service, since a reload replaces it and a captured one would count nothing. */
     private void addCamera(List<Component> lines) {
-        Component cost = CameraReport.cost(plugin.camera());
+        Component cost = CameraReport.cost(plugin.camera().stats());
         if (cost == null) return;
 
         lines.add(Component.text("Main thread", NamedTextColor.GRAY));

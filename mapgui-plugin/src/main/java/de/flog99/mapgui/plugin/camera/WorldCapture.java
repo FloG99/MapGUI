@@ -37,7 +37,7 @@ final class WorldCapture {
      *              stand behind them
      */
     static SnapshotWorld take(Location eye, CameraView view, CameraOptions options, BlockModels models,
-                              Textures textures, BiomeTints tints, SnapshotCache cache) {
+                              Textures textures, BiomeTints tints, SnapshotCache cache, boolean live) {
 
         World world = eye.getWorld();
         int minY = world.getMinHeight();
@@ -45,6 +45,8 @@ final class WorldCapture {
         // Clamped because a snapshot only answers within the world's own range, and a player can stand above it.
         int sampleY = Math.clamp(eye.getBlockY(), minY, maxY);
         int radiusChunks = (view.maxDistance() >> 4) + 1;
+        int eyeChunkX = eye.getBlockX() >> 4;
+        int eyeChunkZ = eye.getBlockZ() >> 4;
         int originChunkX = (eye.getBlockX() >> 4) - radiusChunks;
         int originChunkZ = (eye.getBlockZ() >> 4) - radiusChunks;
         int across = radiusChunks * 2 + 1;
@@ -73,7 +75,10 @@ final class WorldCapture {
                     continue;
                 }
 
-                ChunkSnapshot snapshot = cache.get(worldId, chunkX, chunkZ, now);
+                // How stale this column may be depends on how far off it is: what is under the photographer has to
+                // be right, what is on the horizon is a couple of pixels and can wait.
+                int chunksAway = Math.max(Math.abs(chunkX - eyeChunkX), Math.abs(chunkZ - eyeChunkZ));
+                ChunkSnapshot snapshot = cache.get(worldId, chunkX, chunkZ, now, cache.allowedAgeNanos(live, chunksAway));
                 if (snapshot == null) {
                     // Biomes yes, temperature and rainfall no: what the snapshot would compute is per block, and
                     // the tint wants it per biome, which is cheaper to resolve once from the biome itself.

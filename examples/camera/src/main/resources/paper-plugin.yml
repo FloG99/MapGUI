@@ -5,6 +5,11 @@ api-version: '${apiVersion}'
 description: MapGUI example - capturing the world onto a map.
 author: FloG99
 
+permissions:
+  mapgui.example.camera.debug:
+    description: See what this plugin's captures are costing the server.
+    default: op
+
 dependencies:
   server:
     MapGUI:

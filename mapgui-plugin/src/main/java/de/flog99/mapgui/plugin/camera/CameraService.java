@@ -6,6 +6,7 @@ import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.camera.CameraAssets;
 import de.flog99.mapgui.camera.CameraOptions;
 import de.flog99.mapgui.camera.CameraShot;
+import de.flog99.mapgui.camera.CameraStats;
 import de.flog99.mapgui.ServerBackend;
 import de.flog99.mapgui.camera.EntityAngles;
 import de.flog99.mapgui.camera.LiveWalls;
@@ -13,6 +14,7 @@ import de.flog99.mapgui.render.BiomeColors;
 import de.flog99.mapgui.render.BlockItems;
 import de.flog99.mapgui.render.BlockModels;
 import de.flog99.mapgui.render.CameraView;
+import de.flog99.mapgui.render.ChunkFrustum;
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.EntityVariants;
 import de.flog99.mapgui.render.FrameTracer;
@@ -36,6 +38,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -79,6 +82,17 @@ public final class CameraService implements Camera {
      */
     private final SnapshotCache snapshots;
 
+    /** The same idea for what is bolted to the world rather than standing on it. */
+    private final BlockEntityCache blockEntities;
+
+    /**
+     * And for what a mob <i>looks like</i>, which is the expensive part of one and the part that does not change.
+     *
+     * <p>Never where it is standing - see {@link MobCache}. Built per service rather than per capture, since the
+     * whole point is that it outlives one.
+     */
+    private final MobCache mobShapes;
+
     /**
      * What every capture cost, whoever asked for it, for {@code /mapgui camera performance}.
      *
@@ -116,6 +130,23 @@ public final class CameraService implements Camera {
     /** Only for the report, where the point is that the first few captures are the JIT warming up rather than a cost. */
     private final AtomicInteger captureCount = new AtomicInteger();
 
+    /** Set by the first plugin to ask this camera for anything, and never cleared. */
+    private volatile boolean used;
+
+    /**
+     * How many copied-but-untraced captures may be held at once.
+     *
+     * <p>The bound exists for memory rather than for latency. A queued capture holds the {@code ChunkSnapshot} of
+     * every chunk column it copied - 167 of them at range 192 - so a backlog is not a queue of small jobs waiting,
+     * it is that many copies of the world retained until they are drawn. Unbounded, a plugin capturing faster than
+     * the machine traces runs the server out of heap rather than merely falling behind.
+     *
+     * <p>Small, because the other half of the argument points the same way: a capture that has waited for several
+     * traces is a photograph of somewhere the player no longer is. Turning it away at once and saying so beats
+     * drawing it a second late.
+     */
+    private static final int MAX_QUEUED = 3;
+
     /**
      * Where the off-thread half of a capture runs, instead of {@code runTaskAsynchronously}.
      *
@@ -123,18 +154,25 @@ public final class CameraService implements Camera {
      * sometimes takes 40 to 50, which is a whole tick of latency for no work.
      *
      * <p>Not the tracer's own pool, which would deadlock - the job would hold one of its threads and then wait for a
-     * band with no thread left to run on. Core size zero with a short keep-alive, so an idle camera holds no threads
-     * and a service left behind by a reload cannot leak one.
+     * band with no thread left to run on. One thread, and stated as one: this used to say {@code (0, 2, ...)} over an
+     * unbounded queue, which never reaches two - a pool only grows past its core size when the queue refuses a task,
+     * and an unbounded one never does. It is also the right number rather than an accident, since {@link FrameTracer}
+     * already spreads one capture across every core; a second concurrent trace would contend with the first for the
+     * same threads and hold a second copy of the world while it did. Core threads time out, so an idle camera holds
+     * none and a service left behind by a reload cannot leak one.
      */
-    private final ThreadPoolExecutor captures = new ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(), runnable -> {
+    private final ThreadPoolExecutor captures = new ThreadPoolExecutor(1, 1, 30, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(MAX_QUEUED), runnable -> {
         Thread thread = new Thread(runnable, "MapGUI-capture");
         thread.setDaemon(true);
         return thread;
     });
 
-    private final int defaultDistance;
-    private final float defaultFov;
+    {
+        captures.allowCoreThreadTimeOut(true);
+    }
+
+    private final CameraTuning tuning;
 
     /** Built once the assets are ready, and dropped when they are reloaded. */
     private volatile Baked baked;
@@ -150,54 +188,54 @@ public final class CameraService implements Camera {
                          MobAssets mobs, FrameTracer tracer, String version) {
     }
 
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance) {
-        this(plugin, assets, packs, backend, walls, defaultFov, defaultDistance, 0, 0, 0);
-    }
-
     /**
-     * @param backend           what this version of the server lets a capture read: the pixels behind a framed map,
-     *                          and the angles a squid is really swimming at. Null draws neither
-     * @param walls             the MapGUI walls a photographer can see, or null to leave them out of the picture
-     * @param reuseChunksMillis how long a copied chunk may be served to a later capture, or 0 to copy every time
-     * @param liveMaxMillis     main-thread time a tick may spend on live views, or 0 for no budget
-     * @param liveMaxFps        the most frames a second any one live view may take, or 0 for no ceiling
+     * @param backend what this version of the server lets a capture read: the pixels behind a framed map, and the
+     *                angles a squid is really swimming at. Null draws neither
+     * @param walls   the MapGUI walls a photographer can see, or null to leave them out of the picture
+     * @param tuning  the numbers under {@code camera:} in config.yml
      */
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, float defaultFov, int defaultDistance, int reuseChunksMillis, double liveMaxMillis, int liveMaxFps) {
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, CameraTuning tuning) {
         this.plugin = plugin;
-        this.budget = new CaptureBudget(liveMaxMillis, liveMaxFps);
+        this.tuning = tuning;
+        this.budget = new CaptureBudget(tuning.liveMaxMillisPerTick(), tuning.liveMaxFps());
         this.framedMaps = new FramedMaps(backend == null ? null : backend.savedMapPixels());
         this.angles = backend == null ? null : backend.entityAngles();
         this.walls = walls;
         this.assets = assets;
         this.packs = packs;
-        this.defaultFov = defaultFov;
-        this.defaultDistance = defaultDistance;
-        this.snapshots = new SnapshotCache(TimeUnit.MILLISECONDS.toNanos(reuseChunksMillis));
+        CameraTuning.Reuse reuse = tuning.reuse();
+        this.snapshots = new SnapshotCache(TimeUnit.MILLISECONDS.toNanos(reuse.stillChunksMillis()), reuse.chunks());
+        this.blockEntities = new BlockEntityCache(this.snapshots, reuse.blockEntities());
+        this.mobShapes = new MobCache(reuse.mobs());
     }
 
     @Override
     public CameraAssets assets() {
+        used = true;
         return assets.state();
     }
 
     @Override
     public void useResourcePack(Plugin owner, String resource) {
+        used = true;
         packs.use(owner, resource);
     }
 
     @Override
     public boolean prepare() {
+        used = true;
         assets.ensure();
         return assets.state() instanceof CameraAssets.Ready || assets.state() instanceof CameraAssets.Loading;
     }
 
     @Override
     public void capture(Player player, int size, Consumer<CameraShot> onShot) {
-        capture(player, CameraOptions.defaults().size(size).fov(defaultFov).maxDistance(defaultDistance), onShot);
+        capture(player, CameraOptions.defaults().size(size).fov(tuning.fov()).maxDistance(tuning.maxDistance()), onShot);
     }
 
     @Override
     public void capture(Player player, CameraOptions options, Consumer<CameraShot> onShot) {
+        used = true;
         assets.ensure();
 
         Baked ready = readyBaked();
@@ -218,32 +256,80 @@ public final class CameraService implements Camera {
         // Here rather than in the task, since this is the one moment the caller is still on the stack to be read.
         String owner = CallingPlugin.of(plugin);
 
+        // Before the copy rather than after it. The copy is the main-thread half, so a capture that was never going
+        // to be traced in time should not cost the tick that would have paid for it.
+        if (captures.getQueue().size() >= MAX_QUEUED) {
+            load.turnedAway(owner);
+            onShot.accept(null);
+            return;
+        }
+
+        boolean paced = budget.claimPaced(player.getUniqueId());
+
         // On this thread, in this tick: everything the trace is allowed to touch.
         CameraView view = WorldCapture.viewOf(eye, options, distance);
-        SnapshotWorld world = WorldCapture.take(eye, view, options, ready.models(), ready.atlas(), ready.tints(), snapshots);
+        // Read either side of the copy rather than plumbed out of it. The cache counts every column a capture asks
+        // for, and a capture is the only thing touching it on this thread, so the difference is exactly this one's.
+        long wantedBefore = snapshots.lookups();
+        long reusedBefore = snapshots.hits();
+        SnapshotWorld world = WorldCapture.take(eye, view, options, ready.models(), ready.atlas(), ready.tints(), snapshots, paced);
         // Skins are published into the atlas before the trace, since it looks them up by name like any texture.
         skins.publishTo(ready.atlas());
         long copied = System.nanoTime();
         // A selfie is the one shot the holder belongs in. Every other one is taken from inside their own head, so
         // including them would fill the frame with the back of it.
+        // The same frustum the copy culls columns with, so an entity the frame cannot reach is never built.
+        ChunkFrustum framed = new ChunkFrustum(view, eye.getWorld().getMinHeight(), eye.getWorld().getMaxHeight() - 1);
+        TrackingRanges ranges = TrackingRanges.of(eye.getWorld(), tuning.maxEntityDistance());
+
+        // Read either side of the gather, the same way the columns are: the cache counts every mob a capture asked
+        // it about, and a capture is the only thing touching it on this thread.
+        long mobsBefore = mobShapes.lookups();
+        long mobsReusedBefore = mobShapes.hits();
         List<EntitySnapshot> entities = new ArrayList<>();
         if (options.entities()) {
-            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, angles, options.selfie()));
+            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, angles, ranges, framed,
+                    mobShapes, paced, tuning.limits().mobs(), options.selfie()));
         }
+        // Split here: what is alive above, what is bolted to the world below. They are two different costs with
+        // two different answers, and one timer over both says only that "entities" are slow.
+        long mobbed = System.nanoTime();
+        int mobs = entities.size();
         // Not under the entities option, whatever the trace calls these: a chest is part of the build, and turning
         // entities off asks for the world without the things standing in it rather than with holes in the walls.
-        entities.addAll(BlockEntityCapture.take(eye, ready.mobs(), skins));
+        entities.addAll(BlockEntityCapture.take(eye, ready.mobs(), skins, framed, blockEntities, paced,
+                tuning.limits().blockEntityDistance(), tuning.limits().blockEntities()));
         // Nor under it, for the same reason: a wall is part of the room, and a cinema with the screen left out is
         // not the shot anybody asked for.
         entities.addAll(WallCapture.take(player, eye, walls, ready.atlas()));
         long gathered = System.nanoTime();
         // Counted in the tick it happened in rather than when the shot comes back: a capture whose trace waits three
         // seconds for a thread still cost this tick, and a report that said otherwise would point at the wrong second.
-        load.captured(owner, gathered - started);
-        // Whether this one was paced or not: what it cost to copy the world around this player is the same either
-        // way, and a still taken mid-view is a free measurement for the view.
-        budget.spent(player.getUniqueId(), gathered - started);
+        load.captured(owner, copied - started, mobbed - copied, gathered - mobbed, paced);
+        int[] sections = world.sections();
+        load.copied(owner, (int) (snapshots.lookups() - wantedBefore), (int) (snapshots.hits() - reusedBefore),
+                sections[0], sections[1], mobs, entities.size() - mobs,
+                (int) (mobShapes.lookups() - mobsBefore), (int) (mobShapes.hits() - mobsReusedBefore));
+        // Only a paced one feeds the pacing. What a capture costs is a function of how wide and how far it was asked
+        // to see, so a still at another size is a measurement of something the viewfinder never does.
+        if (paced) {
+            budget.spent(player.getUniqueId(), gathered - started);
+        }
 
+        try {
+            trace(ready, owner, player, pixels, number, world, view, entities, onShot, started, copied, gathered);
+        } catch (RejectedExecutionException e) {
+            // Raced another capture through the check above, or the plugin is stopping. Either way the caller is
+            // owed an answer rather than a shot that never arrives.
+            load.turnedAway(owner);
+            onShot.accept(null);
+        }
+    }
+
+    /** The off-thread half, split out so the tick half above reads as the tick half. */
+    private void trace(Baked ready, String owner, Player player, int pixels, int number,
+                       SnapshotWorld world, CameraView view, List<EntitySnapshot> entities,
+                       Consumer<CameraShot> onShot, long started, long copied, long gathered) {
         captures.execute(() -> {
             int[] argb = new int[pixels * pixels];
             byte[] indices = new byte[pixels * pixels];
@@ -301,7 +387,66 @@ public final class CameraService implements Camera {
 
     @Override
     public boolean readyForFrame(Player player) {
+        used = true;
         return budget.readyForFrame(player.getUniqueId());
+    }
+
+    @Override
+    public double frameRate(Player player) {
+        return budget.frameRate(player.getUniqueId());
+    }
+
+    @Override
+    public CameraStats stats() {
+        CaptureWindow.Load now = load.read();
+        CaptureLoad.Failure failure = load.lastFailure();
+        CaptureBudget.Live live = budget.live();
+
+        List<CameraStats.Caller> callers = new ArrayList<>();
+        for (CaptureLoad.Share share : load.shares()) {
+            callers.add(new CameraStats.Caller(share.plugin(), share.perSecond()));
+        }
+
+        return new CameraStats(
+                now.captures(),
+                now.perSecond(),
+                now.unpacedPerSecond(),
+                millis(now.mainNanosPerTick()),
+                now.tickPercent(),
+                millis(now.worstMainNanos()),
+                millis(now.mainNanosEach()),
+                millis(now.copyNanosEach()),
+                millis(now.mobNanosEach()),
+                millis(now.blockEntityNanosEach()),
+                millis(now.traceNanosEach()),
+                new CameraStats.Copy(now.chunksEach(), now.reusedPercent(), now.filledSectionsEach(), now.sectionsEach()),
+                now.mobsEach(),
+                now.mobsReusedPercent(),
+                now.blockEntitiesEach(),
+                captures.getQueue().size(),
+                now.dropped(),
+                now.failed(),
+                budget.maxMillisPerTick(),
+                budget.fpsCeiling(),
+                failure == null ? null : new CameraStats.Failure(failure.plugin(), failure.reason(), failure.at()),
+                List.copyOf(callers),
+                live == null ? null : new CameraStats.Live(live.viewers(), live.slowestFps(), live.fastestFps(),
+                        live.usedMillisPerTick())
+        );
+    }
+
+    private static double millis(long nanos) {
+        return nanos / 1_000_000.0;
+    }
+
+    /**
+     * Whether anything has asked this camera for anything since the server started.
+     *
+     * <p>For the command tree, which hides the branch that administers a camera nobody is using - on a server that
+     * installed MapGUI for menus, {@code /mapgui camera} is four commands about a feature that never runs.
+     */
+    public boolean everUsed() {
+        return used;
     }
 
     /** What every capture has cost lately, for whoever asks rather than for whoever took them. */
@@ -449,7 +594,7 @@ public final class CameraService implements Camera {
                         new EquipmentAssets(assets.stack()),
                         new EntityVariants(assets.stack())
                 ),
-                new FrameTracer(atlas),
+                new FrameTracer(atlas, tuning.canopy()),
                 ready.minecraftVersion()
         );
         return baked;

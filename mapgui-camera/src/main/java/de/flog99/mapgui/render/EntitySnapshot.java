@@ -50,6 +50,14 @@ public record EntitySnapshot(
         return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, value, tint);
     }
 
+    /**
+     * The same layer standing somewhere else, for a mob whose look an earlier capture built and whose position it
+     * did not. The shape is the expensive part and the pose is six numbers - see {@code MobCache}.
+     */
+    public EntitySnapshot at(double x, double y, double z, float bodyYaw, float headYaw, float pitch) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, tint);
+    }
+
     /** The same layer in a dye color, for the one mob whose color is not in its texture. */
     public EntitySnapshot tint(int value) {
         return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, value);

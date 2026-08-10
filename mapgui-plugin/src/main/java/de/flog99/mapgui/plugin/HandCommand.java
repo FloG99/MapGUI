@@ -44,9 +44,9 @@ final class HandCommand {
     private HandCommand() {
     }
 
-    static ArgumentBuilder<CommandSourceStack, ?> hand(SessionManager sessions, String permission) {
+    static ArgumentBuilder<CommandSourceStack, ?> hand(SessionManager sessions, java.util.function.Predicate<CommandSourceStack> allowed) {
         return Commands.literal("hand")
-                .requires(source -> source.getSender().hasPermission(permission))
+                .requires(allowed)
                 .executes(context -> {
                     Listing.choices(context.getSource().getSender(), "GUIs in a hand", VERBS);
                     return Command.SINGLE_SUCCESS;

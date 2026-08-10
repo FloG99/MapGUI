@@ -26,6 +26,18 @@ groups, and each takes the same three verbs.
 
 `mapgui.admin` is the parent of all six, for the usual case of wanting the lot. All default to op.
 
+**Branches this server has nothing to administer are not listed.** MapGUI is a library, so what it can administer is
+whatever the plugins on top of it registered: `hand` appears once a plugin registers a GUI, `wall` once there is
+content to place or a wall already up, `camera` once something asks the camera for anything or you have installed
+textures for it. A server that installed MapGUI for one camera sees the camera branch and the three at the bottom,
+and nothing about walls. Set `commands.hide-unused: false` to see the whole tree regardless.
+
+**Or turn the lot off.** `commands.enabled: false` never registers `/mapgui` at all - not registered and refused, so
+nothing of MapGUI's appears in a tab completion. For a server whose plugin ships its own commands over the API and
+does not want two ways to ask the same question; everything these commands do is reachable from code, and
+`MapGui.get().camera().stats()` is the same reading `/mapgui camera performance` prints. Takes effect on restart,
+since a command tree is built once.
+
 `list` means the same thing in both groups: what exists right now. `hand open` and `wall place` given no
 argument list what they could take, which is the answer you want at the moment you notice you are missing an
 argument. `wall remove` is the one that instead has a default - the nearest wall - because that is almost
@@ -44,6 +56,16 @@ Placing is ended by right-click or Q rather than a command, since the preview is
 ## config.yml
 
 ```yaml
+commands:
+  # /mapgui and everything under it. Off means never registered, so nothing of MapGUI's shows up in a
+  # tab completion at all - for a server whose plugin ships its own commands over the API. Restart to
+  # change it.
+  enabled: true
+
+  # Hide branches this server has nothing to administer - no GUIs registered, no walls, no camera in
+  # use. Off shows the whole tree whatever this server does with it.
+  hide-unused: true
+
 prompts:
   # How text input is asked for. "dialog" is a native Minecraft dialog and needs no
   # inventory tricks; "anvil" renames an item.

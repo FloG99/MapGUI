@@ -42,9 +42,9 @@ public final class WallCommand {
     private WallCommand() {
     }
 
-    public static ArgumentBuilder<CommandSourceStack, ?> wall(WallManager walls, String permission) {
+    public static ArgumentBuilder<CommandSourceStack, ?> wall(WallManager walls, java.util.function.Predicate<CommandSourceStack> allowed) {
         return Commands.literal("wall")
-                .requires(source -> source.getSender().hasPermission(permission))
+                .requires(allowed)
                 .executes(context -> {
                     Listing.choices(context.getSource().getSender(), "GUIs on blocks", VERBS);
                     return Command.SINGLE_SUCCESS;

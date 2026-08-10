@@ -83,6 +83,30 @@ terrain:
   # one block column per pixel, so don't set this too low.
   min-ticks-between-refresh: 4
 
+commands:
+  # /mapgui and everything under it. Off means it is never registered at all - not registered and refused, so
+  # nothing of MapGUI's shows up in a tab completion or a help listing.
+  #
+  # For a server whose plugin ships its own commands over the API and does not want two ways to ask the same
+  # question. Everything /mapgui does is reachable from code: MapGui.get().camera().stats() is the same reading
+  # /mapgui camera performance prints, and the GUI catalog, the walls and the sessions are all on MapGui too.
+  #
+  # Takes effect on restart. A command tree is built once, when the server starts.
+  enabled: true
+
+  # Hide the branches this server has nothing to administer. MapGUI is a library, so what it can administer is
+  # whatever the plugins on top of it registered - a server that installed it for one camera has no GUIs to open
+  # and no walls to place, and two branches of commands about features that will never run teach an admin not to
+  # read the tree.
+  #
+  # Worked out rather than configured: /mapgui hand appears when a plugin registers a GUI, /mapgui wall when
+  # there is content to place or a wall already up, /mapgui camera when something asks the camera for anything
+  # or you have installed textures for it. Nothing is removed, only unlisted, and it appears the moment it has
+  # something in it.
+  #
+  # Off shows the whole tree whatever this server does with it.
+  hide-unused: true
+
 camera:
   # Vertical field of view for a capture, in degrees. 70 is the client's default, and the server has no way
   # to know what any given player has set theirs to, so this is as close as it gets.
@@ -92,20 +116,90 @@ camera:
   # that the chunks are not loaded, so there is nothing to trace and the ray draws sky.
   max-distance: 96
 
-  # Serve a chunk copied for one capture to another capture taken within this many milliseconds, instead of
-  # copying it again. Copying the world is the half of a capture that has to happen on the main thread, and
-  # two shots a moment apart want almost the same chunks - a walking player taking one shot after another
-  # reuses over 90% of them.
+  # How far entities are drawn in a capture, in blocks. Every one in range is a model to assemble, so this is
+  # what the entity half of a capture costs - and past about this far a mob is a couple of pixels on a map.
   #
-  # Zero, and deliberately. There is no way to know a chunk has changed: block events miss pistons, fluid,
-  # growth, explosions and every other plugin, and a chunk holds light as well as blocks, so a torch placed
-  # in the chunk next door changes this one without touching it. So this is a timer, not a guarantee, and a
-  # capture can show a block as it was up to this long ago. Everything else the camera does to be fast is
-  # exact; this is the one thing that trades a little truth for speed.
+  # Capped by what your server actually sends: spigot.yml's entity-tracking-range decides which entities a
+  # client is told about at all, so MapGUI takes the nearer of the two (less a tenth, since one exactly at the
+  # edge may or may not have been sent). Raising this past your tracking range therefore does nothing, and a
+  # server that tracks closer than this pulls captures in with it - which is what stops a photograph holding a
+  # mob that is not on the photographer's own screen.
+  max-entity-distance: 64
+
+  # How far out the gaps in leaves close up, so a forest photographs as a green mass rather than a haze of
+  # twigs with daylight behind it. Untouched, a leaf stays a cutout at any range, so a ray finds a gap, carries
+  # on through the whole wood and comes out at the sky.
   #
-  # Worth turning on for a live view or a burst of shots, since two captures further apart than this reuse
-  # nothing anyway. 1000 is a sensible value if you want it.
-  reuse-chunks-for-ms: 0
+  # It is a resolution problem rather than a taste one. A leaf texture is 16x16 across a block face, so from
+  # some distance out a texel is smaller than a pixel of the capture and a gap no longer has a pixel of its own
+  # to be seen through: what the pixel covers is part leaf and part gap. From near-blocks the gaps fill in over
+  # the texture's own average color, reaching solid at far-blocks. The client gets to the same place from the
+  # other direction, by mipmapping.
+  #
+  # Where that crossover really falls depends on the size and field of view you shoot at, which is why these
+  # are settings. Raise near-blocks if leaves close up too soon on a small map; a big capture with a narrow fov
+  # resolves further, so it wants both pushed out.
+  leaves:
+    # Where the gaps start closing, in blocks. 0 closes them from the lens out, which is what makes a distant
+    # canopy solid without a band of haze in front of it. Raise it to see sky through a tree overhead.
+    near-blocks: 0
+
+    # Where a canopy is solid. Past this a wood is a surface rather than a thousand leaves with sky between.
+    # Equal to near-blocks it is a hard switch at that one distance; past max-distance nothing ever fills.
+    far-blocks: 50
+
+  # What may be reused from an earlier capture, and for how long. You do not need any of this - every key
+  # below already defaults to what the camera uses. It is here because these are the only settings that trade
+  # truth for speed, and that is a server owner's call.
+  #
+  # They are timers because there is nothing to invalidate on: block events miss pistons, fluid, growth and
+  # every other plugin, a chunk carries light as well as blocks, and nothing reports that a mob drew its sword.
+  # So a capture can show something as it was up to this long ago.
+  #
+  # Each ramps with distance, since staleness is only worth what it hides: what is at your feet is most of the
+  # picture, what is at the horizon is a few pixels. Longer is faster and less true; zeroes turn reuse off.
+  reuse:
+    # Copied chunk columns, in chunks out from the one the camera is in. The biggest win of the three, since
+    # copying the world is the half of a capture that lands on the main thread.
+    chunks:
+      near-ms: 500
+      far-ms: 2000
+      near-chunks: 2
+      far-chunks: 12
+
+      # What a STILL photograph may reuse, which is a different question: it is kept and looked at, and no
+      # frame follows to correct it. Worth turning on for a burst of shots; 1000 is sensible if you want it.
+      stills-for-ms: 0
+
+    # Chests, signs, banners, shelves and pots, in blocks. They do not move and they only change when somebody
+    # edits them, so this is nearly free.
+    tile-entities:
+      near-ms: 500
+      far-ms: 2000
+      near-blocks: 16
+      far-blocks: 64
+
+    # What an entity LOOKS LIKE - its model, what it wears, its variant, its skin. Never where it stands: that
+    # is read fresh every capture whatever you put here, so a reused mob is always in the right place. What can
+    # lag is the sword it just drew or a player's crouch. Tighter up close, since that is what you are looking at.
+    entities:
+      near-ms: 100
+      far-ms: 2000
+      near-blocks: 16
+      far-blocks: 64
+
+  # Caps on what one capture may draw, so a mob farm or a storage room in shot cannot fill a frame. Both keep
+  # the nearest, so what gets dropped is whatever was furthest away.
+  limits:
+    max-entities: 48
+
+    # Counted in drawn parts rather than in blocks, since some draw more than one: a banner is its pole and its
+    # cloth, a sign is a side of text each way. So this is a few hundred blocks rather than exactly 512.
+    max-tile-entities: 512
+
+    # How far chests and signs are gathered from, in blocks. Entities have their own range above, under
+    # max-entity-distance, since that one is capped by what your server actually tracks.
+    tile-entity-distance: 64
 
   # What a LIVE view costs you. A still photograph is not this: it happens once, somebody pressed a button and
   # is waiting for it. A viewfinder wants every frame it can get, forever, and how many that should be depends

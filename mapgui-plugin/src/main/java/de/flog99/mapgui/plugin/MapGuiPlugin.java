@@ -38,6 +38,7 @@ public final class MapGuiPlugin extends JavaPlugin {
     private MapPrinterService printer;
     private HandItems handItems;
     private HeldTriggers heldTriggers;
+    private CommandSurface surface;
 
     @Override
     public void onEnable() {
@@ -73,7 +74,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         cameraAssets.follow(serverPacks::followed);
         // Before the camera, which photographs whatever the walls are showing.
         wallRegistry = new WallRegistry(this, transport, prompts, router);
-        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis(), config.cameraLiveMaxMillis(), config.cameraLiveMaxFps());
+        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraTuning());
         cameraAssets.announce();
         serverPacks.start();
 
@@ -93,9 +94,16 @@ public final class MapGuiPlugin extends JavaPlugin {
         PerformanceReport performance = new PerformanceReport(this, transport, sessions, walls);
         getServer().getPluginManager().registerEvents(new WallListeners(walls), this);
         getServer().getPluginManager().registerEvents(wallRegistry, this);
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
-                event.registrar().register(MapGuiCommand.build(this, sessions, walls, performance::lines), "Interactive map GUIs")
-        );
+
+        // Off means never registered rather than registered and refused, so nothing of MapGUI's appears in a tab
+        // completion or a help listing at all. For a server whose plugin ships its own commands over the API and
+        // does not want two ways to ask the same question. Restart to change it: a Brigadier tree is built once.
+        surface = new CommandSurface(this, screens, walls);
+        if (config.commandsEnabled()) {
+            getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
+                    event.registrar().register(MapGuiCommand.build(this, sessions, walls, surface, performance::lines), "Interactive map GUIs")
+            );
+        }
 
         // Walls are not tied to a session, so they need a tick of their own. One per tick is the most a
         // map can be updated anyway, and a wall with nobody near it does almost nothing.
@@ -108,6 +116,11 @@ public final class MapGuiPlugin extends JavaPlugin {
             handItems.sweep();
             heldTriggers.sweep();
         }, 1L, 1L);
+
+        // Once a second, and only to notice that a branch of /mapgui has become worth listing - registering a GUI,
+        // placing a wall and touching a camera are three unrelated paths, and one poll is cheaper than hooks in all
+        // of them. Nothing is sent unless the answer changed.
+        getServer().getScheduler().runTaskTimer(this, surface::refresh, 20L, 20L);
     }
 
     /**
@@ -163,7 +176,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         // textures go either way, since the fov and distance they were built against may have changed.
         serverPacks.retune(config.cameraFollowServerPacks());
         cameraAssets.retune(config.cameraPacks(), config.cameraDownload(), config.cameraAllowVersionMismatch());
-        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraFov(), config.cameraDistance(), config.cameraReuseChunksMillis(), config.cameraLiveMaxMillis(), config.cameraLiveMaxFps());
+        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraTuning());
     }
 
     MapGuiConfig config() {
