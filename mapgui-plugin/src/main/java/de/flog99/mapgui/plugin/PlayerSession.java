@@ -44,6 +44,11 @@ import java.util.function.Consumer;
  * of two things: clamped, it maps absolutely onto the vertical axis and the head is pushed back into range when it
  * runs out; unclamped, it accumulates a delta like the yaw does, since a head free to leave the range would
  * otherwise pin the cursor to an edge and ignore the way back.
+ *
+ * <p>Either way the cursor stays where it was left while the screen has not got the mouse. A focus mode that gives it
+ * back and takes it away - sneak, a toggle - is one the player leaves to look at something else, and a pointer that
+ * followed their head while it was off screen would come back somewhere they never put it. Clamped, that costs a
+ * head move on the way back in, since there a row and a pitch are the same thing.
  */
 final class PlayerSession implements Session {
 
@@ -65,6 +70,19 @@ final class PlayerSession implements Session {
 
     /** Only read while the pitch is unclamped, where the cursor follows a delta the way the yaw one does. */
     private float lastPitch;
+
+    /**
+     * Where the head is being put back to on regaining the mouse, or null when it is not.
+     *
+     * <p>Held across ticks because setting a pitch only sends a packet: the player's own rotation is whatever the
+     * client last reported, so a one-shot move is read back stale on the very next tick and the cursor snaps to
+     * where the head has not been yet.
+     */
+    private Float restoringPitch;
+
+    /** The pitch reported when that started, so the first move of any kind - ours landing or the player's - ends it. */
+    private float restoringFrom;
+
     private boolean suspended;
     private boolean needsPaint = true;
 
@@ -274,9 +292,17 @@ final class PlayerSession implements Session {
             // Re-anchor the mouse, or the head movement since it was let go arrives as one jump.
             lastYaw = player.getLocation().getYaw();
             lastPitch = player.getLocation().getPitch();
+            // Clamped, a row is a pitch, so looking about with the cursor hidden has to move one of the two. The
+            // head is the one that gives: a pointer that wandered off while it could not be seen loses the player
+            // the place they were working in, and this is the same move start() makes when it centres the head on
+            // a screen opened already focused. Unclamped, the cursor kept its own place all along.
+            if (clampPitch()) {
+                restore(pitchAt(cursorY));
+            }
             applyPitch(player.getLocation().getPitch());
             needsPaint = true;
         } else {
+            restoringPitch = null;
             // Nowhere rather than wherever it was, or the row the player was hovering stays lit on a map they are
             // no longer pointing at. Repainted next tick rather than here, since a screen may drop the mouse from
             // inside its own click handler and painting from there would be painting twice over.
@@ -583,6 +609,7 @@ final class PlayerSession implements Session {
         float max = plugin.config().maxPitch();
 
         if (clampPitch()) {
+            pitch = restored(pitch);
             if (pitch < min) {
                 plugin.rotation().setPitchKeepingYaw(player, min);
                 pitch = min;
@@ -592,12 +619,49 @@ final class PlayerSession implements Session {
             }
             cursorY = clamp((pitch - min) / (max - min) * (height() - 1), 0, height() - 1);
         } else {
+            restoringPitch = null;
             // The same degrees-per-pixel the yaw axis uses, so both axes move at one speed.
             double perDegree = height() / (max - min);
             cursorY = clamp(cursorY + (pitch - lastPitch) * perDegree, 0, height() - 1);
         }
 
         lastPitch = pitch;
+    }
+
+    /** Starts putting the head back, unless it is already there and there is nothing to put back. */
+    private void restore(float pitch) {
+        restoringFrom = player.getLocation().getPitch();
+        restoringPitch = Math.abs(restoringFrom - pitch) <= PITCH_SETTLED ? null : pitch;
+    }
+
+    /**
+     * The pitch to read the cursor's row off while the head is being put back: the one being aimed for until the
+     * client reports having moved at all.
+     *
+     * <p>Any move ends it, ours or the player's. Ours lands on the target, so the row is the one it was left at.
+     * Theirs means they are aiming somewhere of their own while holding the map up, and a head held against that
+     * would be a screen fighting its player for the mouse.
+     */
+    private float restored(float pitch) {
+        if (restoringPitch == null) return pitch;
+
+        if (Math.abs(pitch - restoringFrom) > PITCH_SETTLED) {
+            restoringPitch = null;
+            return pitch;
+        }
+
+        plugin.rotation().setPitchKeepingYaw(player, restoringPitch);
+        return restoringPitch;
+    }
+
+    /** Degrees within which two pitches are the same one, since these arrive as floats off a packet. */
+    private static final float PITCH_SETTLED = 0.05f;
+
+    /** The pitch a row of the cursor sits at, which is what makes a row and a pitch the same thing when clamped. */
+    private float pitchAt(double row) {
+        float min = plugin.config().minPitch();
+        float max = plugin.config().maxPitch();
+        return (float) (min + row / Math.max(1, height() - 1) * (max - min));
     }
 
     /** The screen decides if it has an opinion, otherwise the server does. Never while the mouse is elsewhere. */

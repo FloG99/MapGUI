@@ -147,6 +147,11 @@ Null follows the server's `cursor.clamp-pitch`. A screen with no cursor never re
 either says, and neither does a map in the offhand - that one is glanced at while the player looks at the world,
 so their aim is left alone. Movement is never restricted in any case.
 
+Where the mouse is handed back and forth - `Focus.SNEAK`, a toggle - the cursor stays where it was left while
+the screen has not got it, so looking around never moves a pointer nobody can see. Clamped, a row and a pitch
+are the same thing, so it is the head that comes back to the cursor when the player takes the mouse again.
+Unclamped, nothing moves at all.
+
 ### The wheel, when nothing scrollable is under it
 
 ```java
