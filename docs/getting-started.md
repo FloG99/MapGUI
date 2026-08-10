@@ -147,9 +147,9 @@ Null follows the server's `cursor.clamp-pitch`. A screen with no cursor never re
 either says, and neither does a map in the offhand - that one is glanced at while the player looks at the world,
 so their aim is left alone. Movement is never restricted in any case.
 
-If the cursor is hidden some of the time - `Focus.SNEAK`, a toggle - it stays where the player left it, so
-looking around does not move it. Clamped, their head turns back to the cursor when it comes back; unclamped,
-nothing moves their head.
+While the cursor is hidden it stays where the player left it, so looking around does not move it. That covers
+both ways it goes away: the screen losing the mouse, and `cursor()` returning false for a while. Clamped, their
+head turns back to the cursor when it appears again; unclamped, nothing moves their head.
 
 ### The wheel, when nothing scrollable is under it
 

@@ -45,8 +45,8 @@ import java.util.function.Consumer;
  * runs out; unclamped, it accumulates a delta like the yaw does, since a head free to leave the range would
  * otherwise pin the cursor to an edge and ignore the way back.
  *
- * <p>Either way the cursor holds its place while the screen has not got the mouse, so a hidden pointer never drifts.
- * Clamped, where a row is a pitch, that means turning the head back to it on the way in.
+ * <p>Either way the cursor moves only while it is on screen, so a pointer nobody can see never drifts. Clamped,
+ * where a row is a pitch, drawing it again turns the head back to it.
  */
 final class PlayerSession implements Session {
 
@@ -86,6 +86,9 @@ final class PlayerSession implements Session {
      * be noticed: gaining it has to re-anchor the cursor, and losing it has to send the pointer away.
      */
     private boolean focused;
+
+    /** Whether the cursor is on screen, which is {@link #focused} and the screen wanting one. It moves only then. */
+    private boolean aiming;
 
     /** Set by a toggling gesture, and only read by the focus modes that toggle. */
     private boolean focusToggled;
@@ -227,6 +230,7 @@ final class PlayerSession implements Session {
         // Ticking stops here, so the pointer has to be sent away explicitly or it stays on screen
         // hovering over a menu nobody can reach.
         focused = false;
+        aiming = false;
         send(markers());
     }
 
@@ -283,8 +287,24 @@ final class PlayerSession implements Session {
         if (wanted == focused) return;
 
         focused = wanted;
-        if (focused) {
-            // Re-anchor the mouse, or the head movement since it was let go arrives as one jump.
+        needsPaint = true;
+        reaim();
+    }
+
+    /**
+     * Picks up the cursor being drawn or not, which is focus and the screen wanting one.
+     *
+     * <p>Both, and not focus alone: a screen may keep the mouse and hide its pointer - the camera's viewfinder shows
+     * one only while sneaking - and a cursor nobody can see must not follow the head, or it comes back somewhere the
+     * player never put it.
+     */
+    private void reaim() {
+        boolean wanted = focused && screen().cursor();
+        if (wanted == aiming) return;
+
+        aiming = wanted;
+        if (aiming) {
+            // Re-anchor, or the head movement since the pointer went away arrives as one jump.
             lastYaw = player.getLocation().getYaw();
             lastPitch = player.getLocation().getPitch();
             // Clamped, a row is a pitch, so one of the two has to move. The head gives, the way start() moves it.
@@ -292,7 +312,6 @@ final class PlayerSession implements Session {
                 restore(pitchAt(cursorY));
             }
             applyPitch(player.getLocation().getPitch());
-            needsPaint = true;
         } else {
             restoringPitch = null;
             // Nowhere rather than wherever it was, or the row the player was hovering stays lit on a map they are
@@ -514,8 +533,10 @@ final class PlayerSession implements Session {
         }
 
         refocus();
+        // Every tick, since a screen may start and stop wanting a cursor without focus changing at all.
+        reaim();
 
-        if (focused) {
+        if (aiming) {
             if (now.getYaw() != lastYaw) {
                 double perDegree = width() / (plugin.config().maxPitch() - plugin.config().minPitch());
                 cursorX = clamp(cursorX + yawDelta(now.getYaw()) * perDegree, 0, width() - 1);
@@ -524,7 +545,7 @@ final class PlayerSession implements Session {
 
             applyPitch(now.getPitch());
         } else {
-            // Still followed while the mouse is elsewhere, so picking the map back up does not arrive as a jump.
+            // Still followed while the pointer is away, so drawing it again does not arrive as a jump.
             lastYaw = now.getYaw();
             lastPitch = now.getPitch();
         }
@@ -538,7 +559,7 @@ final class PlayerSession implements Session {
             needsPaint = true;
         }
 
-        if (focused && screen().cursor() && screen().cursorMoved(cursorX(), cursorY())) {
+        if (aiming && screen().cursorMoved(cursorX(), cursorY())) {
             needsPaint = true;
         }
         if (screen().isDirty()) {
@@ -727,8 +748,8 @@ final class PlayerSession implements Session {
         Screen clicked = screen();
         // A cursorless screen still hears the click, but only through Screen#clickedAnywhere: -1 means there is
         // no position, so nothing is hit-tested.
-        boolean aiming = clicked.cursor();
-        if (!clicked.click(aiming ? cursorX() : -1, aiming ? cursorY() : -1, with)) return;
+        boolean pointed = clicked.cursor();
+        if (!clicked.click(pointed ? cursorX() : -1, pointed ? cursorY() : -1, with)) return;
 
         Sound sound = clicked.clickSound();
         if (sound != null) {
