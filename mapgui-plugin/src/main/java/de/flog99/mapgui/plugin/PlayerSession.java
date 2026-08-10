@@ -7,7 +7,6 @@ import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.MapSurface;
 import de.flog99.mapgui.MapTextFont;
 import de.flog99.mapgui.Marker;
-import de.flog99.mapgui.RotationController;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.Session;
 import de.flog99.mapgui.TerrainRenderer;
@@ -45,8 +44,8 @@ import java.util.function.Consumer;
  * runs out; unclamped, it accumulates a delta like the yaw does, since a head free to leave the range would
  * otherwise pin the cursor to an edge and ignore the way back.
  *
- * <p>Either way the cursor moves only while it is on screen, so a pointer nobody can see never drifts. Clamped,
- * where a row is a pitch, drawing it again turns the head back to it.
+ * <p>Either way the cursor moves only while it is on screen, and starts from the middle every time it appears, so a
+ * pointer nobody can see never drifts. Clamped, where a row is a pitch, that means putting the head at mid range.
  */
 final class PlayerSession implements Session {
 
@@ -295,8 +294,8 @@ final class PlayerSession implements Session {
      * Picks up the cursor being drawn or not, which is focus and the screen wanting one.
      *
      * <p>Both, and not focus alone: a screen may keep the mouse and hide its pointer - the camera's viewfinder shows
-     * one only while sneaking - and a cursor nobody can see must not follow the head, or it comes back somewhere the
-     * player never put it.
+     * one only while sneaking. A hidden cursor does not follow the head, and comes back in the middle rather than
+     * wherever it was, so where it appears never depends on what the player was doing without it.
      */
     private void reaim() {
         boolean wanted = focused && screen().cursor();
@@ -307,9 +306,10 @@ final class PlayerSession implements Session {
             // Re-anchor, or the head movement since the pointer went away arrives as one jump.
             lastYaw = player.getLocation().getYaw();
             lastPitch = player.getLocation().getPitch();
-            // Clamped, a row is a pitch, so one of the two has to move. The head gives, the way start() moves it.
+            centreCursor();
+            // Clamped, the middle row is the middle of the pitch range, so the head has to go there to match.
             if (clampPitch()) {
-                restore(pitchAt(cursorY));
+                restore(midPitch());
             }
             applyPitch(player.getLocation().getPitch());
         } else {
@@ -398,13 +398,7 @@ final class PlayerSession implements Session {
         // A focused screen takes everything: the whole point is that a click means "press this" and not
         // whatever the player is really holding.
         plugin.router().claim(player, gestures);
-
-        // Centring the cursor means moving their head, so it only happens if we are allowed to.
-        if (focused && clampPitch()) {
-            RotationController rotation = plugin.rotation();
-            rotation.setPitchKeepingYaw(player, midPitch());
-        }
-
+        // Opening with the cursor already up is the same move as it appearing later, and reaim() has made it.
         task = player.getScheduler().runAtFixedRate(plugin, scheduled -> tick(), null, 1L, 1L);
     }
 
@@ -666,11 +660,9 @@ final class PlayerSession implements Session {
     /** Degrees within which two pitches are the same one, since these arrive as floats off a packet. */
     private static final float PITCH_SETTLED = 0.05f;
 
-    /** The pitch a row of the cursor sits at, which is what makes a row and a pitch the same thing when clamped. */
-    private float pitchAt(double row) {
-        float min = plugin.config().minPitch();
-        float max = plugin.config().maxPitch();
-        return (float) (min + row / Math.max(1, height() - 1) * (max - min));
+    private void centreCursor() {
+        cursorX = width() / 2.0;
+        cursorY = height() / 2.0;
     }
 
     /** The screen decides if it has an opinion, otherwise the server does. Never while the mouse is elsewhere. */

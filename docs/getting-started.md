@@ -147,9 +147,10 @@ Null follows the server's `cursor.clamp-pitch`. A screen with no cursor never re
 either says, and neither does a map in the offhand - that one is glanced at while the player looks at the world,
 so their aim is left alone. Movement is never restricted in any case.
 
-While the cursor is hidden it stays where the player left it, so looking around does not move it. That covers
-both ways it goes away: the screen losing the mouse, and `cursor()` returning false for a while. Clamped, their
-head turns back to the cursor when it appears again; unclamped, nothing moves their head.
+The cursor appears in the middle of the map every time and does not move while it is hidden, so where it turns
+up never depends on what the player was doing without it. That covers both ways it goes away: the screen losing
+the mouse, and `cursor()` returning false for a while. Clamped, their head goes to the middle of the pitch range
+with it; unclamped, nothing moves their head.
 
 ### The wheel, when nothing scrollable is under it
 
