@@ -45,10 +45,8 @@ import java.util.function.Consumer;
  * runs out; unclamped, it accumulates a delta like the yaw does, since a head free to leave the range would
  * otherwise pin the cursor to an edge and ignore the way back.
  *
- * <p>Either way the cursor stays where it was left while the screen has not got the mouse. A focus mode that gives it
- * back and takes it away - sneak, a toggle - is one the player leaves to look at something else, and a pointer that
- * followed their head while it was off screen would come back somewhere they never put it. Clamped, that costs a
- * head move on the way back in, since there a row and a pitch are the same thing.
+ * <p>Either way the cursor holds its place while the screen has not got the mouse, so a hidden pointer never drifts.
+ * Clamped, where a row is a pitch, that means turning the head back to it on the way in.
  */
 final class PlayerSession implements Session {
 
@@ -72,11 +70,8 @@ final class PlayerSession implements Session {
     private float lastPitch;
 
     /**
-     * Where the head is being put back to on regaining the mouse, or null when it is not.
-     *
-     * <p>Held across ticks because setting a pitch only sends a packet: the player's own rotation is whatever the
-     * client last reported, so a one-shot move is read back stale on the very next tick and the cursor snaps to
-     * where the head has not been yet.
+     * Where the head is being put back to on regaining the mouse, or null. Kept across ticks because setting a pitch
+     * only sends a packet, so a one-shot move reads back stale and the cursor snaps to where the head is not yet.
      */
     private Float restoringPitch;
 
@@ -292,10 +287,7 @@ final class PlayerSession implements Session {
             // Re-anchor the mouse, or the head movement since it was let go arrives as one jump.
             lastYaw = player.getLocation().getYaw();
             lastPitch = player.getLocation().getPitch();
-            // Clamped, a row is a pitch, so looking about with the cursor hidden has to move one of the two. The
-            // head is the one that gives: a pointer that wandered off while it could not be seen loses the player
-            // the place they were working in, and this is the same move start() makes when it centres the head on
-            // a screen opened already focused. Unclamped, the cursor kept its own place all along.
+            // Clamped, a row is a pitch, so one of the two has to move. The head gives, the way start() moves it.
             if (clampPitch()) {
                 restore(pitchAt(cursorY));
             }
@@ -635,12 +627,8 @@ final class PlayerSession implements Session {
     }
 
     /**
-     * The pitch to read the cursor's row off while the head is being put back: the one being aimed for until the
-     * client reports having moved at all.
-     *
-     * <p>Any move ends it, ours or the player's. Ours lands on the target, so the row is the one it was left at.
-     * Theirs means they are aiming somewhere of their own while holding the map up, and a head held against that
-     * would be a screen fighting its player for the mouse.
+     * The pitch to read the cursor's row off while the head is being put back. The first move of any kind ends it:
+     * ours lands on the target, and theirs is the player aiming, which a screen must not hold a head against.
      */
     private float restored(float pitch) {
         if (restoringPitch == null) return pitch;
