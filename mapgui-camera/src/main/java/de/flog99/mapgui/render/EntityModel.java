@@ -300,11 +300,12 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
     private static final float CROUCH_LEG_BACK = 4;
 
     /**
-     * This model with both arms swung out in front of it, which is how an enderman stands while it is carrying a
-     * block - its own model poses them the moment it picks one up, and nothing else here holds anything out.
+     * This model with both arms out in front, which is how an enderman stands while it is carrying a block. Its own
+     * model does it and nothing else here holds anything out.
      *
-     * <p>Same frame and same sign rule as {@link #crouched}, and shifts each arm's own rotation rather than setting
-     * one, so whatever the walk cycle had them doing is still theirs.
+     * <p>{@code EndermanModel.setupAnim} <b>sets</b> both arms rather than shifting them, so whatever the walk left
+     * them at is discarded - unlike {@link #crouched}, which leans off it. Same sign rule though: vanilla's -0.5
+     * about X is +0.5 here, and the small spread about Z carries over unchanged.
      */
     EntityModel carrying() {
         return of(carry(parts), culled);
@@ -314,8 +315,8 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
         List<MeshPart> out = new ArrayList<>(parts.size());
         for (MeshPart part : parts) {
             MeshPart posed = switch (part.name()) {
-                case "right_arm" -> part.withRotation(part.xRot() - CARRY_ARM_LEAN, part.yRot(), part.zRot() + CARRY_ARM_SPREAD);
-                case "left_arm" -> part.withRotation(part.xRot() - CARRY_ARM_LEAN, part.yRot(), part.zRot() - CARRY_ARM_SPREAD);
+                case "right_arm" -> part.withRotation(CARRY_ARM_LEAN, part.yRot(), CARRY_ARM_SPREAD);
+                case "left_arm" -> part.withRotation(CARRY_ARM_LEAN, part.yRot(), -CARRY_ARM_SPREAD);
                 default -> part;
             };
             out.add(posed.withChildren(carry(posed.children())));
@@ -323,8 +324,8 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
         return List.copyOf(out);
     }
 
-    /** Radians. Well past the crouch's lean, since these are held out in front rather than merely tipped forward. */
-    private static final float CARRY_ARM_LEAN = 0.9424779f;
+    /** Radians, and the client's own number with the sign this frame gives it. */
+    private static final float CARRY_ARM_LEAN = 0.5f;
 
     /** And a little apart, so the two do not read as one limb from the front. */
     private static final float CARRY_ARM_SPREAD = 0.05f;

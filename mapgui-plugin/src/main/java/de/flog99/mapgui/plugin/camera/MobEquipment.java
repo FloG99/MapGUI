@@ -334,22 +334,25 @@ final class MobEquipment {
     private static final String RIGHT_ARM = "right_arm";
 
     /**
-     * Both placements are measured off the mesh rather than copied from the client: the layers that position them are
-     * renderer code, which is not in the asset subset MapGUI keeps, so there was nothing to read.
+     * Both placements are {@code CarriedBlockLayer}'s and {@code IronGolemFlowerLayer}'s own chains composed down to
+     * one offset and one turn each, in this module's frame.
      *
-     * <p>An enderman's torso runs y 26 to 38 with its front face at z -2, so a half-size block centred four pixels
-     * clear of that sits in front of the chest with its own front about three quarters of a block out - which is
-     * where {@code CarriedBlockLayer} puts it. Turned a quarter so it reads corner-on and tipped back, which is what
-     * stops it drawing as a flat square face on. The X sign is the one {@code EntityModel#crouched} explains: this
-     * frame is the client's flipped, so a rotation about X changes sign with it and one about Z does not.
+     * <p>A chain has to be composed rather than copied because a pose is a single transform, and the order matters:
+     * the client turns about X, then about Y, then flips - do those in any other order and the block picks up a roll
+     * it should not have. So the whole product is worked out and read back as the three angles a part states, which
+     * reproduces the matrix exactly rather than approximately.
+     *
+     * <p>The block ends up around waist height and three quarters of a block out, which is lower and further forward
+     * than it looks like it should be.
      */
     private static final ItemPoses.Pose CARRIED = new ItemPoses.Pose(
-            new float[]{0, -6f, -8f},
-            new float[]{(float) Math.toRadians(-20), (float) Math.toRadians(45), 0}, 0.5f);
+            new float[]{0, -10.06f, -12.34f},
+            new float[]{(float) Math.toRadians(27.24), (float) Math.toRadians(-41.64), (float) Math.toRadians(161.12)},
+            0.5f);
 
-    /** And a golem's right arm hangs from y 33.5 down to 3.5 at x 11, so the poppy goes at the low end of it. */
+    /** The golem's is simpler: off the arm it holds it in, and a quarter turn to stand the flower up in its fist. */
     private static final ItemPoses.Pose OFFERED = new ItemPoses.Pose(
-            new float[]{11f, -23f, -2f}, new float[]{0, 0, 0}, 0.5f);
+            new float[]{15f, -21f, -3f}, new float[]{(float) Math.toRadians(90), 0, 0}, 0.5f);
 
     /** The part a mooshroom's back is, which is the root of its mesh - the client hangs two of the three off it. */
     private static final String BODY = "root";
