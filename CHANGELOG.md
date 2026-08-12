@@ -177,9 +177,9 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 - **A live camera view now costs the server what an admin gives it, however many people have one open.** Two settings,
   `camera.live.max-ms-per-tick` and `camera.live.max-fps`, and everything between them is spent: views take as many
   frames as the budget affords and stop at the ceiling. At the defaults, and a frame costing a millisecond of
-  main-thread time, one viewer gets 10 fps, two get 10 each, three get 6.7 and four get 5 - so a lone viewer does not
-  get twenty times the frames for being alone, and the fourth to open one slows the other three rather than costing a
-  quarter more. What a frame costs is **measured per viewer**, so the budget is divided as time and not as frames, and
+  main-thread time, everybody gets the full 10 fps up to six viewers at once, the seventh brings them all to 8.6 and
+  twelve get 5 each - so a lone viewer does not get twenty times the frames for being alone, and the seventh to open
+  one slows the other six rather than costing a seventh more. What a frame costs is **measured per viewer**, so the budget is divided as time and not as frames, and
   a cheap view that would hit the ceiling on less than its share hands the rest to one that cannot. A plugin asks
   `camera().readyForFrame(player)` every tick it would like a frame; asking is what makes it a viewer, so there is
   nothing to open, nothing to close, and a screen that stops asking stops being divided by. Advisory rather than

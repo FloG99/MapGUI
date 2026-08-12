@@ -213,16 +213,17 @@ camera:
   # the ceiling, so one person alone does not get twenty times the frames for being alone, and the tenth person
   # to open one slows everybody down instead of costing you ten times as much.
   #
-  # With the defaults below and a frame that costs a millisecond of main-thread time, one viewer gets 10 fps,
-  # two get 10 fps each, three get 6.7, four get 5. What a frame really costs is measured per viewer rather
-  # than assumed, so a small viewfinder pointed at a wall earns a higher rate than a wide one over a valley.
+  # With the defaults below and a frame that costs a millisecond of main-thread time, everybody gets the full
+  # 10 fps up to six viewers at once; the seventh brings them all to 8.6, and twelve get 5 each. What a frame
+  # really costs is measured per viewer rather than assumed, so a small viewfinder pointed at a wall earns a
+  # higher rate than a wide one over a valley.
   live:
     # Main-thread time a tick may spend copying the world for live views. This is the only kind of time a
     # capture can take from the server - the trace runs on its own threads and cannot cost you a tick - so it
-    # is the number to turn down if the camera is what is hurting. A tick is 50ms, so 1.0 is 2% of one.
+    # is the number to turn down if the camera is what is hurting. A tick is 50ms, so 3.0 is 6% of one.
     #
     # 0 means no budget: views take whatever the ceiling allows, however many of them there are.
-    max-ms-per-tick: 1.0
+    max-ms-per-tick: 3.0
 
     # The most frames a second any one view may take, however much budget is going spare. Past about 10 a
     # viewfinder on a map stops looking better and only costs more - a map holds 128 pixels and the palette

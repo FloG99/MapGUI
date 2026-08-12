@@ -78,7 +78,7 @@ public record MapGuiConfig(
                 Math.max(1, config.getInt("camera.max-distance", 96)),
                 Math.max(1, config.getDouble("camera.max-entity-distance", TrackingRanges.DEFAULT_MAX)),
                 // Both floor at zero, which each read as "no limit of this kind" rather than as "no frames".
-                Math.max(0, config.getDouble("camera.live.max-ms-per-tick", 1.0)),
+                Math.max(0, config.getDouble("camera.live.max-ms-per-tick", 3.0)),
                 Math.max(0, config.getInt("camera.live.max-fps", 10)),
                 canopy(config),
                 reuse(config),

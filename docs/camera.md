@@ -363,7 +363,7 @@ Two settings decide the rate, and everything between them is spent:
 ```yaml
 camera:
   live:
-    max-ms-per-tick: 1.0
+    max-ms-per-tick: 3.0
     max-fps: 10
 ```
 
@@ -374,12 +374,12 @@ only costs more. So with those defaults, and a frame that costs a millisecond to
 | viewers | each gets | total main-thread cost |
 |---|---|---|
 | 1 | 10 fps | 0.5 ms/t |
-| 2 | 10 fps | 1.0 ms/t |
-| 3 | 6.7 fps | 1.0 ms/t |
-| 4 | 5 fps | 1.0 ms/t |
+| 6 | 10 fps | 3.0 ms/t |
+| 8 | 7.5 fps | 3.0 ms/t |
+| 12 | 5 fps | 3.0 ms/t |
 
-One viewer does not get twenty times the frames for being alone, and the fourth to open one slows the other three
-rather than costing you a quarter more. Either setting takes `0` to mean no limit of that kind - `max-ms-per-tick` at
+One viewer does not get twenty times the frames for being alone, and the seventh to open one slows the other six
+rather than costing you a seventh more. Either setting takes `0` to mean no limit of that kind - `max-ms-per-tick` at
 0 lets everybody have the ceiling however many there are, `max-fps` at 0 lets one lonely viewer take the whole budget.
 
 Only paced captures feed the measurement below, and only they count against the budget. A still taken by the same
