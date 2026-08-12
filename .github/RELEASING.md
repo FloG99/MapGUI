@@ -101,13 +101,18 @@ Attached to that release:
 | Asset | For |
 |---|---|
 | `MapGUI-<version>.jar` | every server. The only required download |
-| `MapGUI-examples-<version>.zip` | a test server. Unpacks into `plugins/` - five demo plugins and a sample video. Delete a jar to drop that demo |
+| `MapGUI-examples-<version>.jar` | a test server. One plugin holding every demo, and the sample video. Delete it to drop the lot |
 | `mapgui-api` jar, with sources | developers who would rather drag a jar in than add a dependency. The layout engine is inside it |
 
 The examples are deliberately not inside `MapGUI.jar`. A jar holds one plugin, so bundling them would mean the
-plugin loading its own demos instead of them being real third-party consumers of the API - and that property is
+plugin loading its own demos instead of them being a real third-party consumer of the API - and that property is
 the reason they are worth shipping at all. It would also need a config flag to switch off something an admin
 can simply not install.
+
+They are one plugin rather than one per demo because that is the shape a reader is going to write: several GUIs registered from a single jar with a single descriptor, and the `dependencies` block that makes it work in one place instead of copy-pasted six times.
+Each demo keeps its own module and package, so lifting one is still a matter of copying a directory.
+
+Assets are named by version rather than globbed, and `fail_on_unmatched_files` is on: the action will happily publish a release with a file missing, so a renamed jar has to break the build instead.
 
 The upload is `USER_MANAGED`, so the release then **waits in the Portal** until you look at it and press
 publish. Validation takes a few minutes; once published it reaches `repo1.maven.org` within the hour, and

@@ -1,0 +1,20 @@
+name: MapGUI-Examples
+version: '${version}'
+main: de.flog99.mapgui.examples.ExamplesPlugin
+api-version: '${apiVersion}'
+description: MapGUI examples - every demo GUI, in one plugin like your own.
+author: FloG99
+
+permissions:
+  mapgui.example.camera.debug:
+    description: See what this plugin's captures are costing the server.
+    default: op
+
+# The block worth copying into your own plugin. BEFORE gets MapGUI enabled first, so MapGui.get() is there in
+# onEnable, and join-classpath is what puts the API's classes on this plugin's classpath at runtime.
+dependencies:
+  server:
+    MapGUI:
+      load: BEFORE
+      required: true
+      join-classpath: true

@@ -13,6 +13,8 @@ include(
     "mapgui-nms-26_2",
     "mapgui-plugin",
     "mapgui-preview",
+    // One plugin for all the demos, then a module each for the demos themselves.
+    "examples:bundle",
     "examples:gallery",
     "examples:todo",
     "examples:minimap",

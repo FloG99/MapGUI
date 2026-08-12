@@ -63,9 +63,6 @@ jobs:
             -F bundle=@build/central-bundle.zip \
             "https://central.sonatype.com/api/v1/publisher/upload?name=MapGUI-$VERSION&publishingType=USER_MANAGED"
 
-      - name: Zip the example plugins
-        run: ./gradlew :examples:examplesZip -Pversion=$VERSION --stacktrace
-
       # The plugin is all a server needs. The examples are optional, and the two library jars are for anyone
       # who would rather drag a jar in than add a dependency - sources included, for a usable IDE.
       #
@@ -78,5 +75,5 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             mapgui-plugin/build/libs/MapGUI-${{ env.VERSION }}.jar
-            examples/build/MapGUI-examples-${{ env.VERSION }}.zip
+            examples/bundle/build/libs/MapGUI-examples-${{ env.VERSION }}.jar
             mapgui-api/build/libs/*.jar

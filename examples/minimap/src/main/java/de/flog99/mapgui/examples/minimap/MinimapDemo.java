@@ -10,15 +10,14 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Terrain rendering, a screen with no cursor at all, and one worn in the offhand rather than opened. */
-public final class MinimapPlugin extends JavaPlugin implements org.bukkit.event.Listener {
+public final class MinimapDemo {
 
     private static final String NAME = "minimap";
 
-    @Override
-    public void onEnable() {
+    public void register(JavaPlugin plugin) {
         MapGui.get().guis().registerOpenable(NAME, "The world around you, with no cursor", player -> new MinimapScreen());
 
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
+        plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
                 .register(Commands.literal("minimap")
                         .executes(context -> {
                             if (context.getSource().getSender() instanceof Player player) {
@@ -33,7 +32,7 @@ public final class MinimapPlugin extends JavaPlugin implements org.bukkit.event.
     }
 
     /**
-     * The plugin's own way in and out, which a carried screen needs.
+     * The demo's own way in and out, which a carried screen needs.
      *
      * <p>Q closes a popup, because a popup is modal and that key has nothing else to do while it is up. This one is
      * worn in the offhand and deliberately takes nothing from the player - not their clicks, not Q - so there is no
@@ -52,8 +51,7 @@ public final class MinimapPlugin extends JavaPlugin implements org.bukkit.event.
                 .append(Component.text(" Run /minimap again to put it away.", NamedTextColor.DARK_GRAY)));
     }
 
-    @Override
-    public void onDisable() {
+    public void unregister() {
         MapGui.get().guis().unregister(NAME);
     }
 }

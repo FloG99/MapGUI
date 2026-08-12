@@ -16,15 +16,14 @@ import org.bukkit.plugin.java.JavaPlugin;
  * {@link MapGui#open} is how <i>your</i> users get to a menu, and MapGUI has no opinion about whether that is a
  * command, an item, an NPC or a click on a block.
  */
-public final class TodoPlugin extends JavaPlugin {
+public final class TodoDemo {
 
     private static final String NAME = "todo";
 
-    @Override
-    public void onEnable() {
+    public void register(JavaPlugin plugin) {
         MapGui.get().guis().registerOpenable(NAME, "A to-do list - scrolling, prompts, per-row state", TodoScreen::new);
 
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
+        plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
                 .register(Commands.literal(NAME)
                         .executes(context -> {
                             if (context.getSource().getSender() instanceof Player player) {
@@ -38,8 +37,7 @@ public final class TodoPlugin extends JavaPlugin {
         );
     }
 
-    @Override
-    public void onDisable() {
+    public void unregister() {
         MapGui.get().guis().unregister(NAME);
     }
 }

@@ -21,16 +21,15 @@ import org.bukkit.plugin.java.JavaPlugin;
  * <p>The part worth copying is in {@link CameraScreen}: it asks whether the textures are installed and says so
  * itself, rather than taking a capture and discovering they are not.
  */
-public final class CameraPlugin extends JavaPlugin implements Listener {
+public final class CameraDemo implements Listener {
 
     private static final String NAME = "camera";
 
-    @Override
-    public void onEnable() {
+    public void register(JavaPlugin plugin) {
         MapGui.get().guis().registerOpenable(NAME, "A screenshot of what you are looking at", player -> new CameraScreen());
-        getServer().getPluginManager().registerEvents(this, this);
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
 
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
+        plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
                 .register(Commands.literal("snapshot")
                         .executes(context -> {
                             if (context.getSource().getSender() instanceof Player player) {
@@ -110,8 +109,7 @@ public final class CameraPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    @Override
-    public void onDisable() {
+    public void unregister() {
         MapGui.get().guis().unregister(NAME);
     }
 }

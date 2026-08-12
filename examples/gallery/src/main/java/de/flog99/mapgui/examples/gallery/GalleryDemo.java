@@ -13,10 +13,10 @@ import java.io.InputStream;
  * Every widget, and the layout rules side by side.
  *
  * <p>The whole integration is one {@code register} call, which makes it {@code /mapgui hand open gallery}
- * without this plugin owning a command. {@code MapGUI-Todo} shows the other route, where a plugin opens a GUI
- * for its own users itself.
+ * without owning a command. The to-do demo shows the other route, where a plugin opens a GUI for its own users
+ * itself.
  */
-public final class GalleryPlugin extends JavaPlugin {
+public final class GalleryDemo {
 
     private static final String NAME = "gallery";
 
@@ -26,9 +26,8 @@ public final class GalleryPlugin extends JavaPlugin {
     /** Decoded at startup, since it takes about a second and every screen shares the one copy. */
     private VideoPlayer video;
 
-    @Override
-    public void onEnable() {
-        video = loadVideo();
+    public void register(JavaPlugin plugin) {
+        video = loadVideo(plugin);
 
         MapGui.get().guis().registerOpenable(NAME, "Every widget and layout rule", player -> new GalleryScreen(video));
         MapGui.get().guis().registerOpenable(TYPE, "A TrueType face and styled components", player -> new TypeScreen());
@@ -40,18 +39,18 @@ public final class GalleryPlugin extends JavaPlugin {
      * <p>{@link MapGui#get()} is safe here: a plugin declaring MapGUI as a required dependency is always
      * disabled before it.
      */
-    @Override
-    public void onDisable() {
+    public void unregister() {
         MapGui.get().guis().unregister(NAME);
         MapGui.get().guis().unregister(TYPE);
     }
 
-    private VideoPlayer loadVideo() {
-        try (InputStream source = getResource("bunny_sample_squared.gif")) {
+    /** Straight out of the jar, so the demo needs no file installing and nothing downloading. */
+    private VideoPlayer loadVideo(JavaPlugin plugin) {
+        try (InputStream source = plugin.getResource("bunny_sample_squared.gif")) {
             if (source == null) return null;
             return new VideoPlayer(GifFrames.read(source, MapColors.INSTANCE));
         } catch (IOException e) {
-            getSLF4JLogger().warn("Could not read the sample video", e);
+            plugin.getSLF4JLogger().warn("Could not read the sample video", e);
             return null;
         }
     }

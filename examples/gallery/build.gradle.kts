@@ -2,6 +2,6 @@
 // this module's resources as well. It is packaged from there.
 tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("examples/media")) {
-        include("*.gif")
+        include("bunny_sample_squared.gif")
     }
 }

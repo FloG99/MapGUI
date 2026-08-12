@@ -33,13 +33,13 @@ import java.util.List;
  * out of ordinary Java scope, which is why it is worth pointing at:
  *
  * <ul>
- *   <li>A <b>field</b> on the plugin is one model for the server. Every jukebox wall plays the same track,
- *       which is the point of a jukebox.
+ *   <li>A <b>field</b> here is one model for the server, since the plugin builds this class once. Every jukebox
+ *       wall plays the same track, which is the point of a jukebox.
  *   <li>Built <b>inside the registration</b> it is one model per wall. Two drawing boards are two pictures,
  *       which is the point of a whiteboard.
  * </ul>
  */
-public final class WallsPlugin extends JavaPlugin {
+public final class WallsDemo {
 
     private static final String DRAW = "draw";
     private static final String JUKEBOX = "jukebox";
@@ -47,16 +47,15 @@ public final class WallsPlugin extends JavaPlugin {
     /**
      * One jukebox for the whole server, so two of them agree on the track.
      *
-     * <p>A field, which is what makes it plugin-wide. The drawing boards do the opposite and build their model
-     * inside the registration instead - see {@link #onEnable}.
+     * <p>A field, which is what makes it server-wide. The drawing boards do the opposite and build their model
+     * inside the registration instead - see {@link #register}.
      */
     private final Jukebox jukebox = new Jukebox();
 
-    /** Ours to close, since nothing else knows about a wall this plugin opened. */
+    /** Ours to close, since nothing else knows about a wall this demo opened. */
     private final List<WallDisplay> owned = new ArrayList<>();
 
-    @Override
-    public void onEnable() {
+    public void register(JavaPlugin plugin) {
         GuiCatalog screens = MapGui.get().guis();
 
         // A screen each over one shared picture, so the drawing is common and the palette is private.
@@ -79,18 +78,17 @@ public final class WallsPlugin extends JavaPlugin {
         // The same jukebox in a hand as well, which is all it takes for one screen to work in both places.
         screens.registerOpenable(JUKEBOX, "Jukebox - one queue the whole room shares", player -> new JukeboxScreen(jukebox));
 
-        registerOwnCommand();
+        registerOwnCommand(plugin);
     }
 
     /**
      * Taken back out, so MapGUI stops offering something this plugin can no longer draw.
      *
      * <p>Walls placed from the catalog close themselves with it and stay in {@code walls.yml}, so putting the
-     * plugin back brings them back. The ones opened by {@code /walls} are this plugin's own, and nothing else
+     * plugin back brings them back. The ones opened by {@code /walls} are this demo's own, and nothing else
      * will close them.
      */
-    @Override
-    public void onDisable() {
+    public void unregister() {
         GuiCatalog screens = MapGui.get().guis();
         screens.unregister(DRAW);
         // One call, even though the jukebox was registered for both surfaces.
@@ -100,8 +98,8 @@ public final class WallsPlugin extends JavaPlugin {
         owned.clear();
     }
 
-    private void registerOwnCommand() {
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
+    private void registerOwnCommand(JavaPlugin plugin) {
+        plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
                 .register(Commands.literal("walls")
                         .requires(source -> source.getSender().hasPermission("mapgui.command.wall"))
                         .then(Commands.literal("here").executes(context -> {

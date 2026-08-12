@@ -18,14 +18,6 @@ dependencies {
 }
 
 tasks {
-    // Puts the sample video where the wall command looks for it, so /mapgui wall works right away.
-    val installSampleVideos by registering(Copy::class) {
-        from(rootProject.file("examples/media")) {
-            include("*.gif")
-        }
-        into(layout.projectDirectory.dir("run/plugins/MapGUI/videos"))
-    }
-
     shadowJar {
         archiveBaseName = "MapGUI"
         archiveClassifier = ""
@@ -45,15 +37,8 @@ tasks {
 
     runServer {
         minecraftVersion(libs.versions.minecraft.get())
-        // Ship the examples into the test server so `runServer` is enough to try everything.
-        pluginJars.from(
-            project(":examples:gallery").tasks.named("jar").map { it.outputs.files },
-            project(":examples:todo").tasks.named("jar").map { it.outputs.files },
-            project(":examples:minimap").tasks.named("jar").map { it.outputs.files },
-            project(":examples:camera").tasks.named("jar").map { it.outputs.files },
-            project(":examples:claims").tasks.named("jar").map { it.outputs.files },
-            project(":examples:walls").tasks.named("jar").map { it.outputs.files },
-        )
-        dependsOn(installSampleVideos)
+        // The examples plugin, so `runServer` is enough to try everything - and the same one jar an admin
+        // downloads, which is also what puts the sample video in place.
+        pluginJars.from(project(":examples:bundle").tasks.named("shadowJar").map { it.outputs.files })
     }
 }

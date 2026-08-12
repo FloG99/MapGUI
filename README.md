@@ -78,28 +78,18 @@ MapGui.get().open(player, new CounterScreen());
 
 **Paper 26.2 and Java 25 are both required** - an older Java will not load it at all.
 
-Two files from the [latest release](https://github.com/FloG99/MapGUI/releases/latest):
-
-1. `MapGUI-<version>.jar` into `plugins/`.
-2. `MapGUI-examples-<version>.zip` extracted into `plugins/` as well - not into a subfolder. It is packed to
-   land in the right places:
+1. Two jars from the [latest release](https://github.com/FloG99/MapGUI/releases/latest), both straight into
+   `plugins/`:
 
 ```
 plugins/
-├── MapGUI-<version>.jar
-├── MapGUI-example-claims-<version>.jar
-├── MapGUI-example-gallery-<version>.jar
-├── MapGUI-example-minimap-<version>.jar
-├── MapGUI-example-todo-<version>.jar
-├── MapGUI-example-walls-<version>.jar
-└── MapGUI/
-    └── videos/
-        └── polish-cow-transparent.gif
+├── MapGUI-<version>.jar            the plugin
+└── MapGUI-examples-<version>.jar   every demo below, sample video included
 ```
 
-3. **Restart the server.** `/reload` is not enough: the examples declare `load: BEFORE` on MapGUI, and that
+2. **Restart the server.** `/reload` is not enough: the examples declare `load: BEFORE` on MapGUI, and that
    ordering is only honoured at startup.
-4. As an operator, run any of these. Every permission defaults to `op`, so there is nothing to configure first.
+3. As an operator, run any of these. Every permission defaults to `op`, so there is nothing to configure first.
 
 | Command | Shows |
 |---|---|
@@ -110,19 +100,19 @@ plugins/
 | `/mapgui hand open claims` | a full-screen map, one `Draw` node standing in for a grid, cursor tracking |
 | `/mapgui wall place draw` | a wall everyone draws on, with a palette only you can see |
 | `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
+| `/mapgui wall place polish-cow-transparent.gif` | a GIF on the wall. Shipped inside the examples jar, and no FFmpeg needed |
 | `/snapshot` | the camera with its own command, aim with your head and left-click to shoot |
-| `/todo` | the same list, opened by its own plugin - which is how your users reach a GUI |
+| `/todo` | the same list, opened by the plugin rather than by an admin - which is how your users reach a GUI |
 | `/walls here` | a plugin placing a wall itself rather than letting an admin site it |
 
 Move the mouse to aim, **right-click to select, Q to close**, and the wheel to scroll. Walking, jumping and
 sneaking all still work. Placing a wall is left-click for the bottom-left corner, look at the far corner to
 size it, then left-click again - or right-click to cancel.
 
-Delete any example jar you do not want; that is the whole off switch, and MapGUI keeps working without them.
+Delete the examples jar when you are done; that is the whole off switch, and MapGUI keeps working without it.
 
-The examples are separate plugins depending on `mapgui-api` exactly as a third party would, so they cannot
-quietly use anything you cannot. None are inside `MapGUI.jar` and none are published to Maven. From a clone,
-`./gradlew runServer` starts a test server with all of them loaded instead.
+The examples are one plugin depending on `mapgui-api` exactly as a third party would, so they cannot quietly use anything you cannot - one jar, one descriptor, a GUI registered per demo, which is the shape your own plugin will have.
+It is not inside `MapGUI.jar` and it is not published to Maven. From a clone, `./gradlew runServer` starts a test server with it loaded instead.
 
 ## Build your own GUI
 

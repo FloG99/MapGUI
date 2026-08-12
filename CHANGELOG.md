@@ -584,6 +584,11 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 
 ### Packaging
 
+- **The examples are one plugin now, `MapGUI-examples-<version>.jar`, in place of a zip that unpacked into six.** Trying MapGUI is two jars in `plugins/` and a restart: no extraction, no "not into a subfolder", and nothing to download beside them.
+  The sample GIF travels inside the jar and is written into `plugins/MapGUI/videos` on first start, so `/mapgui wall place polish-cow-transparent.gif` works on a server that has changed no settings. One jar is also the shape a reader is going to write - several GUIs registered from a single descriptor, and the `dependencies` block that makes that work stated once rather than copy-pasted six times. Each demo keeps its own module and package, so lifting one into your own plugin is still a matter of copying a directory. Deleting the jar remains the whole off switch.
+
+- Release assets are named by version instead of globbed, and an unmatched name now fails the release. `softprops/action-gh-release` will publish a release with a file missing, so `MapGUI-*.jar` would have gone out as a release with no plugin in it the day that jar was renamed.
+
 - **`mapgui-layout` is no longer a separate Maven artifact.** Its classes ship inside `mapgui-api`, which is now the
   only coordinate published and the only jar to grab from a release. Nothing changes for anyone already depending on
   `mapgui-api`, since the layout DSL was always pulled in transitively; what goes away is the second coordinate,
