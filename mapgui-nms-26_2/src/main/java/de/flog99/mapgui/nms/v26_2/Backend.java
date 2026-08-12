@@ -4,7 +4,7 @@ import de.flog99.mapgui.MapTransport;
 import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.RotationController;
 import de.flog99.mapgui.ServerBackend;
-import de.flog99.mapgui.camera.EntityAngles;
+import de.flog99.mapgui.camera.EntityDetails;
 import de.flog99.mapgui.map.SavedMapPixels;
 
 /**
@@ -20,7 +20,7 @@ public final class Backend implements ServerBackend {
     private final NmsPacketInput input = new NmsPacketInput();
     private final NmsRotationController rotation = new NmsRotationController();
     private final NmsSavedMapPixels savedMapPixels = new NmsSavedMapPixels();
-    private final NmsEntityAngles entityAngles = new NmsEntityAngles();
+    private final NmsEntityDetails entityDetails = new NmsEntityDetails();
 
     @Override
     public MapTransport transport() {
@@ -43,7 +43,7 @@ public final class Backend implements ServerBackend {
     }
 
     @Override
-    public EntityAngles entityAngles() {
-        return entityAngles;
+    public EntityDetails entityDetails() {
+        return entityDetails;
     }
 }

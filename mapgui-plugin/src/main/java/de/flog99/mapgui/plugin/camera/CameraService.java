@@ -9,7 +9,7 @@ import de.flog99.mapgui.camera.CameraOptions;
 import de.flog99.mapgui.camera.CameraShot;
 import de.flog99.mapgui.camera.CameraStats;
 import de.flog99.mapgui.ServerBackend;
-import de.flog99.mapgui.camera.EntityAngles;
+import de.flog99.mapgui.camera.EntityDetails;
 import de.flog99.mapgui.camera.LiveWalls;
 import de.flog99.mapgui.render.BiomeColors;
 import de.flog99.mapgui.render.BlockItems;
@@ -78,8 +78,8 @@ public final class CameraService implements Camera {
     /** The pixels of a map somebody has hung on a wall, which are the world's rather than the assets'. */
     private final FramedMaps framedMaps;
 
-    /** The angles a capture reads straight off the server, which is the squid and nothing else. */
-    private final EntityAngles angles;
+    /** What a capture reads off the server that Bukkit does not hand over: a squid's angles, a golem's poppy. */
+    private final EntityDetails details;
 
     /** The walls MapGUI itself is showing, which are the one thing in front of a camera that is not in the world. */
     private final LiveWalls walls;
@@ -200,7 +200,7 @@ public final class CameraService implements Camera {
 
     /**
      * @param backend what this version of the server lets a capture read: the pixels behind a framed map, and the
-     *                angles a squid is really swimming at. Null draws neither
+     *                details Bukkit keeps to itself - a squid's angles, a golem's poppy. Null draws none of it
      * @param walls   the MapGUI walls a photographer can see, or null to leave them out of the picture
      * @param feeds   where live views are kept, which is the plugin's rather than this service's
      * @param tuning  the numbers under {@code camera:} in config.yml
@@ -211,7 +211,7 @@ public final class CameraService implements Camera {
         this.tuning = tuning;
         this.budget = new CaptureBudget(tuning.liveMaxMillisPerTick(), tuning.liveMaxFps());
         this.framedMaps = new FramedMaps(backend == null ? null : backend.savedMapPixels());
-        this.angles = backend == null ? null : backend.entityAngles();
+        this.details = backend == null ? null : backend.entityDetails();
         this.walls = walls;
         this.assets = assets;
         this.packs = packs;
@@ -306,7 +306,7 @@ public final class CameraService implements Camera {
         long mobsReusedBefore = mobShapes.hits();
         List<EntitySnapshot> entities = new ArrayList<>();
         if (options.entities()) {
-            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, angles, ranges, framed,
+            entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, details, ranges, framed,
                     mobShapes, paced, tuning.limits().mobs(), options.selfie()));
         }
         // Split here: what is alive above, what is bolted to the world below. They are two different costs with

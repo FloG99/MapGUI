@@ -1,6 +1,6 @@
 package de.flog99.mapgui;
 
-import de.flog99.mapgui.camera.EntityAngles;
+import de.flog99.mapgui.camera.EntityDetails;
 import de.flog99.mapgui.map.SavedMapPixels;
 import org.jetbrains.annotations.ApiStatus;
 
@@ -30,5 +30,5 @@ public interface ServerBackend {
 
     SavedMapPixels savedMapPixels();
 
-    EntityAngles entityAngles();
+    EntityDetails entityDetails();
 }
