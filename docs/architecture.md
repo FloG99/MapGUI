@@ -6,6 +6,7 @@
 |---|---|---|
 | `mapgui-layout` | the node tree, DSL and layout engine. **No Bukkit dependency**, so it unit tests without a server | inside `mapgui-api` |
 | `mapgui-api` | what you compile against: `Screen`, `Session`, `WallDisplay`, `Marker`, prompts | yes |
+| `mapgui-camera` | the renderer behind a capture: ray traversal, block models, entity meshes, resource pack reading | no, shaded into `MapGUI.jar` |
 | `mapgui-nms-26_2` | the things with no API equivalent, for one Minecraft version. One module per version, and the only ones that touch server internals | no |
 | `mapgui-plugin` | the runtime: sessions, input, walls, commands, prompt providers | no, it *is* the plugin |
 | `mapgui-preview` | renders a screen to a browser or a PNG with no server running | no |
