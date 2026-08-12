@@ -18,6 +18,13 @@ dependencies {
 }
 
 tasks {
+    // The thin jar is nobody's: this module's classes without the api, the layout engine, the camera or a
+    // version backend. It carries paper-plugin.yml though, so it looks like a plugin, loads, and then dies on
+    // NoClassDefFoundError - which is a bad thing to leave sitting beside the real jar in build/libs.
+    jar {
+        enabled = false
+    }
+
     shadowJar {
         archiveBaseName = "MapGUI"
         archiveClassifier = ""
