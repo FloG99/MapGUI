@@ -302,6 +302,11 @@ public record EntitySnapshot(
         return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.carrying(), texture, tint);
     }
 
+    /** The same mob with one arm out, which is how a golem stands while it has a poppy to hand over. */
+    public EntitySnapshot offering() {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.offering(), texture, tint);
+    }
+
     /**
      * The same mob tilted bodily, the way the client tilts the few that swim at an angle.
      *

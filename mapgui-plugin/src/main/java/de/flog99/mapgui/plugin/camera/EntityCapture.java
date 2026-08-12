@@ -23,6 +23,7 @@ import org.bukkit.entity.Enderman;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fish;
+import org.bukkit.entity.IronGolem;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.LivingEntity;
@@ -290,7 +291,8 @@ final class EntityCapture {
 
         String skin = MobTextures.skinOf(entity, type, variant, authored.texture(), isBaby(entity), assets);
         Arms arms = armsOf(entity, at);
-        EntitySnapshot bare = swimming(entity, carrying(entity, hideUnworn(entity, authored.texture(skin))), type, details);
+        EntitySnapshot posed = offering(entity, carrying(entity, hideUnworn(entity, authored.texture(skin))), details);
+        EntitySnapshot bare = swimming(entity, posed, type, details);
         EntitySnapshot dressed = arms == null ? bare : arms.on(bare);
 
         List<EntitySnapshot> worn = new ArrayList<>();
@@ -671,6 +673,14 @@ final class EntityCapture {
     /** An enderman poses its own arms out in front the moment it is holding something. Nothing else here does. */
     private static EntitySnapshot carrying(Entity entity, EntitySnapshot mob) {
         return entity instanceof Enderman enderman && enderman.getCarriedBlock() != null ? mob.carrying() : mob;
+    }
+
+    /**
+     * A golem holds the arm the poppy is in out while it is offering, and the poppy is placed off that arm - so the
+     * arm has to be posed before the flower is hung on it, not after.
+     */
+    private static EntitySnapshot offering(Entity entity, EntitySnapshot mob, EntityDetails details) {
+        return details != null && entity instanceof IronGolem && details.offeringFlower(entity) ? mob.offering() : mob;
     }
 
     /**

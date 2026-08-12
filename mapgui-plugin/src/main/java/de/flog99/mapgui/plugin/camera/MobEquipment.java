@@ -350,9 +350,18 @@ final class MobEquipment {
             new float[]{(float) Math.toRadians(27.24), (float) Math.toRadians(-41.64), (float) Math.toRadians(161.12)},
             0.5f);
 
-    /** The golem's is simpler: off the arm it holds it in, and a quarter turn to stand the flower up in its fist. */
+    /**
+     * The golem's is off the arm it holds the poppy in, twenty five pixels down it - the fist, near the bottom of a
+     * thirty pixel arm - and seven out in front.
+     *
+     * <p>{@code IronGolemFlowerLayer} translates by {@code -1.1875, 1.0625, -0.9375} blocks and then turns the block
+     * a quarter circle about X inside the {@code +0.5 / scale / -0.5} sandwich that turns one about its own middle.
+     * Taking that middle out of the chain leaves this offset, so the numbers land on whole pixels. The turn lays the
+     * poppy flat and pointing away from the golem rather than standing it up: the stem ends three pixels in front of
+     * the fist and the flower eleven.
+     */
     private static final ItemPoses.Pose OFFERED = new ItemPoses.Pose(
-            new float[]{15f, -21f, -3f}, new float[]{(float) Math.toRadians(90), 0, 0}, 0.5f);
+            new float[]{11f, -25f, -7f}, new float[]{(float) Math.toRadians(90), 0, 0}, 0.5f);
 
     /** The part a mooshroom's back is, which is the root of its mesh - the client hangs two of the three off it. */
     private static final String BODY = "root";

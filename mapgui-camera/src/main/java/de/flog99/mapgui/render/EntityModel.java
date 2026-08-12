@@ -330,6 +330,38 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
     /** And a little apart, so the two do not read as one limb from the front. */
     private static final float CARRY_ARM_SPREAD = 0.05f;
 
+    /**
+     * This model with its right arm held out and its left one down, which is how an iron golem stands while it is
+     * offering a poppy.
+     *
+     * <p>One arm, not both: {@code IronGolemModel.setupAnim} sets {@code rightArm.xRot} to -0.8 and {@code leftArm}
+     * to a flat zero, so the arm that is not holding anything stops swinging rather than coming up as well. Vanilla
+     * adds a wobble of a fortieth of a radian off the offer's own countdown, which is under a degree and a half and
+     * is left out.
+     *
+     * <p>An attack takes both arms back off this in vanilla, which a capture of a golem swinging and offering at once
+     * would not show.
+     */
+    EntityModel offering() {
+        return of(offer(parts), culled);
+    }
+
+    private static List<MeshPart> offer(List<MeshPart> parts) {
+        List<MeshPart> out = new ArrayList<>(parts.size());
+        for (MeshPart part : parts) {
+            MeshPart posed = switch (part.name()) {
+                case "right_arm" -> part.withRotation(OFFER_ARM_LEAN, part.yRot(), part.zRot());
+                case "left_arm" -> part.withRotation(0, part.yRot(), part.zRot());
+                default -> part;
+            };
+            out.add(posed.withChildren(offer(posed.children())));
+        }
+        return List.copyOf(out);
+    }
+
+    /** Radians, and vanilla's own -0.8 with the sign this frame gives it. */
+    private static final float OFFER_ARM_LEAN = 0.8f;
+
     /** Vanilla's own {@code ±1.9} rounded to the middle of the leg, which is where this model's boxes already sit. */
     private static final float LEG_PIVOT = 2;
 

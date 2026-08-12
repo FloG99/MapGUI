@@ -7,6 +7,13 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 
 ### Running a server
 
+- **The block an enderman is carrying and the poppy an iron golem is offering are both drawn**, and both mobs take the
+  pose their own model takes to hold one.
+  An enderman brings both arms up and carries the block at waist height; a golem holds its right arm out, leaves the
+  left one hanging, and the poppy lies flat across the fist pointing away from it rather than standing up in it. Each
+  placement is the client's own layer chain - `CarriedBlockLayer` and `IronGolemFlowerLayer` - composed down to one
+  offset and one turn, so what a capture shows and what a player is looking at agree.
+
 - Fixed: **bamboo came out almost black.** Its leaves were multiplied by the biome's foliage green like an oak's, but
   they are already green on disk - 72,117,25 against the flat grey 144 an oak leaf is drawn as - so the tint applied a
   second time took them to 13,85,1 and a grove photographed as a dark hedge. Bamboo now draws at its own color, like
