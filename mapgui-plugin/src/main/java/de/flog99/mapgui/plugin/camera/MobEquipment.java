@@ -3,6 +3,7 @@ package de.flog99.mapgui.plugin.camera;
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.DyedItemColor;
 import io.papermc.paper.datacomponent.item.Equippable;
+import de.flog99.mapgui.camera.EntityDetails;
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.EquipmentAssets;
 import de.flog99.mapgui.render.ItemModels;
@@ -13,7 +14,9 @@ import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.block.banner.Pattern;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Enderman;
 import org.bukkit.entity.Fox;
+import org.bukkit.entity.IronGolem;
 import org.bukkit.entity.MushroomCow;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.LivingEntity;
@@ -61,7 +64,7 @@ final class MobEquipment {
      * @param worn adds to, for the layers that turn with the head, and {@code held} for the ones that turn with the body
      */
     static void wornBy(Entity entity, EntitySnapshot base, String type, MobAssets assets, SkinCache skins,
-                       List<EntitySnapshot> worn, List<EntitySnapshot> held) {
+                       EntityDetails details, List<EntitySnapshot> worn, List<EntitySnapshot> held) {
         if (!(entity instanceof LivingEntity living)) return;
 
         EntityEquipment dressed = living.getEquipment();
@@ -94,6 +97,8 @@ final class MobEquipment {
         carry(worn, base, assets, skins, entity, dressed.getItemInMainHand());
         decorate(worn, base, atlas, equipment, entity);
         contains(worn, base, assets, type, dressed.getItem(EquipmentSlot.BODY));
+        carried(held, base, assets, entity);
+        offering(held, base, assets, details, entity);
     }
 
     /**
@@ -287,6 +292,64 @@ final class MobEquipment {
     /** One mushroom: which part it grows on, where, and whether it turns with the head. */
     private record Sprout(String part, ItemPoses.Pose pose, boolean onHead) {
     }
+
+    /**
+     * The block an enderman has pulled up, held out in front of its chest rather than in either hand - which is why
+     * it does not go through {@link #hold} and is not equipment at all: it is a block state on the mob.
+     */
+    private static void carried(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets, Entity entity) {
+        if (!(entity instanceof Enderman enderman)) return;
+
+        BlockData block = enderman.getCarriedBlock();
+        if (block == null) return;
+
+        for (EntitySnapshot layer : assets.items().displayed(block.getAsString(), block.getMaterial().getKey().asString())) {
+            EntitySnapshot lifted = EntitySnapshot.on(base, BODY, layer, CARRIED, false);
+            if (lifted != null) {
+                into.add(lifted);
+            }
+        }
+    }
+
+    /**
+     * A poppy an iron golem is offering, which it holds out for twenty seconds after handing one to a villager.
+     *
+     * <p>Off the server rather than out of Bukkit, which knows nothing about it - so a fork that will not answer
+     * draws the golem empty handed, the way it was drawn before.
+     */
+    private static void offering(List<EntitySnapshot> into, EntitySnapshot base, MobAssets assets,
+                                 EntityDetails details, Entity entity) {
+        if (details == null || !(entity instanceof IronGolem) || !details.offeringFlower(entity)) return;
+
+        BlockData poppy = Material.POPPY.createBlockData();
+        for (EntitySnapshot layer : assets.items().displayed(poppy.getAsString(), Material.POPPY.getKey().asString())) {
+            EntitySnapshot held = EntitySnapshot.on(base, RIGHT_ARM, layer, OFFERED, false);
+            if (held != null) {
+                into.add(held);
+            }
+        }
+    }
+
+    /** The arm a golem holds its flower in, which is its right one whichever way it is facing. */
+    private static final String RIGHT_ARM = "right_arm";
+
+    /**
+     * Both placements are measured off the mesh rather than copied from the client: the layers that position them are
+     * renderer code, which is not in the asset subset MapGUI keeps, so there was nothing to read.
+     *
+     * <p>An enderman's torso runs y 26 to 38 with its front face at z -2, so a half-size block centred four pixels
+     * clear of that sits in front of the chest with its own front about three quarters of a block out - which is
+     * where {@code CarriedBlockLayer} puts it. Turned a quarter so it reads corner-on and tipped back, which is what
+     * stops it drawing as a flat square face on. The X sign is the one {@code EntityModel#crouched} explains: this
+     * frame is the client's flipped, so a rotation about X changes sign with it and one about Z does not.
+     */
+    private static final ItemPoses.Pose CARRIED = new ItemPoses.Pose(
+            new float[]{0, -6f, -8f},
+            new float[]{(float) Math.toRadians(-20), (float) Math.toRadians(45), 0}, 0.5f);
+
+    /** And a golem's right arm hangs from y 33.5 down to 3.5 at x 11, so the poppy goes at the low end of it. */
+    private static final ItemPoses.Pose OFFERED = new ItemPoses.Pose(
+            new float[]{11f, -23f, -2f}, new float[]{0, 0, 0}, 0.5f);
 
     /** The part a mooshroom's back is, which is the root of its mesh - the client hangs two of the three off it. */
     private static final String BODY = "root";

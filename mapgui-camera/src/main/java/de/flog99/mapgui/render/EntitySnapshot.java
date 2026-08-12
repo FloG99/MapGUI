@@ -297,6 +297,11 @@ public record EntitySnapshot(
                 cart.scale(), block.model().inCart(offset), block.texture(), block.tint());
     }
 
+    /** The same mob with its arms out in front, which its own model does the moment it picks a block up. */
+    public EntitySnapshot carrying() {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.carrying(), texture, tint);
+    }
+
     /**
      * The same mob tilted bodily, the way the client tilts the few that swim at an angle.
      *

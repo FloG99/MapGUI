@@ -299,6 +299,36 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
     /** The legs go back rather than down, which is what keeps the feet under a torso that has tipped forward. */
     private static final float CROUCH_LEG_BACK = 4;
 
+    /**
+     * This model with both arms swung out in front of it, which is how an enderman stands while it is carrying a
+     * block - its own model poses them the moment it picks one up, and nothing else here holds anything out.
+     *
+     * <p>Same frame and same sign rule as {@link #crouched}, and shifts each arm's own rotation rather than setting
+     * one, so whatever the walk cycle had them doing is still theirs.
+     */
+    EntityModel carrying() {
+        return of(carry(parts), culled);
+    }
+
+    private static List<MeshPart> carry(List<MeshPart> parts) {
+        List<MeshPart> out = new ArrayList<>(parts.size());
+        for (MeshPart part : parts) {
+            MeshPart posed = switch (part.name()) {
+                case "right_arm" -> part.withRotation(part.xRot() - CARRY_ARM_LEAN, part.yRot(), part.zRot() + CARRY_ARM_SPREAD);
+                case "left_arm" -> part.withRotation(part.xRot() - CARRY_ARM_LEAN, part.yRot(), part.zRot() - CARRY_ARM_SPREAD);
+                default -> part;
+            };
+            out.add(posed.withChildren(carry(posed.children())));
+        }
+        return List.copyOf(out);
+    }
+
+    /** Radians. Well past the crouch's lean, since these are held out in front rather than merely tipped forward. */
+    private static final float CARRY_ARM_LEAN = 0.9424779f;
+
+    /** And a little apart, so the two do not read as one limb from the front. */
+    private static final float CARRY_ARM_SPREAD = 0.05f;
+
     /** Vanilla's own {@code ±1.9} rounded to the middle of the leg, which is where this model's boxes already sit. */
     private static final float LEG_PIVOT = 2;
 

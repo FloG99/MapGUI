@@ -1,6 +1,6 @@
 package de.flog99.mapgui.plugin.camera;
 
-import de.flog99.mapgui.camera.EntityAngles;
+import de.flog99.mapgui.camera.EntityDetails;
 import de.flog99.mapgui.render.ChunkFrustum;
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.ItemPoses;
@@ -19,6 +19,7 @@ import org.bukkit.entity.Bogged;
 import org.bukkit.entity.ChestedHorse;
 import org.bukkit.entity.ComplexEntityPart;
 import org.bukkit.entity.EnderCrystal;
+import org.bukkit.entity.Enderman;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Fish;
@@ -81,7 +82,7 @@ final class EntityCapture {
      *                first, so what is dropped is what was furthest away
      */
     static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, FramedMaps maps,
-                                     EntityAngles angles, TrackingRanges ranges, ChunkFrustum frustum,
+                                     EntityDetails details, TrackingRanges ranges, ChunkFrustum frustum,
                                      MobCache shapes, boolean live, int most, boolean includeSelf) {
         double search = ranges.widest();
 
@@ -123,7 +124,7 @@ final class EntityCapture {
         for (Near found : near) {
             if (built++ >= most) break;
 
-            snapshots.addAll(drawn(found, skins, assets, maps, angles, reusing, now));
+            snapshots.addAll(drawn(found, skins, assets, maps, details, reusing, now));
         }
 
         return snapshots;
@@ -136,7 +137,7 @@ final class EntityCapture {
      * changes every tick - a dropped item's spin, a frame's map - so there is nothing in them worth holding.
      */
     private static List<EntitySnapshot> drawn(Near found, SkinCache skins, MobAssets assets, FramedMaps maps,
-                                              EntityAngles angles, MobCache shapes, long now) {
+                                              EntityDetails details, MobCache shapes, long now) {
         Entity entity = found.entity();
         Location at = found.at();
         String type = entity.getType().name().toLowerCase(Locale.ROOT);
@@ -151,7 +152,7 @@ final class EntityCapture {
             }
         }
 
-        MobCache.Built built = shapeOf(entity, at, type, skins, assets, angles);
+        MobCache.Built built = shapeOf(entity, at, type, skins, assets, details);
         if (built == null) return upended(entity, loose(entity, at, type, skins, assets, maps));
 
         if (reusable) {
@@ -162,7 +163,7 @@ final class EntityCapture {
 
     /**
      * Where this entity's body and head point, as body yaw, head yaw and pitch. One rule rather than two, since a
-     * shape built at one pose and stood back up at another has to be handed the same three angles both times.
+     * shape built at one pose and stood back up at another has to be handed the same three details both times.
      */
     private static float[] pose(Entity entity, Location at, String type) {
         float body = bodyYaw(entity);
@@ -225,11 +226,11 @@ final class EntityCapture {
      * authored mesh, or a player whose skin has not come down. Those fall through to {@link #loose}.
      */
     private static MobCache.Built shapeOf(Entity entity, Location at, String type, SkinCache skins,
-                                          MobAssets assets, EntityAngles angles) {
+                                          MobAssets assets, EntityDetails details) {
         if (entity instanceof Player player) return upended(entity, playerShape(player, at, type, skins, assets));
         if (entity instanceof Painting || entity instanceof ItemFrame || entity instanceof Item) return null;
 
-        return upended(entity, mobShape(entity, at, type, assets, skins, angles));
+        return upended(entity, mobShape(entity, at, type, assets, skins, details));
     }
 
     /**
@@ -270,12 +271,13 @@ final class EntityCapture {
         List<EntitySnapshot> worn = new ArrayList<>();
         List<EntitySnapshot> held = new ArrayList<>();
         worn.add(body);
-        MobEquipment.wornBy(player, body, type, assets, skins, worn, held);
+        // No details: the two things they carry are an enderman's block and a golem's poppy, and a player is neither.
+        MobEquipment.wornBy(player, body, type, assets, skins, null, worn, held);
         return new MobCache.Built(worn, held);
     }
 
     /** Null for a type with no authored shape, which is the caller's cue to fall back to a bounding box. */
-    private static MobCache.Built mobShape(Entity entity, Location at, String type, MobAssets assets, SkinCache skins, EntityAngles angles) {
+    private static MobCache.Built mobShape(Entity entity, Location at, String type, MobAssets assets, SkinCache skins, EntityDetails details) {
         String variant = MobTextures.variantOf(entity, type);
         float[] pose = pose(entity, at, type);
         EntitySnapshot authored = EntitySnapshot.mob(
@@ -288,14 +290,14 @@ final class EntityCapture {
 
         String skin = MobTextures.skinOf(entity, type, variant, authored.texture(), isBaby(entity), assets);
         Arms arms = armsOf(entity, at);
-        EntitySnapshot bare = swimming(entity, hideUnworn(entity, authored.texture(skin)), type, angles);
+        EntitySnapshot bare = swimming(entity, carrying(entity, hideUnworn(entity, authored.texture(skin))), type, details);
         EntitySnapshot dressed = arms == null ? bare : arms.on(bare);
 
         List<EntitySnapshot> worn = new ArrayList<>();
         List<EntitySnapshot> held = new ArrayList<>();
         worn.add(dressed);
         worn.addAll(wornLayers(entity, dressed, type, variant));
-        MobEquipment.wornBy(entity, dressed, type, assets, skins, worn, held);
+        MobEquipment.wornBy(entity, dressed, type, assets, skins, details, worn, held);
         held.addAll(carried(entity, dressed, assets));
         return new MobCache.Built(worn, held);
     }
@@ -653,8 +655,8 @@ final class EntityCapture {
      *
      * <p>Both angles run backwards here, as every X and Y rotation does in the space a mesh is kept in.
      */
-    private static EntitySnapshot swimming(Entity entity, EntitySnapshot mob, String type, EntityAngles angles) {
-        float[] swim = angles == null ? null : angles.swimming(entity);
+    private static EntitySnapshot swimming(Entity entity, EntitySnapshot mob, String type, EntityDetails details) {
+        float[] swim = details == null ? null : details.swimming(entity);
         if (swim != null) {
             return mob.tilted((float) Math.toRadians(-swim[0]), (float) Math.toRadians(-swim[1]), SQUID_PIVOT);
         }
@@ -664,6 +666,11 @@ final class EntityCapture {
         }
 
         return mob;
+    }
+
+    /** An enderman poses its own arms out in front the moment it is holding something. Nothing else here does. */
+    private static EntitySnapshot carrying(Entity entity, EntitySnapshot mob) {
+        return entity instanceof Enderman enderman && enderman.getCarriedBlock() != null ? mob.carrying() : mob;
     }
 
     /**
