@@ -4,6 +4,7 @@ import com.destroystokyo.paper.ClientOption;
 import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.camera.CameraAssets;
+import de.flog99.mapgui.camera.CameraFeed;
 import de.flog99.mapgui.camera.CameraOptions;
 import de.flog99.mapgui.camera.CameraShot;
 import de.flog99.mapgui.camera.CameraStats;
@@ -43,6 +44,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 
 /**
@@ -64,6 +66,14 @@ public final class CameraService implements Camera {
     private final CameraAssetStore assets;
     private final ServerPacks packs;
     private final SkinCache skins = new SkinCache();
+
+    /**
+     * The live views this server is driving, which outlive this service.
+     *
+     * <p>Owned by the plugin so that a reload rebuilding the camera does not silently stop everybody's viewfinder -
+     * see {@link CameraFeeds}.
+     */
+    private final CameraFeeds feeds;
 
     /** The pixels of a map somebody has hung on a wall, which are the world's rather than the assets'. */
     private final FramedMaps framedMaps;
@@ -192,10 +202,12 @@ public final class CameraService implements Camera {
      * @param backend what this version of the server lets a capture read: the pixels behind a framed map, and the
      *                angles a squid is really swimming at. Null draws neither
      * @param walls   the MapGUI walls a photographer can see, or null to leave them out of the picture
+     * @param feeds   where live views are kept, which is the plugin's rather than this service's
      * @param tuning  the numbers under {@code camera:} in config.yml
      */
-    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, CameraTuning tuning) {
+    public CameraService(Plugin plugin, CameraAssetStore assets, ServerPacks packs, ServerBackend backend, LiveWalls walls, CameraFeeds feeds, CameraTuning tuning) {
         this.plugin = plugin;
+        this.feeds = feeds;
         this.tuning = tuning;
         this.budget = new CaptureBudget(tuning.liveMaxMillisPerTick(), tuning.liveMaxFps());
         this.framedMaps = new FramedMaps(backend == null ? null : backend.savedMapPixels());
@@ -216,9 +228,15 @@ public final class CameraService implements Camera {
     }
 
     @Override
-    public void useResourcePack(Plugin owner, String resource) {
+    public String useResourcePack(Plugin owner, String resource) {
         used = true;
-        packs.use(owner, resource);
+        return packs.use(owner, resource);
+    }
+
+    @Override
+    public CameraFeed feed(Player player, Supplier<CameraOptions> options, Consumer<CameraShot> onFrame) {
+        used = true;
+        return feeds.open(player, options, onFrame);
     }
 
     @Override
@@ -416,12 +434,12 @@ public final class CameraService implements Camera {
                 millis(now.worstMainNanos()),
                 millis(now.mainNanosEach()),
                 millis(now.copyNanosEach()),
-                millis(now.mobNanosEach()),
+                millis(now.entityNanosEach()),
                 millis(now.blockEntityNanosEach()),
                 millis(now.traceNanosEach()),
-                new CameraStats.Copy(now.chunksEach(), now.reusedPercent(), now.filledSectionsEach(), now.sectionsEach()),
-                now.mobsEach(),
-                now.mobsReusedPercent(),
+                new CameraStats.Blocks(now.chunksEach(), now.reusedPercent(), now.filledSectionsEach(), now.sectionsEach()),
+                now.entitiesEach(),
+                now.entitiesReusedPercent(),
                 now.blockEntitiesEach(),
                 captures.getQueue().size(),
                 now.dropped(),
@@ -430,8 +448,7 @@ public final class CameraService implements Camera {
                 budget.fpsCeiling(),
                 failure == null ? null : new CameraStats.Failure(failure.plugin(), failure.reason(), failure.at()),
                 List.copyOf(callers),
-                live == null ? null : new CameraStats.Live(live.viewers(), live.slowestFps(), live.fastestFps(),
-                        live.usedMillisPerTick())
+                new CameraStats.Live(live.viewers(), live.slowestFps(), live.fastestFps(), live.usedMillisPerTick())
         );
     }
 

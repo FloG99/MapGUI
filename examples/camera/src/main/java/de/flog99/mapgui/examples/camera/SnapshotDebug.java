@@ -64,7 +64,7 @@ final class SnapshotDebug {
         String cap = stats.liveFpsCeiling() <= 0 ? "no fps cap" : stats.liveFpsCeiling() + " fps cap";
         CameraStats.Live live = stats.live();
 
-        if (live == null) {
+        if (live.viewers() == 0) {
             sender.sendMessage(line("live views", "none open", cap));
         } else {
             String budget = stats.liveMaxMillisPerTick() <= 0
@@ -74,7 +74,7 @@ final class SnapshotDebug {
             sender.sendMessage(line("live views",
                     live.viewers() + (live.viewers() == 1 ? " viewer" : " viewers")
                             + String.format(Locale.ROOT, ", %.1f to %.1f fps", live.slowestFps(), live.fastestFps()),
-                    budget + ", " + cap));
+                    budget + ", " + cap + ", " + held(stats)));
         }
 
         // The caps are set for live views, so captures taken without asking are not covered by them. Said here for
@@ -83,6 +83,16 @@ final class SnapshotDebug {
             sender.sendMessage(line("unpaced", String.format(Locale.ROOT, "%.1f/s", stats.unpacedPerSecond()),
                     "taken without readyForFrame, so no budget applies"));
         }
+    }
+
+    /** Which of the two settings is the binding one, worked out by MapGUI so nobody has to guess at the slack. */
+    private static String held(CameraStats stats) {
+        return switch (stats.bound()) {
+            case NOTHING_OPEN -> "nothing to hold back";
+            case FPS_CEILING -> "held by the cap";
+            case TICK_BUDGET -> "held by the budget";
+            case UNLIMITED -> "no limit set";
+        };
     }
 
     /**

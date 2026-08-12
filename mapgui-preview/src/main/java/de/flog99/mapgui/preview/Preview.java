@@ -1,6 +1,7 @@
 package de.flog99.mapgui.preview;
 
 import de.flog99.mapgui.MapColors;
+import de.flog99.mapgui.MapImage;
 import de.flog99.mapgui.MapSurface;
 
 import javax.imageio.ImageIO;
@@ -38,15 +39,7 @@ public final class Preview {
 
     /** Nearest neighbor: smoothing a 128px pixel-art canvas hides exactly what you came to see. */
     public static BufferedImage scale(BufferedImage source, int factor) {
-        if (factor <= 1) return source;
-
-        BufferedImage scaled = new BufferedImage(source.getWidth() * factor, source.getHeight() * factor, BufferedImage.TYPE_INT_RGB);
-        for (int y = 0; y < scaled.getHeight(); y++) {
-            for (int x = 0; x < scaled.getWidth(); x++) {
-                scaled.setRGB(x, y, source.getRGB(x / factor, y / factor));
-            }
-        }
-        return scaled;
+        return MapImage.scaled(source, factor);
     }
 
     public static byte[] toPng(BufferedImage image) throws IOException {

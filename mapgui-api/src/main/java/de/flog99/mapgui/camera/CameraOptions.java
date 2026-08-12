@@ -3,8 +3,8 @@ package de.flog99.mapgui.camera;
 /**
  * What a capture should look like.
  *
- * @param size        pixels square. {@link Camera#MAP_SIZE} fills a map exactly; halving it quarters the work
- *                    and the palette hides much of the loss
+ * @param size        pixels square, between {@link #MIN_SIZE} and {@link #MAX_SIZE}. {@link Camera#MAP_SIZE} fills a
+ *                    map exactly; halving it quarters the work and the palette hides much of the loss
  * @param fov         vertical degrees. The client's default is 70 and the server cannot see what a player set
  * @param maxDistance blocks to trace, or 0 to follow the viewer's own render distance. Capped by the
  *                    server's view distance either way, since past that nothing is loaded to trace
@@ -19,8 +19,32 @@ package de.flog99.mapgui.camera;
 public record CameraOptions(int size, float fov, int maxDistance, boolean fog, boolean entities,
                             boolean clouds, boolean selfie) {
 
+    /** Smaller than this is a few dozen rays and not a picture of anything. */
+    public static final int MIN_SIZE = 16;
+
+    /**
+     * The most a capture will trace, which is four maps to a side.
+     *
+     * <p>A ceiling because the cost is the square of it: 512 is a quarter of a million rays a frame and the next step
+     * up is a million. Bigger pictures are more captures rather than one enormous one.
+     */
+    public static final int MAX_SIZE = Camera.MAP_SIZE * 4;
+
+    /**
+     * Refuses a size it cannot honour rather than quietly moving it.
+     *
+     * <p>This used to clamp, which was worse than it sounds: {@link de.flog99.mapgui.map.MapPrinter} cuts a capture
+     * into whole maps, so a size pulled down to 512 stopped being a multiple of 128 and the shot came back
+     * unprintable - reported to whoever pressed the shutter as a photograph that failed. A size is a constant in
+     * somebody's code, so a wrong one is a bug to hear about once rather than a condition to survive.
+     *
+     * <p>The other two still clamp, since nothing downstream depends on their exact value.
+     */
     public CameraOptions {
-        size = Math.clamp(size, 16, 512);
+        if (size < MIN_SIZE || size > MAX_SIZE) {
+            throw new IllegalArgumentException("A capture is between " + MIN_SIZE + " and " + MAX_SIZE
+                    + " pixels square, which " + size + " is not");
+        }
         fov = Math.clamp(fov, 10f, 170f);
         maxDistance = Math.clamp(maxDistance, 0, 512);
     }

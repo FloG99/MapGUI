@@ -86,8 +86,7 @@ public final class CameraPlugin extends JavaPlugin implements Listener {
                 return;
             }
 
-            // The camera clamps a size it will not trace, so the grid comes from what came back rather than what
-            // was asked for.
+            // Read off the shot rather than reusing `across`, since the cut has to follow the pixels that arrived.
             int grid = MapPrinter.mapsAcross(shot);
             if (grid == 0) {
                 player.sendMessage(Component.text("That capture could not be cut into whole maps.", NamedTextColor.RED));

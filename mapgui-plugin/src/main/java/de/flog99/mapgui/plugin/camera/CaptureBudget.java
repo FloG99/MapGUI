@@ -96,6 +96,9 @@ final class CaptureBudget {
      *                          only means anything against - well under it means the ceiling is what is binding
      */
     record Live(int viewers, double slowestFps, double fastestFps, double usedMillisPerTick) {
+
+        /** Nobody looking through one, which is a state to report rather than an absence to null-check for. */
+        static final Live NONE = new Live(0, 0, 0, 0);
     }
 
     CaptureBudget(double millisPerTick, int fpsCeiling) {
@@ -208,7 +211,7 @@ final class CaptureBudget {
         return viewer.fps;
     }
 
-    /** Null when nobody is looking through one, since a report about no viewers is a line to learn to skip. */
+    /** {@link Live#NONE} when nobody is looking through one, so a caller reads a count rather than a null. */
     Live live() {
         long now = clock.getAsLong();
         allocate(now);
@@ -230,7 +233,7 @@ final class CaptureBudget {
         }
 
         double perTick = nanosPerSecond / TICKS_PER_SECOND / 1_000_000;
-        return counted == 0 ? null : new Live(counted, slowest, fastest, perTick);
+        return counted == 0 ? Live.NONE : new Live(counted, slowest, fastest, perTick);
     }
 
     /**

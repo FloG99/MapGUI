@@ -36,8 +36,9 @@ import java.util.logging.Level;
  * line naming the two routes above.
  *
  * <p>Whatever is found is kept under the SHA-1 of its own bytes and layered under anything the admin put in
- * {@code assets/} - explicit beats detected. Content-addressed means the same pack costs one write ever, and a
- * changed one replaces itself.
+ * {@code assets/} - explicit beats detected. Content-addressed means the same pack costs one write ever. A changed
+ * one lands beside the old rather than over it, which is why the cache hands back the newest few newest-first
+ * rather than everything it holds.
  */
 public final class ServerPacks implements Listener {
 
@@ -103,24 +104,30 @@ public final class ServerPacks implements Listener {
      * <p>Synchronous and small: reading a few hundred KB out of an already-open jar and hashing it is not worth a
      * thread, and doing it inline means a plugin that calls this from its own {@code onEnable} has the pack in
      * place before anything has had the chance to take a capture.
+     *
+     * @return the pack's SHA-1 in hex, or null if there was nothing to read. Given back because the caller has to
+     *         serve the same file to clients and a client is offered a pack by its hash, so the digest taken here is
+     *         one they should not have to take again
      */
-    public void use(Plugin owner, String resource) {
+    public String use(Plugin owner, String resource) {
         try (InputStream stream = owner.getResource(resource)) {
             if (stream == null) {
                 plugin.getLogger().warning(owner.getName() + " asked for captures to be drawn with " + resource
                         + ", but there is no such file in its jar.");
-                return;
+                return null;
             }
 
             ServerPackCache.Stored stored = cache.keep(stream.readAllBytes());
-            if (!stored.fresh()) return;
-
-            plugin.getLogger().info("Captures will be drawn with " + owner.getName() + "'s resource pack ("
-                    + stored.zip().getFileName() + ").");
-            assets.reload();
+            if (stored.fresh()) {
+                plugin.getLogger().info("Captures will be drawn with " + owner.getName() + "'s resource pack ("
+                        + stored.zip().getFileName() + ").");
+                assets.reload();
+            }
+            return stored.sha1();
         } catch (Exception failure) {
             plugin.getLogger().log(Level.WARNING, "Could not take " + resource + " from " + owner.getName()
                     + ", so captures will draw its items from their base materials instead.", failure);
+            return null;
         }
     }
 

@@ -30,10 +30,10 @@ class CameraReportTest {
         return all.toString();
     }
 
-    private static final CameraStats.Copy COPY = new CameraStats.Copy(152, 78, 6, 24);
+    private static final CameraStats.Blocks BLOCKS = new CameraStats.Blocks(152, 78, 6, 24);
 
     private static CameraStats stats() {
-        return new CameraStats(13, 3.2, 0, 0.34, 0.68, 4.1, 6.8, 6.0, 0.5, 0.3, 184.0, COPY, 8, 62, 4, 0, 0, 0, 1.0, 10, null,
+        return new CameraStats(13, 3.2, 0, 0.34, 0.68, 4.1, 6.8, 6.0, 0.5, 0.3, 184.0, BLOCKS, 8, 62, 4, 0, 0, 0, 1.0, 10, null,
                 List.of(new CameraStats.Caller("PhotoBooth", 3.0)),
                 new CameraStats.Live(3, 6.7, 6.7, 0.92));
     }
@@ -53,7 +53,7 @@ class CameraReportTest {
     /** Under a millisecond a single decimal rounds a real cost to nothing, and nothing reads as free. */
     @Test
     void aSmallCostKeepsTwoDecimalsRatherThanRoundingToNought() {
-        CameraStats small = new CameraStats(1, 0.25, 0, 0.04, 0.08, 1.6, 1.6, 1.4, 0.1, 0.1, 20, COPY, 1, 0, 1, 0, 0, 0, 1.0, 10, null, List.of(), null);
+        CameraStats small = new CameraStats(1, 0.25, 0, 0.04, 0.08, 1.6, 1.6, 1.4, 0.1, 0.1, 20, BLOCKS, 1, 0, 1, 0, 0, 0, 1.0, 10, null, List.of(), CameraStats.Live.NONE);
 
         assertTrue(text(CameraReport.lines(small)).contains("0.04ms/t"), text(CameraReport.lines(small)));
     }
@@ -74,7 +74,7 @@ class CameraReportTest {
      */
     @Test
     void capturesTakenWithoutAskingAreCalledOutWhenABudgetExists() {
-        CameraStats unpaced = new CameraStats(80, 20.0, 20.0, 2.0, 4.0, 5.0, 2.0, 1.8, 0.1, 0.1, 30, COPY, 1, 0, 1, 0, 0, 0, 1.0, 10, null, List.of(), null);
+        CameraStats unpaced = new CameraStats(80, 20.0, 20.0, 2.0, 4.0, 5.0, 2.0, 1.8, 0.1, 0.1, 30, BLOCKS, 1, 0, 1, 0, 0, 0, 1.0, 10, null, List.of(), CameraStats.Live.NONE);
         String out = text(CameraReport.lines(unpaced));
 
         assertTrue(out.contains("Unpaced"), out);
@@ -84,7 +84,7 @@ class CameraReportTest {
     /** With no budget set there is nothing for it to be a warning about, so it would only be noise. */
     @Test
     void unpacedCapturesAreNotMentionedWhenNothingWasLimited() {
-        CameraStats loose = new CameraStats(80, 20.0, 20.0, 2.0, 4.0, 5.0, 2.0, 1.8, 0.1, 0.1, 30, COPY, 1, 0, 1, 0, 0, 0, 0, 0, null, List.of(), null);
+        CameraStats loose = new CameraStats(80, 20.0, 20.0, 2.0, 4.0, 5.0, 2.0, 1.8, 0.1, 0.1, 30, BLOCKS, 1, 0, 1, 0, 0, 0, 0, 0, null, List.of(), null);
 
         assertFalse(text(CameraReport.lines(loose)).contains("Unpaced"));
     }
@@ -92,7 +92,7 @@ class CameraReportTest {
     /** Turned away is not failed, and the words have to differ or an admin goes looking for a stack trace. */
     @Test
     void capturesTurnedAwayReadAsCapacityRatherThanAsBreakage() {
-        CameraStats over = new CameraStats(40, 10.0, 10.0, 2.0, 4.0, 5.0, 4.0, 3.5, 0.3, 0.2, 30, COPY, 2, 0, 1, 3, 12, 0, 1.0, 10, null, List.of(), null);
+        CameraStats over = new CameraStats(40, 10.0, 10.0, 2.0, 4.0, 5.0, 4.0, 3.5, 0.3, 0.2, 30, BLOCKS, 2, 0, 1, 3, 12, 0, 1.0, 10, null, List.of(), CameraStats.Live.NONE);
         String out = text(CameraReport.lines(over));
 
         assertTrue(out.contains("Turned away"), out);
@@ -108,7 +108,7 @@ class CameraReportTest {
     /** Four zeroes would read as "cheap" when what is wrong is that captures are not happening at all. */
     @Test
     void aWindowOfNothingButFailuresSkipsTheCostLines() {
-        CameraStats broken = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, COPY, 0, 0, 0, 0, 0,3, 1.0, 10,
+        CameraStats broken = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, BLOCKS, 0, 0, 0, 0, 0,3, 1.0, 10,
                 new CameraStats.Failure("PhotoBooth", "java.lang.NullPointerException: nope", System.currentTimeMillis()),
                 List.of(), null);
         String out = text(CameraReport.lines(broken));
@@ -121,7 +121,7 @@ class CameraReportTest {
     /** A camera that fails every time and one nothing uses look the same from outside, so the failure outlives the window. */
     @Test
     void anIdleCameraStillReportsTheLastFailureHoweverOldItIs() {
-        CameraStats quiet = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, COPY, 0, 0, 0, 0, 0,0, 1.0, 10,
+        CameraStats quiet = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, BLOCKS, 0, 0, 0, 0, 0,0, 1.0, 10,
                 new CameraStats.Failure("PhotoBooth", "java.lang.IllegalStateException: gone", 0),
                 List.of(), null);
         String out = text(CameraReport.lines(quiet));
@@ -133,9 +133,9 @@ class CameraReportTest {
     /** /mapgui status only speaks up when something is wrong, and only while it is still recent. */
     @Test
     void troubleIsReportedOnlyForARecentFailure() {
-        CameraStats fresh = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, COPY, 0, 0, 0, 0, 0,1, 1.0, 10,
+        CameraStats fresh = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, BLOCKS, 0, 0, 0, 0, 0,1, 1.0, 10,
                 new CameraStats.Failure("PhotoBooth", "boom", System.currentTimeMillis()), List.of(), null);
-        CameraStats stale = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, COPY, 0, 0, 0, 0, 0,1, 1.0, 10,
+        CameraStats stale = new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, BLOCKS, 0, 0, 0, 0, 0,1, 1.0, 10,
                 new CameraStats.Failure("PhotoBooth", "boom", 0), List.of(), null);
 
         assertNotNull(CameraReport.trouble(fresh));
@@ -146,7 +146,7 @@ class CameraReportTest {
     /** The performance one-liner is for a report about cost, so a camera costing nothing has nothing to add to it. */
     @Test
     void theCostLineIsLeftOutWhenNothingIsCapturing() {
-        assertNull(CameraReport.cost(new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, COPY, 0, 0, 0, 0, 0,0, 1.0, 10, null, List.of(), null)));
+        assertNull(CameraReport.cost(new CameraStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, BLOCKS, 0, 0, 0, 0, 0,0, 1.0, 10, null, List.of(), CameraStats.Live.NONE)));
         assertEquals(true, PlainTextComponentSerializer.plainText()
                 .serialize(CameraReport.cost(stats())).contains("0.34ms/t"));
     }

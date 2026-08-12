@@ -29,6 +29,18 @@ public record Rect(int x, int y, int width, int height) {
         return new Rect(x + dx, y + dy, width, height);
     }
 
+    /** The smallest rect holding both. An empty one contributes nothing rather than dragging a corner to 0,0. */
+    public Rect union(Rect other) {
+        if (width <= 0 || height <= 0) return other;
+        if (other.width <= 0 || other.height <= 0) return this;
+
+        int x1 = Math.min(x, other.x);
+        int y1 = Math.min(y, other.y);
+        int x2 = Math.max(right(), other.right());
+        int y2 = Math.max(bottom(), other.bottom());
+        return new Rect(x1, y1, x2 - x1, y2 - y1);
+    }
+
     /** Overlap of two rects, or {@link #EMPTY} if they don't touch. Used for clipping. */
     public Rect intersect(Rect other) {
         int x1 = Math.max(x, other.x);

@@ -21,6 +21,26 @@ Three ways a node decides its size, and that is the whole model:
 `gap`, `padding`, `align` and `justify` do what they look like. `align(Align.STRETCH)` on a column makes its
 children as wide as the widest, which is usually what you want for a stack of buttons.
 
+`Gap(width, height)` is empty space of a fixed size, for holding a slot open when what goes in it is not there -
+a control a server has turned off, an icon that has not loaded. `hidden(true)` takes the space with it, so a row
+of three controls becomes a row of two and everything shifts.
+
+`place(justify, align)` positions a node inside an `Overlay` - a badge in a corner, a label across the middle.
+It is on `Node` itself, so a method handed plain nodes can still position them:
+
+```java
+static Node bar(Node left, Node middle, Node right) {
+    return Overlay(
+            left.place(Justify.START, Align.CENTER),
+            middle.place(Justify.CENTER, Align.CENTER),
+            right.place(Justify.END, Align.CENTER)
+    ).fillWidth();
+}
+```
+
+`Image(bufferedImage)` puts a picture from a file in a layout, drawn a pixel for a pixel. A null image draws
+nothing, so the node's own background is what shows when an asset is missing.
+
 ## Draw
 
 The escape hatch: raw pixel access inside an auto-laid-out box, for graphs, icons, or anything the widget
@@ -52,6 +72,33 @@ painter.polyline(xs, ys, WHITE, 2);
 Thickness works on all of them because the outline is defined rather than drawn: it is every pixel inside the
 shape within the border's width of somewhere outside it. A shape of your own is one method - implement
 `Shape.contains` and hand it to `painter.shape(..)`, and it gets fills, outlines and thickness for free.
+
+Because a shape is only "is this pixel inside", shapes combine:
+
+| | |
+|---|---|
+| `a.intersectionWith(b)` | only where both cover |
+| `a.combinedWith(b)` | wherever either covers |
+| `a.without(b)` | `a` with `b` cut out |
+| `a.holeIn(box)` | the box with `a` punched out of it |
+
+Which is how an area none of the factories draws gets described rather than plotted a row at a time. A camera
+iris is an octagon that turns as it shrinks, and the blades are everything around it:
+
+```java
+Shape opening = Shape.regularPolygon(cx, cy, reach, 8, turnDegrees);
+painter.shape(opening.holeIn(bounds), Fill.solid(BLADE), null);
+```
+
+That is not slower than plotting it yourself: a shape is drawn a row at a time via `spansAt`, so an octagon costs
+eight sums per row rather than eight per pixel - outlined ones included. A shape of your own gets the slower
+pixel-by-pixel path unless it implements `spansAt` too.
+
+`Shape.sideOfLine(box, x1, y1, x2, y2)` is a straight cut across a box, keeping what is to the right of the
+arrow. Several of those intersected describe any convex area between them.
+
+`pushClip(shape)` clips to a shape instead of a box, so a picture can sit in a round window. Unlike masking
+afterwards it applies to whatever draws next, including text and images, which have no shape of their own.
 
 ### Fonts
 

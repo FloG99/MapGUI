@@ -36,15 +36,15 @@ final class CaptureLoad {
     record Share(String plugin, double perSecond) {
     }
 
-    void captured(String plugin, long copyNanos, long mobNanos, long blockEntityNanos, boolean paced) {
-        total.captured(copyNanos, mobNanos, blockEntityNanos, paced);
-        window(plugin).captured(copyNanos, mobNanos, blockEntityNanos, paced);
+    void captured(String plugin, long copyNanos, long entityNanos, long blockEntityNanos, boolean paced) {
+        total.captured(copyNanos, entityNanos, blockEntityNanos, paced);
+        window(plugin).captured(copyNanos, entityNanos, blockEntityNanos, paced);
     }
 
-    void copied(String plugin, int wanted, int fromCache, int filled, int total, int mobs, int blocks,
-                int askedMobs, int reusedMobs) {
-        this.total.copied(wanted, fromCache, filled, total, mobs, blocks, askedMobs, reusedMobs);
-        window(plugin).copied(wanted, fromCache, filled, total, mobs, blocks, askedMobs, reusedMobs);
+    void copied(String plugin, int wanted, int fromCache, int filled, int total, int entities, int blocks,
+                int askedEntities, int reusedEntities) {
+        this.total.copied(wanted, fromCache, filled, total, entities, blocks, askedEntities, reusedEntities);
+        window(plugin).copied(wanted, fromCache, filled, total, entities, blocks, askedEntities, reusedEntities);
     }
 
     void turnedAway(String plugin) {

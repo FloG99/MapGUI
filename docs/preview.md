@@ -58,3 +58,20 @@ they will be in game.
 
 Two limits: screens that read live player state cannot be built headless, and terrain needs a world - pass
 `-Pbackdrop=some.png` to stand in for it.
+
+## Rendering from a test
+
+`MapImage` is the same thing from code, and it takes a node tree rather than a `Screen` - so it works for a screen
+that does read the player, as long as the part being looked at can be built without one:
+
+```java
+BufferedImage frame = MapImage.of(Viewfinder.body(state), 128, 128);
+MapImage.write(MapImage.scaled(frame, 3), Path.of("build/screen.png"));
+```
+
+Worth it for anything too quick to catch in game. `MapImage.strip(frames, gap, background)` puts several side by side,
+which is the practical way to look at an animation that is over in a fifth of a second: render it at half a dozen
+points in its timeline and compare the columns.
+
+Building the tree in a method that takes what it needs as arguments, rather than reading it off the session, is what
+makes a screen renderable this way - and is worth doing for that reason alone.

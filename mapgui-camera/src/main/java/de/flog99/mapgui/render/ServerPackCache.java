@@ -45,18 +45,46 @@ public final class ServerPackCache {
 
     private final Path directory;
 
+    /**
+     * Swept on the way up, which is the only moment in a run when nothing has these files open.
+     *
+     * <p>{@link #prune()} otherwise only runs after a write, and by then the stack is holding every pack it
+     * layers - so on Windows the stale ones could never be deleted and only stopped being read.
+     */
     public ServerPackCache(Path cacheDir) {
         this.directory = cacheDir.resolve("packs");
+
+        try {
+            if (Files.isDirectory(directory)) {
+                prune();
+            }
+        } catch (IOException swept) {
+            // A cache that cannot be tidied still works. What is past KEEP is not layered either way.
+        }
     }
 
-    /** Everything fetched so far, sorted by name so layering does not depend on directory order. */
+    /**
+     * The packs to layer: the newest {@link #KEEP} of them, newest first.
+     *
+     * <p>Newest first because a pack is named by its own bytes, so a plugin that changes its pack does not replace
+     * an entry, it adds one - and every older version of it is still a full pack claiming the same file names.
+     * By name, which is by hash, which is at random, one of those stale copies won and captures were drawn with
+     * a texture the plugin had already stopped shipping.
+     *
+     * <p>The count is the same limit {@link #prune()} was written to hold, and holding it here as well is what
+     * makes it true. Pruning can only delete a file nothing has open, and every pack in this list is open in the
+     * asset stack, so on Windows - where a delete is refused rather than deferred - the limit never applied to
+     * anything and one test session left thirty-two of them stacked up.
+     */
     public List<Path> stored() {
         if (!Files.isDirectory(directory)) return List.of();
 
         try (var files = Files.list(directory)) {
             return files.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".zip"))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                    .sorted(Comparator.comparingLong(ServerPackCache::modifiedAt).reversed()
+                            .thenComparing(path -> path.getFileName().toString()))
+                    .limit(KEEP)
                     .toList();
         } catch (IOException unreadable) {
             return List.of();
@@ -106,13 +134,13 @@ public final class ServerPackCache {
      * <p>Same shelf, same content-addressed name, so it layers and de-duplicates exactly as a downloaded one does
      * and a plugin handing over the same bytes on every start writes nothing after the first.
      *
-     * @return the stored zip, and whether this was the first time these bytes were seen
+     * @return the stored zip, its hash, and whether this was the first time these bytes were seen
      */
     public Stored keep(byte[] pack) throws IOException {
         String sha1 = HexFormat.of().formatHex(sha1().digest(pack));
         Path target = zipFor(sha1);
         if (Files.isRegularFile(target) && Files.size(target) == pack.length) {
-            return new Stored(target, false);
+            return new Stored(target, sha1, false);
         }
 
         Files.createDirectories(directory);
@@ -121,14 +149,19 @@ public final class ServerPackCache {
             Files.write(part, pack);
             Files.move(part, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             prune();
-            return new Stored(target, true);
+            return new Stored(target, sha1, true);
         } finally {
             Files.deleteIfExists(part);
         }
     }
 
-    /** @param fresh whether anything was actually written, which is what decides if a reload is worth it */
-    public record Stored(Path zip, boolean fresh) {
+    /**
+     * @param sha1  of the bytes, in lowercase hex. Handed back out through {@code Camera#useResourcePack} so that a
+     *              plugin serving the same pack to clients offers it under the hash MapGUI measured rather than one
+     *              it worked out itself
+     * @param fresh whether anything was actually written, which is what decides if a reload is worth it
+     */
+    public record Stored(Path zip, String sha1, boolean fresh) {
     }
 
     /** @return the SHA-1 of what was written, in lowercase hex */
@@ -187,7 +220,13 @@ public final class ServerPackCache {
         }
     }
 
-    /** Newest kept, and a file another process still has open is left where it is rather than fought over. */
+    /**
+     * Newest kept, and a file still open is left where it is rather than fought over.
+     *
+     * <p>Which on Windows is most of them, since the stack has every pack it layers open. That is why
+     * {@link #stored()} holds the same limit itself: a pack this cannot delete stops being layered anyway, and
+     * stops being open at the next reload, so the one after this deletes it.
+     */
     private void prune() throws IOException {
         List<Path> zips;
         try (var files = Files.list(directory)) {

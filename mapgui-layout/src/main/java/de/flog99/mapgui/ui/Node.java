@@ -55,7 +55,15 @@ public interface Node {
         return 0;
     }
 
-    /** Where this node sits when it is overlaid on its siblings rather than laid out beside them. */
+    /**
+     * Where this node sits when it is overlaid on its siblings rather than laid out beside them.
+     *
+     * <p>Declared here rather than only on {@link AbstractNode} so that a method taking plain {@code Node}s can
+     * still place them. A reusable piece of layout - a toolbar handed the three marks that go on it - otherwise
+     * has to wrap each one in a container of its own just to reach the setter.
+     */
+    Node place(Justify horizontal, Align vertical);
+
     default Justify placeX() {
         return Justify.START;
     }

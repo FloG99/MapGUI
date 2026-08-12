@@ -212,9 +212,10 @@ class CaptureBudgetTest {
         assertTrue(budget.frameRate(one) > 1, "but not all the way in one frame: " + budget.frameRate(one));
     }
 
+    /** A count rather than a null, so nothing reading this has to guard before asking how many viewers there are. */
     @Test
-    void nobodyLookingIsReportedAsNothingRatherThanAsZeroViewers() {
-        assertNull(budget(1.0, 10).live());
+    void nobodyLookingIsReportedAsNoViewers() {
+        assertEquals(CaptureBudget.Live.NONE, budget(1.0, 10).live());
     }
 
     /** Asking more often than the rate allows does not earn more frames, or the pacing would be advice only. */

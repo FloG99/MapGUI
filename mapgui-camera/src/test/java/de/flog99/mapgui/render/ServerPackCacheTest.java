@@ -156,6 +156,30 @@ class ServerPackCacheTest {
         assertEquals(2, cache.stored().size(), "pruned by age rather than deleted on sight");
     }
 
+    /**
+     * A plugin that has shipped its pack many times gets its newest one layered, and only a handful in total.
+     *
+     * <p>Both halves have been wrong. Layering went by file name, which is by hash, which is at random - so one of
+     * the stale copies won and captures drew a texture the plugin had stopped shipping. And the cap was left to
+     * pruning alone, which cannot delete a file the stack has open, so a session's worth of them piled up.
+     */
+    @Test
+    void theNewestPacksAreLayeredNewestFirst() throws IOException {
+        ServerPackCache cache = cache();
+        Path newest = null;
+
+        for (int version = 0; version < 9; version++) {
+            Path kept = cache.keep(("pack version " + version).getBytes()).zip();
+            // Stamped rather than slept for: the ordering is by age, and nine writes inside one millisecond is
+            // exactly the tie that would make this pass by luck.
+            Files.setLastModifiedTime(kept, java.nio.file.attribute.FileTime.fromMillis(1_000_000 + version * 1000L));
+            newest = kept;
+        }
+
+        assertEquals(5, cache.stored().size(), "the newest handful, not everything ever kept");
+        assertEquals(newest, cache.stored().getFirst(), "and the newest of those wins the layering");
+    }
+
     @Test
     void aPackThatIsNotThereLeavesNothingBehind() {
         ServerPackCache cache = cache();

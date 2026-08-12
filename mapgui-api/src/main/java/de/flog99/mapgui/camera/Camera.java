@@ -4,6 +4,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Captures what a player is looking at, onto a map.
@@ -43,8 +44,11 @@ public interface Camera {
      *
      * @param plugin   yours, whose jar the resource is read from
      * @param resource path inside that jar, such as {@code pack/my-pack.zip}
+     * @return the pack's SHA-1 in hex, or null if the resource could not be read. Handed back because you also have
+     *         to <b>serve</b> this pack to clients, and a client is offered one by its hash - so using this one is
+     *         what stops the copy players download and the copy captures are drawn with drifting apart
      */
-    void useResourcePack(Plugin plugin, String resource);
+    String useResourcePack(Plugin plugin, String resource);
 
     /**
      * Captures the player's view and hands it back on the main thread.
@@ -58,6 +62,8 @@ public interface Camera {
      *
      * @param size pixels square, {@link #MAP_SIZE} to fill a map exactly. Smaller renders faster and the
      *             palette hides much of the difference
+     * @throws IllegalArgumentException if the size is outside {@link CameraOptions#MIN_SIZE} to
+     *         {@link CameraOptions#MAX_SIZE}
      */
     void capture(Player player, int size, Consumer<CameraShot> onShot);
 
@@ -65,7 +71,43 @@ public interface Camera {
     void capture(Player player, CameraOptions options, Consumer<CameraShot> onShot);
 
     /**
+     * A live view of this player, driven for you: the way to put moving pictures on a screen.
+     *
+     * <p>Every tick a frame could be taken it asks {@code options} what to capture, and hands the result to
+     * {@code onFrame} on the main thread. What it saves you is the three things that are invisible when got wrong:
+     * only one capture in flight, so a slow tick leaves the next frame late rather than two copies of the world in
+     * memory; frames only as fast as {@link #readyForFrame} allows, so several viewers divide the server's time
+     * rather than multiplying it; and none at all while the screen is put away, since those are frames nobody sees.
+     *
+     * <pre>{@code
+     * protected void onOpen() {
+     *     feed = MapGui.get().camera().feed(player(), this::framing, this::preview);
+     * }
+     *
+     * protected void onClose() {
+     *     feed.close();
+     * }
+     * }</pre>
+     *
+     * <p>Return <b>null</b> from {@code options} for a tick where no frame is wanted - mid-animation, mid-shutter,
+     * still loading. That pauses the feed without closing it, and a paused one stops counting as a viewer, so it
+     * gives back its share of the budget while it waits.
+     *
+     * <p>{@code onFrame} only ever sees real frames: a failed capture is dropped rather than passed on as a null.
+     * Anything it throws closes the feed and is logged, rather than breaking the tick.
+     *
+     * @param options what to capture. Asked whenever a frame could be taken, so not while paused or while one is
+     *                already in flight. Null means not now
+     * @param onFrame given each finished frame, on the main thread
+     */
+    CameraFeed feed(Player player, Supplier<CameraOptions> options, Consumer<CameraShot> onFrame);
+
+    /**
      * Whether a <b>live view</b> of this player should take a frame now.
+     *
+     * <p>{@link #feed} is this with the loop written for you, and is what a viewfinder should reach for first. This
+     * stays for a plugin that drives its own timing - a view that only wants a frame when something in the world
+     * changed, or one paced by something other than a tick.
      *
      * <p>For a viewfinder rather than a photograph. A still is one capture and whoever pressed the shutter is waiting
      * for it, so take it; a live view wants every frame it can get, forever, and how many that is depends on how many

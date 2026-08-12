@@ -237,6 +237,7 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
      * Where this node sits when it is overlaid rather than laid out in a row - a count in the top right,
      * a label across the middle. Ignored outside an {@link Ui#Overlay}.
      */
+    @Override
     public S place(Justify horizontal, Align vertical) {
         this.placeX = horizontal;
         this.placeY = vertical;

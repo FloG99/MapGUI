@@ -225,7 +225,13 @@ public final class CameraAssetStore {
         stack = loaded.stack();
         state = new CameraAssets.Ready(loaded.stack().version(), loaded.stack().blockTextureCount());
 
-        plugin.getLogger().info("Camera assets ready: Minecraft " + loaded.stack().version() + ", " + loaded.stack().blockTextureCount() + " block textures, " + loaded.stack().entityMeshCount() + " mob shapes, layers " + String.join(" over ", loaded.stack().layerNames()) + ".");
+        // Counted rather than named. Every layer past the base is a SHA-1, so naming them spent a console screen
+        // to say a number, twice per startup, and the one reader who wants to know which packs made it in can ask
+        // for them with 'mapgui camera'.
+        int overlays = loaded.stack().layerNames().size() - 1;
+        plugin.getLogger().info("Camera assets ready: Minecraft " + loaded.stack().version() + ", "
+                + loaded.stack().blockTextureCount() + " block textures, " + loaded.stack().entityMeshCount()
+                + " mob shapes" + (overlays > 0 ? ", " + overlays + " pack" + (overlays == 1 ? "" : "s") + " over vanilla" : "") + ".");
 
         if (loaded.stack().entityMeshCount() == 0) {
             // Not a fault. Mob geometry is baked out of a client jar, so a base that is only a resource pack has

@@ -29,6 +29,22 @@ Color tint = animateColor("bar", health > 20 ? GREEN : RED);
 
 Both are safe to call while painting.
 
+## A timeline of your own
+
+Some animations are not a value easing toward another value - a shutter that closes, waits for something, flashes and
+opens again is a sequence with stages, read off the wall clock. `keepDrawing()` is how one gets frames:
+
+```java
+@Override
+protected boolean keepDrawing() {
+    return shutter.tick(System.currentTimeMillis());
+}
+```
+
+Return true while it is running and false the moment it is over. MapGUI asks every tick, so this is also the hook that
+carries your own clock forward - which is the whole of what used to need a repeating task calling `invalidate()`.
+Frames still respect `fps()` and the server's ceiling, so it cannot ask for more than a map can send.
+
 ## Effects that never arrive
 
 `phase(periodMillis)` is a 0..1 value that loops forever, for a spinner, a pulse, a scrolling rainbow.

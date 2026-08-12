@@ -7,6 +7,7 @@ import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.RotationController;
 import de.flog99.mapgui.ServerBackend;
 import de.flog99.mapgui.plugin.camera.CameraAssetStore;
+import de.flog99.mapgui.plugin.camera.CameraFeeds;
 import de.flog99.mapgui.plugin.camera.CameraService;
 import de.flog99.mapgui.plugin.camera.ServerPacks;
 import de.flog99.mapgui.plugin.map.MapPrinterService;
@@ -34,6 +35,7 @@ public final class MapGuiPlugin extends JavaPlugin {
     private GuiCatalogImpl screens;
     private CameraAssetStore cameraAssets;
     private CameraService camera;
+    private CameraFeeds feeds;
     private ServerPacks serverPacks;
     private MapPrinterService printer;
     private HandItems handItems;
@@ -74,7 +76,10 @@ public final class MapGuiPlugin extends JavaPlugin {
         cameraAssets.follow(serverPacks::followed);
         // Before the camera, which photographs whatever the walls are showing.
         wallRegistry = new WallRegistry(this, transport, prompts, router);
-        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraTuning());
+        // Held here rather than inside the camera so that a reload, which builds a new service, leaves everybody's
+        // viewfinder running. Both suppliers are read at tick time, which is what lets this exist before either.
+        feeds = new CameraFeeds(this, this::camera, this::sessions);
+        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, feeds, config.cameraTuning());
         cameraAssets.announce();
         serverPacks.start();
 
@@ -115,6 +120,8 @@ public final class MapGuiPlugin extends JavaPlugin {
             wallRegistry.tick(System.currentTimeMillis());
             handItems.sweep();
             heldTriggers.sweep();
+            // Live camera views, which want a frame every tick and get one when the budget says so.
+            feeds.tick();
         }, 1L, 1L);
 
         // Once a second, and only to notice that a branch of /mapgui has become worth listing - registering a GUI,
@@ -142,6 +149,9 @@ public final class MapGuiPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (feeds != null) {
+            feeds.closeAll();
+        }
         if (sessions != null) {
             sessions.closeAll();
         }
@@ -176,7 +186,9 @@ public final class MapGuiPlugin extends JavaPlugin {
         // textures go either way, since the fov and distance they were built against may have changed.
         serverPacks.retune(config.cameraFollowServerPacks());
         cameraAssets.retune(config.cameraPacks(), config.cameraDownload(), config.cameraAllowVersionMismatch());
-        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, config.cameraTuning());
+        // The feeds are not rebuilt with it: they look this method up each tick, so an open viewfinder carries on
+        // through a reload against the new service rather than quietly freezing.
+        camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, feeds, config.cameraTuning());
     }
 
     MapGuiConfig config() {

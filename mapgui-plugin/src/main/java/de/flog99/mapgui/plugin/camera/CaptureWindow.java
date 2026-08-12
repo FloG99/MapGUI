@@ -34,11 +34,11 @@ final class CaptureWindow {
     private final long[] reused = new long[WINDOW_SECONDS];
     private final long[] filledSections = new long[WINDOW_SECONDS];
     private final long[] sections = new long[WINDOW_SECONDS];
-    private final long[] mobsBuilt = new long[WINDOW_SECONDS];
-    private final long[] blocksBuilt = new long[WINDOW_SECONDS];
-    private final long[] mobsWanted = new long[WINDOW_SECONDS];
-    private final long[] mobsReused = new long[WINDOW_SECONDS];
-    private final long[] mobNanos = new long[WINDOW_SECONDS];
+    private final long[] entitiesBuilt = new long[WINDOW_SECONDS];
+    private final long[] blockEntitiesBuilt = new long[WINDOW_SECONDS];
+    private final long[] entitiesWanted = new long[WINDOW_SECONDS];
+    private final long[] entitiesReused = new long[WINDOW_SECONDS];
+    private final long[] entityNanos = new long[WINDOW_SECONDS];
     private final long[] blockEntityNanos = new long[WINDOW_SECONDS];
     private final long[] worstNanos = new long[WINDOW_SECONDS];
     private final int[] traced = new int[WINDOW_SECONDS];
@@ -60,13 +60,13 @@ final class CaptureWindow {
      * The main-thread half, recorded in the tick it happened in rather than when the shot comes back - a capture
      * whose trace waits three seconds for a thread still cost this tick, not that one.
      */
-    synchronized void captured(long copy, long mobs, long blockEntities, boolean asked) {
+    synchronized void captured(long copy, long entities, long blockEntities, boolean asked) {
         int slot = slot();
-        long nanos = copy + mobs + blockEntities;
+        long nanos = copy + entities + blockEntities;
         captures[slot]++;
         mainNanos[slot] += nanos;
         copyNanos[slot] += copy;
-        mobNanos[slot] += mobs;
+        entityNanos[slot] += entities;
         blockEntityNanos[slot] += blockEntities;
         worstNanos[slot] = Math.max(worstNanos[slot], nanos);
         if (asked) {
@@ -93,15 +93,15 @@ final class CaptureWindow {
      *
      * @param wanted     columns the frustum asked for, {@code fromCache} how many of them came back without being
      *                   copied, and {@code filled} how many of the sections in them held anything
-     * @param askedMobs  mobs the capture looked for a held shape for, and {@code reusedMobs} how many had one
+     * @param askedEntities  entities the capture looked for a held shape for, and {@code reusedEntities} how many had one
      */
-    synchronized void copied(int wanted, int fromCache, int filled, int total, int mobs, int blocks,
-                             int askedMobs, int reusedMobs) {
+    synchronized void copied(int wanted, int fromCache, int filled, int total, int entities, int blockEntities,
+                             int askedEntities, int reusedEntities) {
         int slot = slot();
-        mobsBuilt[slot] += mobs;
-        blocksBuilt[slot] += blocks;
-        mobsWanted[slot] += askedMobs;
-        mobsReused[slot] += reusedMobs;
+        entitiesBuilt[slot] += entities;
+        blockEntitiesBuilt[slot] += blockEntities;
+        entitiesWanted[slot] += askedEntities;
+        entitiesReused[slot] += reusedEntities;
         columns[slot] += wanted;
         reused[slot] += fromCache;
         filledSections[slot] += filled;
@@ -134,11 +134,11 @@ final class CaptureWindow {
             reused[slot] = 0;
             filledSections[slot] = 0;
             sections[slot] = 0;
-            mobsBuilt[slot] = 0;
-            blocksBuilt[slot] = 0;
-            mobsWanted[slot] = 0;
-            mobsReused[slot] = 0;
-            mobNanos[slot] = 0;
+            entitiesBuilt[slot] = 0;
+            blockEntitiesBuilt[slot] = 0;
+            entitiesWanted[slot] = 0;
+            entitiesReused[slot] = 0;
+            entityNanos[slot] = 0;
             blockEntityNanos[slot] = 0;
             worstNanos[slot] = 0;
             traced[slot] = 0;
@@ -158,16 +158,16 @@ final class CaptureWindow {
         int traces = 0;
         long main = 0;
         long copy = 0;
-        long mobs = 0;
+        long entities = 0;
         long blockEntities = 0;
         long wanted = 0;
         long fromCache = 0;
         long filled = 0;
         long allSections = 0;
-        long mobsBuilt2 = 0;
-        long blocksBuilt2 = 0;
-        long mobsAsked = 0;
-        long mobsFromCache = 0;
+        long entitiesTotal = 0;
+        long blockEntitiesTotal = 0;
+        long entitiesAsked = 0;
+        long entitiesFromCache = 0;
         long worst = 0;
         long trace = 0;
 
@@ -182,16 +182,16 @@ final class CaptureWindow {
             traces += traced[i];
             main += mainNanos[i];
             copy += copyNanos[i];
-            mobs += mobNanos[i];
+            entities += entityNanos[i];
             blockEntities += blockEntityNanos[i];
             wanted += columns[i];
             fromCache += reused[i];
             filled += filledSections[i];
             allSections += sections[i];
-            mobsBuilt2 += mobsBuilt[i];
-            blocksBuilt2 += blocksBuilt[i];
-            mobsAsked += mobsWanted[i];
-            mobsFromCache += mobsReused[i];
+            entitiesTotal += entitiesBuilt[i];
+            blockEntitiesTotal += blockEntitiesBuilt[i];
+            entitiesAsked += entitiesWanted[i];
+            entitiesFromCache += entitiesReused[i];
             trace += traceNanos[i];
             worst = Math.max(worst, worstNanos[i]);
         }
@@ -200,16 +200,16 @@ final class CaptureWindow {
         // and counting only the busy seconds would report one capture four seconds ago as one a second.
         return new Load(total, asked, total / (double) COUNTED_SECONDS,
                 (total - asked) / (double) COUNTED_SECONDS, main / COUNTED_SECONDS, worst,
-                total == 0 ? 0 : copy / total, total == 0 ? 0 : mobs / total,
+                total == 0 ? 0 : copy / total, total == 0 ? 0 : entities / total,
                 total == 0 ? 0 : blockEntities / total,
                 traces == 0 ? 0 : trace / traces, turnedAway, failures,
                 total == 0 ? 0 : wanted / (double) total,
                 wanted == 0 ? 0 : 100.0 * fromCache / wanted,
                 total == 0 ? 0 : filled / (double) total,
                 total == 0 ? 0 : allSections / (double) total,
-                total == 0 ? 0 : mobsBuilt2 / (double) total,
-                mobsAsked == 0 ? 0 : 100.0 * mobsFromCache / mobsAsked,
-                total == 0 ? 0 : blocksBuilt2 / (double) total);
+                total == 0 ? 0 : entitiesTotal / (double) total,
+                entitiesAsked == 0 ? 0 : 100.0 * entitiesFromCache / entitiesAsked,
+                total == 0 ? 0 : blockEntitiesTotal / (double) total);
     }
 
     /**
@@ -224,20 +224,20 @@ final class CaptureWindow {
      *                            budget entirely, which is worth saying out loud: an admin who set one and is being
      *                            ignored cannot otherwise tell
      * @param dropped             captures turned away because the trace was too far behind
-     * @param copyNanosEach       what copying the world cost one capture, {@code mobNanosEach} what gathering
-     *                            what is standing in it cost, and {@code blockEntityNanosEach} what gathering what
-     *                            is bolted to it cost. Three stages rather than two, because they are three
-     *                            different fixes: fewer columns, fewer mobs, fewer chests
+     * @param copyNanosEach       what copying the world's blocks cost one capture, {@code entityNanosEach} what
+     *                            gathering what is standing in it cost, and {@code blockEntityNanosEach} what
+     *                            gathering what is bolted to it cost. Three stages rather than two, because they are
+     *                            three different fixes: fewer columns, fewer entities, fewer chests
      */
     record Load(int captures, int paced, double perSecond, double unpacedPerSecond, long mainNanosPerSecond,
-                long worstMainNanos, long copyNanosEach, long mobNanosEach, long blockEntityNanosEach,
+                long worstMainNanos, long copyNanosEach, long entityNanosEach, long blockEntityNanosEach,
                 long traceNanosEach, int dropped, int failed, double chunksEach, double reusedPercent,
-                double filledSectionsEach, double sectionsEach, double mobsEach, double mobsReusedPercent,
+                double filledSectionsEach, double sectionsEach, double entitiesEach, double entitiesReusedPercent,
                 double blockEntitiesEach) {
 
         /** What one capture took out of a tick, which against the budget is what decides a live view's rate. */
         long mainNanosEach() {
-            return copyNanosEach + mobNanosEach + blockEntityNanosEach;
+            return copyNanosEach + entityNanosEach + blockEntityNanosEach;
         }
 
         boolean idle() {

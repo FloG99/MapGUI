@@ -147,7 +147,7 @@ class CaptureWindowTest {
 
         CaptureWindow.Load load = window.read();
         assertEquals(5 * MS, load.copyNanosEach());
-        assertEquals(2 * MS, load.mobNanosEach());
+        assertEquals(2 * MS, load.entityNanosEach());
         assertEquals(7 * MS, load.mainNanosEach());
     }
 

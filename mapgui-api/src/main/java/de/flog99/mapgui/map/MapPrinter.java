@@ -32,6 +32,15 @@ import java.util.List;
 public interface MapPrinter {
 
     /**
+     * The most maps one capture cuts into, to a side, since a capture has a size ceiling of its own.
+     *
+     * <p>Four, so sixteen maps and a picture 512 pixels square. Anything bigger is several captures, and this is the
+     * number to check a configurable grid against - {@link de.flog99.mapgui.camera.CameraOptions} refuses a size past
+     * it rather than quietly trimming one.
+     */
+    int MAX_SIZE_MAPS = de.flog99.mapgui.camera.CameraOptions.MAX_SIZE / Camera.MAP_SIZE;
+
+    /**
      * Prints one map's worth of palette indices onto a new map item.
      *
      * @param pixels {@link Camera#MAP_SIZE} squared indices, row by row, the way {@link CameraShot#pixels(int)}
@@ -45,7 +54,9 @@ public interface MapPrinter {
      *
      * <p>One pixel per pixel with nothing resampled, which is why the size has to divide exactly: a map is 128 pixels
      * and nothing changes that, so the way to a picture with more in it is more maps. Ask the camera for
-     * {@link #sizeFor(int)} and the cut is whole by construction.
+     * {@link #sizeFor(int)} and the cut is whole by construction - up to
+     * {@link de.flog99.mapgui.camera.CameraOptions#MAX_SIZE}, which is the biggest capture there is and so four maps
+     * to a side.
      *
      * @throws IllegalArgumentException if the capture is not a square whole number of maps across
      */

@@ -88,6 +88,22 @@ public final class Ui {
         return new Spacer();
     }
 
+    /**
+     * Empty space of a fixed size, which a {@link #Spacer} is not - that one eats whatever is left over.
+     *
+     * <p>For holding a slot open when the thing that goes in it is not there: a control a server has turned off,
+     * an icon that has not loaded. Hiding a node takes its space with it, so a row of three buttons becomes a row
+     * of two and everything shifts.
+     */
+    public static Spacer Gap(int width, int height) {
+        return new Spacer().size(width, height);
+    }
+
+    /** A picture from a file, drawn a pixel for a pixel. Null draws nothing, so a background shows through. */
+    public static Bitmap Image(java.awt.image.BufferedImage image) {
+        return new Bitmap(image);
+    }
+
     /** A ring of dots that turns, for waiting on something that cannot say how far along it is. */
     public static Spinner Spinner() {
         return new Spinner();

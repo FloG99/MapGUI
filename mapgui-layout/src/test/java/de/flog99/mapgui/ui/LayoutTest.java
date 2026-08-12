@@ -361,4 +361,40 @@ class LayoutTest {
 
         assertEquals(100, child.bounds().x());
     }
+
+    /** A gap keeps its slot open where a hidden node takes the space with it. */
+    @Test
+    void aGapHoldsItsSpaceWhereAHiddenNodeGivesItUp() {
+        Panel after = Row().width(10);
+        layout(Row(Ui.Gap(14, 14), after));
+        assertEquals(14, after.bounds().x());
+
+        Panel moved = Row().width(10);
+        layout(Row(Row().size(14, 14).hidden(true), moved));
+        assertEquals(0, moved.bounds().x());
+    }
+
+    /** Placing through the interface, so a method handed plain nodes can still position them. */
+    @Test
+    void aNodeCanBePlacedWithoutKnowingItsConcreteType() {
+        Node badge = Row().size(10, 10);
+        layout(Ui.Overlay(placedBottomRight(badge)));
+
+        assertEquals(118, badge.bounds().x());
+        assertEquals(118, badge.bounds().y());
+    }
+
+    private static Node placedBottomRight(Node node) {
+        return node.place(Justify.END, Align.END);
+    }
+
+    /** A missing image still takes its box, which is what lets the node's background stand in for the artwork. */
+    @Test
+    void anImagelessBitmapStillFills() {
+        Bitmap missing = Ui.Image(null).fill();
+        layout(Ui.Overlay(missing));
+
+        assertEquals(128, missing.bounds().width());
+        assertEquals(128, missing.bounds().height());
+    }
 }

@@ -3,9 +3,11 @@ package de.flog99.mapgui.ui;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ShapeTest {
@@ -162,5 +164,140 @@ class ShapeTest {
         assertFalse(triangle.contains(-5, -5));
         assertFalse(triangle.contains(100, 100));
         assertTrue(triangle.contains(5, 5));
+    }
+
+    // ---- combining ----
+
+    @Test
+    void anIntersectionIsOnlyWhereBothCover() {
+        Shape left = Shape.of(new Rect(10, 10, 20, 20));
+        Shape right = Shape.of(new Rect(20, 10, 20, 20));
+        Shape both = left.intersectionWith(right);
+
+        assertTrue(both.contains(25, 15), "the overlap");
+        assertFalse(both.contains(15, 15), "only the left one");
+        assertFalse(both.contains(35, 15), "only the right one");
+        assertEquals(new Rect(20, 10, 10, 20), both.bounds(), "bounded by the overlap, so nothing else is asked");
+    }
+
+    @Test
+    void combiningCoversEitherAndBoundsBoth() {
+        Shape combined = Shape.of(new Rect(10, 10, 10, 10)).combinedWith(Shape.of(new Rect(40, 40, 10, 10)));
+
+        assertTrue(combined.contains(15, 15));
+        assertTrue(combined.contains(45, 45));
+        assertFalse(combined.contains(30, 30), "the gap between them belongs to neither");
+        assertEquals(new Rect(10, 10, 40, 40), combined.bounds());
+    }
+
+    @Test
+    void withoutCutsTheOtherShapeOut() {
+        Shape ring = Shape.circle(32, 32, 20).without(Shape.circle(32, 32, 10));
+
+        assertTrue(ring.contains(32, 47), "out in the ring");
+        assertFalse(ring.contains(32, 32), "the middle was cut away");
+    }
+
+    /** The aperture case: what gets drawn is everything the shape does not cover. */
+    @Test
+    void aHoleIsTheBoxWithTheShapePunchedOut() {
+        Rect box = new Rect(0, 0, 64, 64);
+        Shape blades = Shape.circle(32, 32, 10).holeIn(box);
+
+        assertFalse(blades.contains(32, 32), "the opening is not covered");
+        assertTrue(blades.contains(2, 2), "the corner is");
+        assertFalse(blades.contains(70, 2), "and nothing outside the box");
+        assertEquals(box, blades.bounds());
+    }
+
+    /** The corners are the contract: a turn of 0 points right, and turning goes clockwise. */
+    @Test
+    void aRegularPolygonPutsItsCornersOnTheRadius() {
+        Shape.Polygon octagon = Shape.regularPolygon(32, 32, 20, 8, 0);
+
+        assertEquals(8, octagon.xs().length);
+        assertEquals(52, octagon.xs()[0], 0.001);
+        assertEquals(32, octagon.ys()[0], 0.001);
+        assertTrue(octagon.contains(32, 32));
+        assertFalse(octagon.contains(51, 13), "a corner of the square it fits inside is cut off");
+
+        Shape.Polygon turned = Shape.regularPolygon(32, 32, 20, 4, 90);
+        assertEquals(52, turned.ys()[0], 0.001, "a quarter turn goes down the screen, not up");
+    }
+
+    @Test
+    void aSideOfALineKeepsWhatIsToItsRight() {
+        Rect box = new Rect(0, 0, 64, 64);
+        Shape below = Shape.sideOfLine(box, 0, 32, 64, 32);
+
+        assertTrue(below.contains(32, 40), "below a line drawn left to right");
+        assertFalse(below.contains(32, 20), "above it");
+    }
+
+    /** Several straight cuts describing one area between them, which is what a polygon is from the outside. */
+    @Test
+    void cutsCombineIntoAnAreaBetweenThem() {
+        Rect box = new Rect(0, 0, 64, 64);
+        Shape band = Shape.sideOfLine(box, 0, 20, 64, 20).intersectionWith(Shape.sideOfLine(box, 64, 40, 0, 40));
+
+        assertTrue(band.contains(32, 30), "between the two lines");
+        assertFalse(band.contains(32, 10), "above both");
+        assertFalse(band.contains(32, 50), "below both");
+    }
+
+    /**
+     * The one invariant the fast path has to hold: a shape's rows and its pixels must agree.
+     *
+     * <p>A filled shape is drawn row by row, and the same shape with an outline is drawn pixel by pixel - so a shape
+     * whose {@code spansAt} disagreed with its {@code contains} would come out a different size depending on whether
+     * it happened to be given a border, which is not the sort of thing anybody would think to look for.
+     */
+    @Test
+    void rowsAndPixelsCoverTheSameThing() {
+        Rect box = new Rect(0, 0, 64, 64);
+        Shape.Polygon arrowhead = Shape.polygon(new double[]{30, 50, 30, 10}, new double[]{5, 45, 30, 45});
+
+        for (Shape shape : List.of(
+                Shape.of(new Rect(10, 8, 21, 17)),
+                Shape.regularPolygon(32, 32, 20, 8, 0),
+                Shape.regularPolygon(32, 32, 17.5, 5, 11.25),
+                arrowhead,
+                arrowhead.intersectionWith(Shape.of(new Rect(20, 20, 30, 30))),
+                Shape.regularPolygon(32, 32, 20, 8, 22.5).intersectionWith(Shape.of(box)).holeIn(box),
+                Shape.regularPolygon(90, 90, 60, 8, 5).intersectionWith(Shape.of(box)).holeIn(box))) {
+
+            for (int y = box.y(); y < box.bottom(); y++) {
+                int[] spans = shape.spansAt(y);
+                assertNotNull(spans, shape + " row " + y + " should answer in spans");
+
+                for (int x = box.x(); x < box.right(); x++) {
+                    assertEquals(shape.contains(x, y), covers(spans, x), shape + " at " + x + "," + y);
+                }
+            }
+        }
+    }
+
+    private static boolean covers(int[] spans, int x) {
+        for (int i = 0; i + 1 < spans.length; i += 2) {
+            if (x >= spans[i] && x < spans[i + 1]) return true;
+        }
+        return false;
+    }
+
+    @Test
+    void aShapeClipCutsWhateverIsDrawnAfterIt() {
+        Buffer buffer = new Buffer();
+        Painter painter = painter(buffer);
+
+        Painter.Clip previous = painter.pushClip(Shape.circle(32, 32, 10));
+        painter.fill(new Rect(0, 0, 64, 64), FILL);
+        painter.popClip(previous);
+
+        assertEquals(FILLED, buffer.get(32, 32), "inside the clip");
+        assertEquals(NOTHING, buffer.get(0, 0), "the corner was clipped away");
+        assertTrue(buffer.count(FILLED) < 64 * 64 / 4, "a disc of ten, not the whole square");
+
+        painter.fill(new Rect(0, 0, 2, 2), FILL);
+        assertEquals(FILLED, buffer.get(0, 0), "and the clip was given back");
     }
 }

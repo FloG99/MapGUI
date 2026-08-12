@@ -17,6 +17,9 @@ public final class Painter {
     private TextFont font;
     private Rect clip;
 
+    /** Set only by {@link #pushClip(Shape)}, so an ordinary rect clip costs one null check a pixel. */
+    private Shape clipShape;
+
     /** Built on first use, since a screen with no gradients never needs it. */
     private Palette dithered;
 
@@ -65,10 +68,38 @@ public final class Painter {
         clip = previous;
     }
 
+    /**
+     * Clips to a shape rather than to a box, so anything drawn afterwards only lands inside it.
+     *
+     * <p>For content sitting in a hole that is not rectangular - a picture behind a round lens, a video in a
+     * porthole. It works for whatever draws next, including text and images, which have no shape of their own to cut.
+     *
+     * <p>Nests with the rect clips containers push; hand the returned {@link Clip} back to restore both.
+     */
+    public Clip pushClip(Shape shape) {
+        Clip previous = new Clip(clip, clipShape);
+        clip = clip.intersect(shape.bounds());
+        clipShape = clipShape == null ? shape : clipShape.intersectionWith(shape);
+        return previous;
+    }
+
+    public void popClip(Clip previous) {
+        clip = previous.rect();
+        clipShape = previous.shape();
+    }
+
+    /** A clip as it was, box and shape together, so restoring one restores both. */
+    public record Clip(Rect rect, Shape shape) {
+    }
+
+    private boolean clipped(int x, int y) {
+        return !clip.contains(x, y) || (clipShape != null && !clipShape.contains(x, y));
+    }
+
     // ---- pixels ----
 
     public void pixel(int x, int y, byte color) {
-        if (clip.contains(x, y) && surface.inBounds(x, y)) {
+        if (!clipped(x, y) && surface.inBounds(x, y)) {
             surface.set(x, y, color);
         }
     }
@@ -82,7 +113,7 @@ public final class Painter {
 
         int alpha = color.getAlpha();
         if (alpha == 0) return;
-        if (!clip.contains(x, y) || !surface.inBounds(x, y)) return;
+        if (clipped(x, y) || !surface.inBounds(x, y)) return;
 
         if (alpha == 255) {
             surface.set(x, y, with.index(color, x, y));
@@ -238,6 +269,9 @@ public final class Painter {
         int stroke = resolved.visible() ? resolved.width() : 0;
         Palette fillPalette = fill == null ? palette : paletteFor(fill);
 
+        // A plain fill goes straight out row by row, with no mask in between - see Shape#spansAt.
+        if (stroke == 0 && fill != null && fillBySpans(shape, bounds, fill, fillPalette)) return;
+
         // Tested once into a mask rather than per probe: an outline asks about the same pixel repeatedly, and
         // for a polygon each of those would be a walk round its edges. Grown by the stroke, since a pixel at
         // the edge has to ask about ones the shape does not cover.
@@ -259,11 +293,67 @@ public final class Painter {
         }
     }
 
+    /** False if the shape would rather be asked pixel by pixel, in which case nothing has been drawn yet. */
+    private boolean fillBySpans(Shape shape, Rect bounds, Fill fill, Palette fillPalette) {
+        int[][] rows = new int[bounds.height()][];
+        for (int y = 0; y < rows.length; y++) {
+            rows[y] = shape.spansAt(bounds.y() + y);
+            // Asked for every row before any of it is drawn, so a shape that gives up halfway leaves no half-shape
+            // behind for the pixel path to draw over.
+            if (rows[y] == null) return false;
+        }
+
+        for (int y = 0; y < rows.length; y++) {
+            int row = bounds.y() + y;
+            int[] spans = rows[y];
+            for (int i = 0; i + 1 < spans.length; i += 2) {
+                int from = Math.max(spans[i], bounds.x());
+                int to = Math.min(spans[i + 1], bounds.right());
+                for (int x = from; x < to; x++) {
+                    pixel(x, row, fill.at(x, row, bounds), fillPalette);
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Which pixels the shape covers, as a flat grid.
+     *
+     * <p>An outline needs one of these - it is grown from the boundary, so it has to ask about a pixel's neighbours -
+     * but filling it in does not have to be done a pixel at a time. Row by row where the shape can say, which is what
+     * makes a bordered shape cost about what an unbordered one does rather than eight times more.
+     */
     private static boolean[] mask(Shape shape, Rect area) {
+        boolean[] fromSpans = maskFromSpans(shape, area);
+        if (fromSpans != null) return fromSpans;
+
         boolean[] inside = new boolean[area.width() * area.height()];
         for (int j = 0; j < area.height(); j++) {
             for (int i = 0; i < area.width(); i++) {
                 inside[j * area.width() + i] = shape.contains(area.x() + i, area.y() + j);
+            }
+        }
+        return inside;
+    }
+
+    /** Null if any row would rather be asked pixel by pixel, since half a mask is no use. */
+    private static boolean[] maskFromSpans(Shape shape, Rect area) {
+        int[][] rows = new int[area.height()][];
+        for (int y = 0; y < rows.length; y++) {
+            rows[y] = shape.spansAt(area.y() + y);
+            if (rows[y] == null) return null;
+        }
+
+        boolean[] inside = new boolean[area.width() * area.height()];
+        for (int y = 0; y < rows.length; y++) {
+            int[] spans = rows[y];
+            for (int i = 0; i + 1 < spans.length; i += 2) {
+                int from = Math.max(spans[i], area.x());
+                int to = Math.min(spans[i + 1], area.right());
+                for (int x = from; x < to; x++) {
+                    inside[y * area.width() + (x - area.x())] = true;
+                }
             }
         }
         return inside;
@@ -379,8 +469,45 @@ public final class Painter {
         }
     }
 
+    /**
+     * A line whose ends were worked out rather than typed, rounded to the nearest pixel at each end.
+     *
+     * <p>For a ray leaving a point at an angle, where computing the far end and handing it over beats stepping
+     * along it by hand. Only the ends are rounded, so the run between them is as straight as the integer
+     * version - which is as straight as a pixel grid gets.
+     */
+    public void line(double x1, double y1, double x2, double y2, Color color) {
+        line(x1, y1, x2, y2, color, 1);
+    }
+
+    public void line(double x1, double y1, double x2, double y2, Color color, int width) {
+        line(pixelOf(x1), pixelOf(y1), pixelOf(x2), pixelOf(y2), color, width);
+    }
+
+    /**
+     * Rounded, and held to somewhere a surface could plausibly be.
+     *
+     * <p>The bound is what stops a computed end that came out enormous - a step divided by something near zero -
+     * from being walked pixel by pixel on the main thread. Nothing that far out is drawn either way.
+     */
+    private static int pixelOf(double value) {
+        return Math.clamp(Math.round(value), -REACH, REACH);
+    }
+
+    /** Comfortably past any canvas, since even a wall is a few hundred pixels. */
+    private static final int REACH = 1 << 16;
+
     /** Corner to corner, left open. {@link #polygon} for the closed one. */
     public void polyline(int[] xs, int[] ys, Color color, int width) {
+        if (xs.length < 2 || xs.length != ys.length) return;
+
+        for (int i = 0; i < xs.length - 1; i++) {
+            line(xs[i], ys[i], xs[i + 1], ys[i + 1], color, width);
+        }
+    }
+
+    /** The same with the corners between pixels - see {@link #line(double, double, double, double, Color)}. */
+    public void polyline(double[] xs, double[] ys, Color color, int width) {
         if (xs.length < 2 || xs.length != ys.length) return;
 
         for (int i = 0; i < xs.length - 1; i++) {

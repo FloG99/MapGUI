@@ -1,7 +1,7 @@
 # Changelog
 
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
-surface is `mapgui-api` and `mapgui-layout`.
+surface is `mapgui-api`, which carries the layout engine inside it.
 
 ## Unreleased
 
@@ -215,6 +215,22 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Widgets
 
+- **`place()` is on `Node`** rather than only on the concrete classes, so a method taking plain nodes can position
+  them. Handing a toolbar the three marks that go on it used to mean wrapping each one in a container just to reach
+  the setter.
+- **`Ui.Image(image)`** - a picture from a file, drawn a pixel for a pixel and laid out like anything else. A null
+  image draws nothing, so the node's background is what shows when an asset is missing.
+- **`Ui.Gap(width, height)`** - empty space of a fixed size, for holding a slot open when what goes in it is not
+  there. Hiding a node takes its space with it, so a row of three controls becomes a row of two and everything shifts.
+- **`Screen#keepDrawing()`** - ask for frames while an animation of your own runs. `animate` and `phase` already do
+  this for what they cover; a sequence with stages read off the clock could only get frames from a repeating task
+  calling `invalidate()`, which every screen with a timeline ended up writing.
+- **`Screen#onSwapHands()`** - the swap-hands key, when MapGUI had no use for it. The one press that costs no aim, so
+  it is the shutter a viewfinder wants; reaching it used to mean a listener of your own that looked up the session and
+  cast its screen. Not called under `Focus.SWAP_HANDS`, where the key is the focus toggle.
+- **`Screen#onSneak(boolean)`** and `sneaking()`. Sneak is the modifier a map ends up using, since it is the one
+  gesture that costs no aim - a cursor only while it is held, a wheel that means zoom - and reading it meant polling
+  the player from a task of your own.
 - **`Spinner()`**, a ring of dots with a bright one travelling round it, for work that is happening but cannot say
   how far along it is - which is most work: a progress bar needs a total, and a download whose length nobody was told
   cannot give one. It steps from dot to dot rather than sliding, since on a 128-pixel map of 61 colours a smooth fade
@@ -241,6 +257,28 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Camera
 
+- **`camera().feed(player, options, onFrame)`** drives a live view for you. Every consumer writing a viewfinder was
+  writing the same tick loop, and each thing it has to get right is invisible when it does not: one capture in flight,
+  so a long tick leaves the next frame late rather than two copies of the world in memory; frames only as fast as
+  `readyForFrame` allows; and none at all while the screen is put away. Return null from `options` for a tick that
+  wants no frame, which pauses it without closing it and gives back its share of the budget. `readyForFrame` stays for
+  anything pacing itself.
+- **`useResourcePack` hands back the pack's SHA-1.** A plugin shipping a pack has to serve it to clients too, and a
+  client is offered one by its hash - so both sides were digesting the same bytes, and nothing stopped the file players
+  downloaded and the file captures were drawn with from being different ones.
+- **`CameraStats` says entities where it used to say mobs**, since it counts players as well and everything the reports
+  print already called them that: `entityMillisEach`, `entitiesEach`, `entitiesReusedPercent`. `copyMillisEach` and
+  `Copy` are `blockMillisEach` and `Blocks`, matching the "blocks" the same figures are printed under. The old
+  `entityMillisEach()`, which was the two gathers added together, is `gatherMillisEach()`.
+- **`CameraStats.bound()`** says which of the two settings is holding the frame rate down - the fps ceiling, the tick
+  budget, or neither. Every consumer was working this out again, with its own idea of how near the ceiling counts as on
+  it, and it is the actionable half of the reading: three frames a second under a ten frame ceiling is a budget that
+  ran out, and three under a three frame ceiling is a setting somebody chose.
+- `stats().live()` is never null - `viewers()` is 0 when nobody has a view open.
+- **A capture size that cannot be traced is refused rather than quietly shrunk.** Clamping was worse than it sounds:
+  `MapPrinter` cuts a capture into whole maps, so a size pulled down to 512 stopped being a multiple of 128 and the
+  shot came back unprintable, reported to whoever pressed the shutter as a photograph that failed. The ceiling is now
+  `CameraOptions.MAX_SIZE`, four maps to a side, also readable as `MapPrinter.MAX_SIZE_MAPS`.
 - **What is written on a sign is drawn**, front and back, in the sign's own dye and dimmed the way the client dims it
   unless it has been glow-inked. A sign's text is four strings and nothing else - the client rasterises them with its
   font every frame - so they are rasterised here too, with MapGUI's map font, which is Minecraft's own glyphs and was
@@ -504,6 +542,27 @@ surface is `mapgui-api` and `mapgui-layout`.
 
 ### Drawing
 
+- **Shapes combine now**: `intersectionWith`, `combinedWith`, `without`, and `holeIn` for a box with the shape punched
+  out of it. A `Shape` is just "is this pixel inside", so each of these answers by asking the shapes it was built
+  from - which means an area none of the factories draws can be described rather than plotted a row at a time. The
+  camera's iris was 100 lines of scanline arithmetic before this and is now four calls.
+- **A shape is drawn a row at a time, not a pixel at a time**, which is what makes the above affordable at map sizes:
+  `Shape.spansAt(y)` returns the runs it covers on one row, so an octagon costs eight sums a row rather than eight per
+  pixel - 770 against 74000 on a 96 square window. Implemented for rectangles, polygons, intersections and holes;
+  anything else returns null and is asked pixel by pixel as before.
+- **An outlined shape got about four times cheaper** with it. An outline is grown from the boundary, so it does need to
+  know about a pixel's neighbours - but working that out from the rows is the same answer as asking each pixel, and
+  every filled shape in the library takes this path.
+
+  Measured on the camera's iris, per painted frame, against the hand-written scanline it replaced: filled, 0.017 ms
+  against 0.036; filled and outlined, 0.075 ms against 0.24 before this landed.
+- `Shape.regularPolygon` for a triangle, hexagon or octagon turned to any angle, and `Shape.sideOfLine` for a
+  straight cut across a box. Both take doubles, and `regularPolygon` hands back its corners so anything drawing along
+  its edges can read them.
+- `Shape.polygon` and `Painter.line` take corners between pixels as well as on them. Rounding a computed corner
+  first decides which side of an edge a pixel falls on, which shows as a stepped edge at map sizes.
+- **`Painter.pushClip(Shape)`** - clip to a shape rather than a box, so a picture can sit in a round window. It
+  applies to whatever draws next, including text and images, which have no shape of their own to be cut to.
 - Shapes with a fill, an outline and a line thickness: `triangle`, `polygon`, `circle`, `ellipse`, `line`,
   `polyline`, and `shape` for anything you implement `Shape#contains` for.
 - **Small circles are round rather than pointed.** An exact disc ends each axis in a single pixel, because the
@@ -522,6 +581,25 @@ surface is `mapgui-api` and `mapgui-layout`.
   no longer allocates per pixel.
 - `MapColors` answers from a lookup table instead of a growing map, so matching a color is a shift and an
   array read, costs no allocation, and is safe off the main thread.
+
+### Packaging
+
+- **`mapgui-layout` is no longer a separate Maven artifact.** Its classes ship inside `mapgui-api`, which is now the
+  only coordinate published and the only jar to grab from a release. Nothing changes for anyone already depending on
+  `mapgui-api`, since the layout DSL was always pulled in transitively; what goes away is the second coordinate,
+  the second jar for people without a build tool, and the "you need both" caveat in the docs. It stays a separate
+  module, which is what keeps Bukkit out of the layout engine.
+- Gradle module metadata is no longer published for `mapgui-api`. It is generated from the real dependency graph, so
+  it named a coordinate that no longer exists, and Gradle prefers it over the POM. Resolution is by POM now, which
+  costs nothing for one jar on one platform.
+
+### Tooling
+
+- **`MapImage`** renders a node tree to an image with no server anywhere, through the real layout engine, font and
+  palette - plus `scaled`, `strip` and `write` for looking at several frames at once. A map GUI is 128 pixels of 143
+  colours, and an animation that is over in a fifth of a second cannot be judged in game at all.
+- `Picture.paint(painter, bounds, frames)` draws one still into a box. It was already possible through `VideoPlayer`
+  with a millis of 0, which works and reads as though the picture were about to move.
 
 ### Video
 

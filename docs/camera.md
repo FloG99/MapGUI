@@ -94,13 +94,17 @@ than working around: nothing reports one. `PlayerResourcePackStatusEvent` fires,
 hash and never its URL, and a URL is what a fetch needs. So a plugin serving its own pack has to say so:
 
 ```java
-MapGui.get().camera().useResourcePack(this, "pack/my-pack.zip");
+String sha1 = MapGui.get().camera().useResourcePack(this, "pack/my-pack.zip");
 ```
 
 That reads the zip out of your own jar, keeps it under its own SHA-1 and layers it - which is what makes **a
 plugin's own items** photograph as themselves instead of as the material underneath them. Call it whenever;
 unchanged bytes on the next startup write nothing and reload nothing. It works with `follow-server-packs` off,
 since a plugin asking directly is not MapGUI going looking.
+
+**Use the hash it hands back** when you offer the pack to clients. You have to serve the file yourself - Minecraft
+only takes a pack from a URL - and a client is offered one by its hash, so both sides were digesting the same bytes
+and nothing stopped the copy players download and the copy captures are drawn with from being different files.
 
 If players are sent a pack and none of this has happened, MapGUI says so once rather than quietly drawing
 vanilla.
@@ -314,7 +318,35 @@ you are never looking through a hundred of them at once.
 
 A still and a viewfinder are not the same problem. A still happens once, somebody pressed a button, and they are
 waiting for it - take it. A viewfinder wants every frame it can get, forever, and how many that should be depends on
-how many other people have one open. Only the server can see all of them, so the server does the dividing:
+how many other people have one open. Only the server can see all of them, so the server drives it:
+
+```java
+@Override
+protected void onOpen() {
+    feed = MapGui.get().camera().feed(player(), this::framing, shot::set);
+}
+
+@Override
+protected void onClose() {
+    feed.close();
+}
+```
+
+That is the whole of it. Every tick the feed asks `framing` what to capture and hands the result to `shot::set`,
+and what it saves you is the three things that are invisible when got wrong:
+
+- **One capture in flight at a time**, so a tick that runs long leaves the next frame late rather than leaving two
+  copies of the world in memory.
+- **Frames only as fast as the budget allows**, so five people holding a camera divide the server's time rather than
+  costing five times as much.
+- **No frames while the screen is put away** or covered by an inventory, since those are frames nobody sees.
+
+Return `null` from `framing` for a tick that wants no frame - mid-animation, mid-shutter, still loading textures. That
+pauses the feed without closing it, and a paused feed stops counting as a viewer, so it gives its share back while it
+waits. `onFrame` only ever sees real frames; a capture that fails is dropped rather than handed on as a null.
+
+If you are pacing yourself - a view that only wants a frame when something in the world changed - ask directly
+instead:
 
 ```java
 if (MapGui.get().camera().readyForFrame(player)) {
@@ -584,7 +616,14 @@ Which is deliberate. A built-in command working from a wider view than the API o
 the field somebody needed - so `/mapgui camera performance` is written against exactly what your own debugging
 command can get. Rates, per-tick cost, the slowest single capture, each stage with what it went through, trace time, the queue, failures with
 the last reason, which plugin asked, and what the live views are being allowed against the two settings that decided
-it. Plus one that is per player rather than server-wide, for a plugin debugging its own viewfinder:
+it.
+
+`stats.bound()` answers the one question a rate cannot answer by itself - whether the fps ceiling or the tick budget
+is what is holding the views down. Three frames a second under a ten frame ceiling is a budget that ran out; three
+under a three frame ceiling is a setting somebody chose. They call for opposite actions and look identical from the
+number alone.
+
+Plus one that is per player rather than server-wide, for a plugin debugging its own viewfinder:
 
 ```java
 double fps = MapGui.get().camera().frameRate(player);

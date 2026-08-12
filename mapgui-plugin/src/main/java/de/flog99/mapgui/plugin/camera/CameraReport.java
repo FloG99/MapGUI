@@ -81,14 +81,14 @@ public final class CameraReport {
             // What one capture costs, split three ways, each with what it went through beside what it cost - since a
             // slow stage is either a lot of things or expensive things, and those have opposite answers. The rate a
             // live view gets is the budget divided by this, so it is also the number that explains a slow viewfinder.
-            CameraStats.Copy copy = now.copy();
+            CameraStats.Blocks blocks = now.blocks();
             lines.add(Component.text("Each capture  ", NamedTextColor.GRAY)
                     .append(Component.text(millis(now.mainMillisEach()), NamedTextColor.WHITE))
                     .append(Component.text(" on the tick", NamedTextColor.DARK_GRAY))
                     .append(Component.text(String.format(Locale.ROOT,
                             "   blocks %s (%.0f chunks, %.0f%% reused), entities %s (%.0f, %.0f%% reused), tile entities %s (%.0f)",
-                            millis(now.copyMillisEach()), copy.chunksEach(), copy.reusedPercent(),
-                            millis(now.mobMillisEach()), now.mobsEach(), now.mobsReusedPercent(),
+                            millis(now.blockMillisEach()), blocks.chunksEach(), blocks.reusedPercent(),
+                            millis(now.entityMillisEach()), now.entitiesEach(), now.entitiesReusedPercent(),
                             millis(now.blockEntityMillisEach()), now.blockEntitiesEach()), NamedTextColor.DARK_GRAY)));
 
             addLive(lines, now);
@@ -174,12 +174,13 @@ public final class CameraReport {
      */
     private static void addLive(List<Component> lines, CameraStats now) {
         CameraStats.Live live = now.live();
-        if (live != null) {
-            String fps = live.slowestFps() >= live.fastestFps() - 0.05
+        if (live.viewers() > 0) {
+            String fps = live.even()
                     ? String.format(Locale.ROOT, "%.1f fps", live.fastestFps())
                     : String.format(Locale.ROOT, "%.1f to %.1f fps", live.slowestFps(), live.fastestFps());
 
-            boolean capped = now.liveFpsCeiling() > 0 && live.fastestFps() >= now.liveFpsCeiling() - 0.05;
+            // Green for a view sitting on the rate somebody chose, yellow for one the budget is holding down.
+            boolean capped = now.bound() == CameraStats.Bound.FPS_CEILING;
             lines.add(Component.text("Live views  ", NamedTextColor.GRAY)
                     .append(Component.text(live.viewers() + (live.viewers() == 1 ? " viewer at " : " viewers at "), NamedTextColor.WHITE))
                     .append(Component.text(fps, capped ? NamedTextColor.GREEN : NamedTextColor.YELLOW))
