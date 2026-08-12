@@ -68,11 +68,15 @@ jobs:
 
       # The plugin is all a server needs. The examples are optional, and the two library jars are for anyone
       # who would rather drag a jar in than add a dependency - sources included, for a usable IDE.
+      #
+      # Named by version rather than globbed, and unmatched is fatal: the action is happy to publish a release
+      # with an asset missing, so a renamed jar would otherwise go out as a release nobody can install.
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
-            mapgui-plugin/build/libs/MapGUI-*.jar
-            examples/build/MapGUI-examples-*.zip
+            mapgui-plugin/build/libs/MapGUI-${{ env.VERSION }}.jar
+            examples/build/MapGUI-examples-${{ env.VERSION }}.zip
             mapgui-api/build/libs/*.jar
