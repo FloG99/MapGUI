@@ -166,6 +166,19 @@ protected boolean onScroll(int notches) {
 A `Scroll` under the cursor always wins. Return true if you used it - on a wall that also decides whether
 the player's hotbar selection is left alone, so claiming a turn you ignored would stop them changing items.
 
+### The swap-hands key
+
+```java
+@Override
+protected void onSwapHands() {
+    shutter.press();
+}
+```
+
+The one press that costs no aim, since both cursor axes come off the player's head. Called only for a map with
+nothing to swap - MapGUI refuses the key there anyway - and never under `HandOptions.Focus.SWAP_HANDS`, where the
+key is the focus toggle.
+
 ## Next
 
 - [Widgets and styling](widgets.md) for what you can put in a `build()`

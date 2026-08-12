@@ -226,6 +226,38 @@ public abstract class Screen {
     }
 
     /**
+     * Whether to keep drawing frames even though nothing has changed.
+     *
+     * <p>For an animation running off its own clock: a sequence with stages, a countdown, anything reading the time
+     * while it paints. {@link #animate} and {@link #phase} already ask for their own frames, so this is for what they
+     * cannot express - and without it the only way to get frames is a repeating task calling {@link #invalidate()}.
+     *
+     * <p>Frames still respect {@link #fps()} and the server's ceiling. Return false the moment the animation is over:
+     * while it is true the screen is laid out and painted again every frame, forever.
+     */
+    protected boolean keepDrawing() {
+        return false;
+    }
+
+    /**
+     * Called when the player starts or stops holding sneak, and not otherwise.
+     *
+     * <p>Sneak is the one gesture that costs a screen nothing, since it moves no part of the aim - so it is what a map
+     * ends up using as its modifier: a cursor that appears only while it is held, a wheel that means zoom.
+     * {@link #sneaking()} is the same thing as a value, for a build or a paint to read.
+     *
+     * <p>Override it to {@link #invalidate()} if what is drawn depends on it. Nothing happens by default, since
+     * repainting every open screen whenever anybody crouches would be a frame for nothing on most of them.
+     */
+    protected void onSneak(boolean sneaking) {
+    }
+
+    /** Whether the player is holding sneak right now. */
+    protected final boolean sneaking() {
+        return session != null && session.player().isSneaking();
+    }
+
+    /**
      * Redraws this screen whenever {@code model} changes, for as long as the screen is open.
      *
      * <p>What makes one thing shared by several screens actually look shared - a claim map that updates while
@@ -384,7 +416,12 @@ public abstract class Screen {
     /** True while something is still easing, which is the cue to keep drawing frames. */
     @ApiStatus.Internal
     public final boolean animating() {
-        return animator.animating() || pressing();
+        return animator.animating() || pressing() || keepDrawing();
+    }
+
+    @ApiStatus.Internal
+    public final void sneakChanged(boolean sneaking) {
+        onSneak(sneaking);
     }
 
     /** Kept alive for as long as the node keeps being built, and a couple of passes after. */
@@ -538,5 +575,19 @@ public abstract class Screen {
      */
     protected boolean onScroll(int notches) {
         return false;
+    }
+
+    @ApiStatus.Internal
+    public final void swapHands() {
+        onSwapHands();
+    }
+
+    /**
+     * The swap-hands key, when MapGUI had no use for it: a press that costs no aim, unlike a button on the map.
+     *
+     * <p>Only for a map with nothing to swap, and never under {@link HandOptions.Focus#SWAP_HANDS}, where the key
+     * is the focus toggle.
+     */
+    protected void onSwapHands() {
     }
 }

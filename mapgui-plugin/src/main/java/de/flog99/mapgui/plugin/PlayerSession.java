@@ -92,6 +92,9 @@ final class PlayerSession implements Session {
     /** Set by a toggling gesture, and only read by the focus modes that toggle. */
     private boolean focusToggled;
 
+    /** Last seen sneak, so the screen hears about the change rather than the state. */
+    private boolean sneaking;
+
     /**
      * Whether the map is what the player has in their main hand, which is the only place the drop key can reach it.
      *
@@ -529,6 +532,7 @@ final class PlayerSession implements Session {
         refocus();
         // Every tick, since a screen may start and stop wanting a cursor without focus changing at all.
         reaim();
+        trackSneak();
 
         if (aiming) {
             if (now.getYaw() != lastYaw) {
@@ -574,6 +578,21 @@ final class PlayerSession implements Session {
             send(markers);
         }
         needsPaint = false;
+    }
+
+    /**
+     * Tells the screen when sneak goes down or comes up, and only then.
+     *
+     * <p>Polled rather than listened for because {@code PlayerToggleSneakEvent} fires for every player on the server
+     * and this only cares about the few with a map open - and the tick is already here. Nothing is sent for a screen
+     * that does not override the hook.
+     */
+    private void trackSneak() {
+        boolean now = player.isSneaking();
+        if (now == sneaking) return;
+
+        sneaking = now;
+        screen().sneakChanged(now);
     }
 
     /** Whether an animation may have another frame yet. Only animation asks, so a low limit costs responsiveness nothing. */

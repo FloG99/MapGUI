@@ -169,6 +169,9 @@ final class InputListeners implements Listener {
      * offhand map the key that would have swapped the hands has nothing else to do. Otherwise it moves a faked map
      * between the hands, if the mode allows the offhand at all.
      *
+     * <p>Where none of that applies the key is refused and handed to the screen through
+     * {@link de.flog99.mapgui.Screen#onSwapHands()}, which is a press that costs the player no aim.
+     *
      * <p>A real item is left alone. The server really does swap it, and the sweep notices which hand it landed in.
      */
     @EventHandler
@@ -178,7 +181,7 @@ final class InputListeners implements Listener {
         if (session == null || !session.hand().faked()) return;
 
         if (session.hand().fillsHotbar()) {
-            event.setCancelled(true);
+            refuse(event, session);
             return;
         }
         if (session.hand().focus() == HandOptions.Focus.SWAP_HANDS) {
@@ -191,7 +194,7 @@ final class InputListeners implements Listener {
         // they would be swapping: the fake map is drawn over their real offhand item, so the key would silently
         // shuffle two items they are only holding one of.
         if (!session.hand().reachesMainHand()) {
-            event.setCancelled(true);
+            refuse(event, session);
             return;
         }
 
@@ -200,6 +203,12 @@ final class InputListeners implements Listener {
         if (plugin.display().moveTo(player, plugin.display().slotOf(player), other)) {
             event.setCancelled(true);
         }
+    }
+
+    /** Nothing to swap, so the key is free for the screen to mean something by. */
+    private static void refuse(PlayerSwapHandItemsEvent event, PlayerSession session) {
+        event.setCancelled(true);
+        session.screen().swapHands();
     }
 
     // Cancelling the interact event stops the click, but not a held-down dig, so block damage is
