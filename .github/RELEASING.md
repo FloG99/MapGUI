@@ -2,7 +2,7 @@
 
 There are two artifacts with two audiences, and they go to different places.
 
-| | `mapgui-api` + `mapgui-layout` | `MapGUI.jar` |
+| | `mapgui-api` | `MapGUI.jar` |
 |---|---|---|
 | For | plugin **developers** | **server owners** |
 | Goes to | Maven Central | a GitHub release, then Hangar and Modrinth |
@@ -102,7 +102,7 @@ Attached to that release:
 |---|---|
 | `MapGUI-<version>.jar` | every server. The only required download |
 | `MapGUI-examples-<version>.zip` | a test server. Unpacks into `plugins/` - five demo plugins and a sample video. Delete a jar to drop that demo |
-| `mapgui-api` + `mapgui-layout` jars, with sources | developers who would rather drag a jar in than add a dependency |
+| `mapgui-api` jar, with sources | developers who would rather drag a jar in than add a dependency. The layout engine is inside it |
 
 The examples are deliberately not inside `MapGUI.jar`. A jar holds one plugin, so bundling them would mean the
 plugin loading its own demos instead of them being real third-party consumers of the API - and that property is

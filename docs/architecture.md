@@ -4,7 +4,7 @@
 
 | Module | | Published |
 |---|---|---|
-| `mapgui-layout` | the node tree, DSL and layout engine. **No Bukkit dependency**, so it unit tests without a server | yes |
+| `mapgui-layout` | the node tree, DSL and layout engine. **No Bukkit dependency**, so it unit tests without a server | inside `mapgui-api` |
 | `mapgui-api` | what you compile against: `Screen`, `Session`, `WallDisplay`, `Marker`, prompts | yes |
 | `mapgui-nms-26_2` | the things with no API equivalent, for one Minecraft version. One module per version, and the only ones that touch server internals | no |
 | `mapgui-plugin` | the runtime: sessions, input, walls, commands, prompt providers | no, it *is* the plugin |
@@ -14,8 +14,9 @@
 unit tests and the whole headless preview only exist because of it. Anything it needs from the server arrives
 as an interface - `Surface`, `Palette`, `TextFont`.
 
-Only the two modules a plugin compiles against are published, and `mapgui-api` depends on `mapgui-layout`
-transitively, so one coordinate is enough.
+One coordinate is published, `mapgui-api`, with the layout engine's classes inside it. The two stay separate
+modules because that is what keeps Bukkit out of the layout engine, but nothing consumes the layout engine on
+its own, so publishing it separately would only mean two jars to find for one dependency.
 
 ## Nothing is real
 

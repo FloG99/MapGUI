@@ -39,10 +39,10 @@ the `io.github.flog99:mapgui-api:1.0.0-SNAPSHOT` coordinates.
 
 ### Without a build tool
 
-`mapgui-api.jar` and `mapgui-layout.jar` are attached to every
-[release](https://github.com/FloG99/MapGUI/releases), with sources jars, for dropping into a `libs/` folder.
-You need both - the API speaks the layout DSL - and they belong on the compile path only, exactly as
-`compileOnly` above. The `paper-plugin.yml` block is the same either way.
+`mapgui-api.jar` is attached to every [release](https://github.com/FloG99/MapGUI/releases), with a sources
+jar, for dropping into a `libs/` folder. The layout DSL is inside it, so that one file is everything, and it
+belongs on the compile path only, exactly as `compileOnly` above. The `paper-plugin.yml` block is the same
+either way.
 
 ## A screen
 

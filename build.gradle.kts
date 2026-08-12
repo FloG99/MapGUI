@@ -12,8 +12,11 @@ allprojects {
     version = rootProject.providers.gradleProperty("version").getOrElse("1.0.0-SNAPSHOT")
 }
 
-/** What a plugin compiles against, and so the only thing worth putting in a repository. */
-val published = setOf("mapgui-api", "mapgui-layout")
+/**
+ * What a plugin compiles against, and so the only thing worth putting in a repository. One coordinate, with
+ * the layout engine bundled into it - see mapgui-api/build.gradle.kts.
+ */
+val published = setOf("mapgui-api")
 
 // Everything for Central lands in one directory across both modules, so it can be zipped into a single
 // bundle - the only shape the Central Portal accepts.
@@ -64,7 +67,7 @@ subprojects {
 
     apply(plugin = "maven-publish")
 
-    // Only the two modules anyone compiles against carry sources and javadoc jars. Central requires both, and
+    // Only the module anyone compiles against carries sources and javadoc jars. Central requires both, and
     // building them for the plugin and the examples would be output nobody reads.
     extensions.configure<JavaPluginExtension> {
         withSourcesJar()

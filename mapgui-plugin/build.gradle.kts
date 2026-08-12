@@ -30,9 +30,9 @@ tasks {
         archiveBaseName = "MapGUI"
         archiveClassifier = ""
         // Only our own modules end up in here - there are no third-party runtime
-        // dependencies to relocate.
+        // dependencies to relocate. mapgui-layout is not listed: its classes are already inside the
+        // mapgui-api jar, so including it as well would merge them twice.
         dependencies {
-            include(project(":mapgui-layout"))
             include(project(":mapgui-api"))
             include(project(":mapgui-camera"))
             include(project(":mapgui-nms-26_2"))

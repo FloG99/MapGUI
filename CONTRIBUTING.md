@@ -32,8 +32,8 @@ Adding to `mapgui-api` adds to what a plugin compiles against, so it is the hard
 the plugin module unless a consumer genuinely needs it, and mark framework-only entry points
 `@ApiStatus.Internal`.
 
-`mapgui-api` and `mapgui-layout` are the only published modules, and a published version can never be
-replaced - see [RELEASING.md](.github/RELEASING.md).
+`mapgui-api` is the only published artifact, and it carries `mapgui-layout`'s classes inside it. A published
+version can never be replaced - see [RELEASING.md](.github/RELEASING.md).
 
 ## Code style
 

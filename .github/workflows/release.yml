@@ -1,6 +1,6 @@
 name: Release
 
-# Tag a commit v1.0.0 and this builds it, publishes mapgui-api and mapgui-layout to Maven Central,
+# Tag a commit v1.0.0 and this builds it, publishes mapgui-api to Maven Central,
 # and attaches the plugin jar to a draft GitHub release. See .github/RELEASING.md for the one-time setup.
 on:
   push:
@@ -76,4 +76,3 @@ jobs:
             mapgui-plugin/build/libs/MapGUI-*.jar
             examples/build/MapGUI-examples-*.zip
             mapgui-api/build/libs/*.jar
-            mapgui-layout/build/libs/*.jar
