@@ -342,12 +342,19 @@ final class MobEquipment {
      * it should not have. So the whole product is worked out and read back as the three angles a part states, which
      * reproduces the matrix exactly rather than approximately.
      *
+     * <p><b>Two frames are crossed here, not one.</b> A mob's mesh is a half circle about Z from the model space the
+     * client's chain is written in, which is what turns a position's X and Y round. A block's mesh is a half circle
+     * about <i>Y</i> from the model the block states - it keeps its up, and swaps its north for south and its east
+     * for west, which is what {@code aBlocksSidesLandOnTheMeshSidesTheHalfTurnPutsThem} pins. So a turn converts as
+     * {@code Z half turn * the client's turn * Y half turn}, and leaving that last one out draws every block upside
+     * down and back to front - invisible on a cobblestone, not on a grass block or a poppy.
+     *
      * <p>The block ends up around waist height and three quarters of a block out, which is lower and further forward
      * than it looks like it should be.
      */
     private static final ItemPoses.Pose CARRIED = new ItemPoses.Pose(
             new float[]{0, -10.06f, -12.34f},
-            new float[]{(float) Math.toRadians(27.24), (float) Math.toRadians(-41.64), (float) Math.toRadians(161.12)},
+            new float[]{(float) Math.toRadians(-152.76), (float) Math.toRadians(-41.64), (float) Math.toRadians(161.12)},
             0.5f);
 
     /**
@@ -359,9 +366,11 @@ final class MobEquipment {
      * Taking that middle out of the chain leaves this offset, so the numbers land on whole pixels. The turn lays the
      * poppy flat and pointing away from the golem rather than standing it up: the stem ends three pixels in front of
      * the fist and the flower eleven.
+     *
+     * <p>Its quarter turn comes out negative here, not positive, for the reason {@link #CARRIED} gives.
      */
     private static final ItemPoses.Pose OFFERED = new ItemPoses.Pose(
-            new float[]{11f, -25f, -7f}, new float[]{(float) Math.toRadians(90), 0, 0}, 0.5f);
+            new float[]{11f, -25f, -7f}, new float[]{(float) Math.toRadians(-90), 0, 0}, 0.5f);
 
     /** The part a mooshroom's back is, which is the root of its mesh - the client hangs two of the three off it. */
     private static final String BODY = "root";
