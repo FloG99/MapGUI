@@ -14,6 +14,12 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   placement is the client's own layer chain - `CarriedBlockLayer` and `IronGolemFlowerLayer` - composed down to one
   offset and one turn, so what a capture shows and what a player is looking at agree.
 
+- Fixed: **the spinner was not round.** Its ring sat a pixel high, so the top dot was half outside the box with the
+  rest of it cut off, and there was a blank row under the bottom one.
+  Placing a dot dropped half a pixel twice, both the same way: the middle of a box is not the middle of a pixel, and
+  half of a two pixel dot is not a whole number. The two halves made a whole one. At the default size every dot is now
+  square and the ring is as far from the middle on all four sides.
+
 - Fixed: **a carried block wore no tint, so a grass block had a grey top.** A block being carried has no biome to ask,
   and `grass_block_top` is a flat grey until something colors it.
   Vanilla writes the answer down on the block's own item - grass at a fixed climate, a constant for every leaf - which

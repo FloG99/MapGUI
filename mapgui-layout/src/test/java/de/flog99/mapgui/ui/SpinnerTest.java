@@ -171,4 +171,69 @@ class SpinnerTest {
         paintAt(130, root);
         assertNotEquals(start, surface.brightest());
     }
+
+    /**
+     * Every dot whole, and the ring the same distance out on all four sides.
+     *
+     * <p>Half a pixel is dropped twice when a dot is placed - the middle of a box is not the middle of a pixel, and
+     * half of an even dot is not a whole number - and two halves in the same direction move the ring a whole pixel.
+     * That is what it looked like: the top dot half outside the box with its other half cut off, and a blank row
+     * under the bottom one.
+     *
+     * <p>Sizes either side of the odd and even cases, since the dot's own size is the box's sixth and so changes
+     * parity with it.
+     */
+    @Test
+    void everyDotIsWholeAndTheRingIsCentred() {
+        for (int size : new int[]{13, 14, 20, 21}) {
+            Spinner spinner = Spinner().size(size).dots(8);
+            paintAt(0, Column(spinner));
+
+            Rect box = spinner.bounds();
+            int dot = Math.max(2, Math.min(box.width(), box.height()) / 6);
+
+            assertEquals(8 * dot * dot, lit(box), "size " + size + ": eight whole dots, none clipped by the box");
+
+            // The far side of the ring is as far from the middle as the near side, which is the whole of round.
+            assertEquals(first(box, true) - box.x(), box.x() + box.width() - 1 - last(box, true),
+                    "size " + size + ": as far in from the left as from the right");
+            assertEquals(first(box, false) - box.y(), box.y() + box.height() - 1 - last(box, false),
+                    "size " + size + ": as far in from the top as from the bottom");
+        }
+    }
+
+    /** Lit pixels inside the spinner's own box, which is every pixel it should have drawn. */
+    private int lit(Rect box) {
+        int count = 0;
+        for (int y = box.y(); y < box.y() + box.height(); y++) {
+            for (int x = box.x(); x < box.x() + box.width(); x++) {
+                if (surface.get(x, y) != 0) count++;
+            }
+        }
+        return count;
+    }
+
+    private int first(Rect box, boolean across) {
+        for (int at = 0; at < (across ? box.width() : box.height()); at++) {
+            if (anyAt(box, across, at)) return (across ? box.x() : box.y()) + at;
+        }
+        return -1;
+    }
+
+    private int last(Rect box, boolean across) {
+        for (int at = (across ? box.width() : box.height()) - 1; at >= 0; at--) {
+            if (anyAt(box, across, at)) return (across ? box.x() : box.y()) + at;
+        }
+        return -1;
+    }
+
+    private boolean anyAt(Rect box, boolean across, int at) {
+        int length = across ? box.height() : box.width();
+        for (int other = 0; other < length; other++) {
+            int x = across ? box.x() + at : box.x() + other;
+            int y = across ? box.y() + other : box.y() + at;
+            if (surface.get(x, y) != 0) return true;
+        }
+        return false;
+    }
 }
