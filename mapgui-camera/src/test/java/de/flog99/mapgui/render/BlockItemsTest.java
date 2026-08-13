@@ -326,6 +326,40 @@ class BlockItemsTest {
     }
 
     /**
+     * A block state drawn away from the world wears the tint its own item states.
+     *
+     * <p>Which is the only place the answer is written down: a block being carried has no biome to ask, and
+     * {@code grass_block_top} on its own is the flat grey the texture is on disk. Vanilla states grass at a fixed
+     * climate on the item, and a leaf states a constant, so an enderman's grass block is the same green wherever it
+     * is standing.
+     */
+    @Test
+    void aCarriedBlockIsTintedTheWayItsOwnItemStatesRatherThanNotAtAll() throws IOException {
+        files.put(AssetStack.BLOCKSTATES + "greenery.json", """
+                {"variants": {"": {"model": "minecraft:block/greenery"}}}
+                """);
+        model("greenery", """
+                {"textures": {"top": "block/greenery_top", "side": "block/greenery_side"},
+                 "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+                    "up": {"texture": "#top", "tintindex": 0},
+                    "north": {"texture": "#side"}
+                 }}]}
+                """);
+        definition("greenery", """
+                {"model": {"type": "minecraft:model", "model": "minecraft:block/greenery",
+                    "tints": [{"type": "minecraft:constant", "value": 4243520}]}}
+                """);
+        texture("block/greenery_top");
+        texture("block/greenery_side");
+
+        List<EntitySnapshot> layers = baked().displayed("minecraft:greenery", "minecraft:greenery");
+
+        assertEquals(2, layers.size(), "one layer per texture");
+        assertEquals(0xFF40C040, layerOf(layers, "block/greenery_top").tint(), "the face that states a tintindex");
+        assertEquals(0, layerOf(layers, "block/greenery_side").tint(), "and the one that does not is left alone");
+    }
+
+    /**
      * A shape the client draws in code arrives facing the way a block model faces.
      *
      * <p>A mesh and a block model are a half circle apart, and everything downstream of here expects what a block

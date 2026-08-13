@@ -140,7 +140,7 @@ public final class ItemModels {
         EntitySnapshot built = builtIn(id);
         if (built != null) return List.of(built);
 
-        return blocks.stateLayers(state, atlas);
+        return blocks.stateLayers(state, id, atlas);
     }
 
     /**

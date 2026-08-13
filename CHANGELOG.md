@@ -14,6 +14,12 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   placement is the client's own layer chain - `CarriedBlockLayer` and `IronGolemFlowerLayer` - composed down to one
   offset and one turn, so what a capture shows and what a player is looking at agree.
 
+- Fixed: **a carried block wore no tint, so a grass block had a grey top.** A block being carried has no biome to ask,
+  and `grass_block_top` is a flat grey until something colors it.
+  Vanilla writes the answer down on the block's own item - grass at a fixed climate, a constant for every leaf - which
+  is what a block in a hand already used and what a block on a mob now uses too. Endermen, minecarts and anything else
+  drawn from a block state rather than an item.
+
 - Fixed: **bamboo came out almost black.** Its leaves were multiplied by the biome's foliage green like an oak's, but
   they are already green on disk - 72,117,25 against the flat grey 144 an oak leaf is drawn as - so the tint applied a
   second time took them to 13,85,1 and a grove photographed as a dark hedge. Bamboo now draws at its own color, like

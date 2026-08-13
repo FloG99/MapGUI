@@ -86,12 +86,16 @@ public final class BlockItems {
      * see in the world and its item model is a flat icon, so a hopper minecart drawn from the item is a picture of a
      * hopper standing in a cart. The client hands its own block state to the block model set, and so does this.
      *
-     * <p>Untinted, since a tint is the item definition's to state and there is no item here.
+     * <p>Tinted the way the block's own item is, which is where vanilla keeps the answer for a block being drawn
+     * away from any biome: {@code grass_block} states grass at a climate of 0.5 and 1.0, and every leaf states a
+     * constant. Take the model alone and {@code grass_block_top} is drawn as it is on disk, which is grey - a block
+     * in a hand and a block in an enderman's arms both wear the flat top a texture has before a biome colors it.
      *
      * @param state {@code BlockData#getAsString()}, the same key {@link BlockModels#bake} is written against
+     * @param item  the block's item id, for the tint. Blocks with no item of their own simply state none
      */
-    List<EntitySnapshot> stateLayers(String state, TextureAtlas atlas) {
-        return drawn(models.bake(state).elements(), 0, atlas);
+    List<EntitySnapshot> stateLayers(String state, String item, TextureAtlas atlas) {
+        return drawn(models.bake(state).elements(), definitions.of(item).tint(), atlas);
     }
 
     /**
