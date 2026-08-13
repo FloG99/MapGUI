@@ -103,10 +103,7 @@ class SpinnerTest {
         root.paint(painter);
     }
 
-    /**
-     * The square it asked for where the ring fits it, and the largest one under that where it does not - never a
-     * box with a spare row and column beside the ring, which is a spinner that looks off centre in its own space.
-     */
+    /** The square it asked for where the ring fits, the largest one under it where it does not - never a spare row. */
     @Test
     void itTakesTheRingItCanDrawRatherThanEverythingItAskedFor() {
         Spinner fits = Spinner().size(21);
@@ -191,14 +188,11 @@ class SpinnerTest {
     }
 
     /**
-     * The ring is exactly itself turned a quarter circle, which is the strongest thing "round" can mean on a grid
-     * this small and the one a player is really looking at.
+     * The ring is exactly itself turned a quarter circle, and mirrored both ways.
      *
-     * <p>Eight dots on a thirteen pixel ring cannot all land on a circle, so some of them are a fraction out. What
-     * must not happen is that the fraction goes a different way in different quarters: the eye reads a ring that is
-     * a pixel wider on one side than the other long before it notices that all eight dots are equally not-quite.
-     *
-     * <p>Sizes either side of both parities, since the dot's own size is the box's sixth and changes parity with it.
+     * <p>Eight dots on a small ring cannot all land on a circle. What must not happen is the fraction going a
+     * different way in different quarters, which an eye picks up long before it notices they are all not-quite.
+     * Four sizes, either side of both parities, since the dot is the box's sixth and changes parity with it.
      */
     @Test
     void theRingIsTheSameInEveryQuarter() {

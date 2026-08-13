@@ -109,12 +109,10 @@ class HandOptionsTest {
     /**
      * A pinned map id survives every other change, and a nonsense one is dropped rather than drawn to.
      *
-     * <p>The floor is the point: the server allocates real map ids upwards from 0, so a low number is a map
-     * somebody owns and painting it would replace their picture with somebody's menu.
+     * <p>The floor is the point: a low number is a real map somebody owns, and painting it replaces their picture.
      */
     @Test
     void aPinnedMapIdIsKeptAndAnImpossibleOneIsNot() {
-        // The band the javadoc recommends, which MapIds keeps clear of its own counting.
         HandOptions pinned = HandOptions.item().mapId(Integer.MAX_VALUE - 1);
         assertEquals(Integer.MAX_VALUE - 1, pinned.mapId());
         assertEquals(Integer.MAX_VALUE - 1, pinned.focus(HandOptions.Focus.ALWAYS).movable(false).sane().mapId(),

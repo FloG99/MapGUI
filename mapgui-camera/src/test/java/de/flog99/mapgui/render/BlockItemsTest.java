@@ -328,10 +328,8 @@ class BlockItemsTest {
     /**
      * A block state drawn away from the world wears the tint its own item states.
      *
-     * <p>Which is the only place the answer is written down: a block being carried has no biome to ask, and
-     * {@code grass_block_top} on its own is the flat grey the texture is on disk. Vanilla states grass at a fixed
-     * climate on the item, and a leaf states a constant, so an enderman's grass block is the same green wherever it
-     * is standing.
+     * <p>The only place the answer is written down: a carried block has no biome to ask, and {@code grass_block_top}
+     * is flat grey until something colors it.
      */
     @Test
     void aCarriedBlockIsTintedTheWayItsOwnItemStatesRatherThanNotAtAll() throws IOException {

@@ -10,20 +10,16 @@ import java.nio.file.Path;
 /**
  * The sample GIF, put where {@code /mapgui wall place} looks for media.
  *
- * <p>It travels inside this jar, so there is nothing to download and nothing to unpack. Writing it out is still
- * necessary: that command lists real files in {@code plugins/MapGUI/videos}, and a demo of it has to leave one
- * there. GIFs need no FFmpeg, so it plays on a server that has changed no settings at all.
- *
- * <p>Reaching into another plugin's folder is deliberate and worth doing only because both are demos - written
- * when missing, so deleting this jar is still the whole off switch.
+ * <p>It travels inside this jar, but that command lists real files, so one has to be written out. A GIF needs no
+ * FFmpeg, so it plays on a server that has changed no settings. Written when missing, so deleting this jar is still
+ * the whole off switch - reaching into MapGUI's own folder is worth it only because both are demos.
  */
 final class SampleVideo {
 
     private static final String NAME = "polish-cow-transparent.gif";
 
     static void install(JavaPlugin plugin) {
-        // Sibling of our own folder rather than a path from the server root, so it follows a renamed plugins
-        // directory.
+        // A sibling of our own folder, so it follows a renamed plugins directory.
         Path videos = plugin.getDataFolder().toPath().resolveSibling("MapGUI").resolve("videos");
         Path target = videos.resolve(NAME);
         if (Files.exists(target)) return;

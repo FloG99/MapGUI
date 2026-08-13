@@ -8,10 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The band at the top of the range that MapGUI promises not to draw to.
  *
- * <p>Worth a test because the promise is what a resource pack is written against: a pack keying on
- * {@code Integer.MAX_VALUE - 1} is wrong the moment this counter is allowed to reach it, and it would be wrong
- * quietly - the second GUI opened after a restart would take the phone's number, and the phone would start wearing
- * whatever that screen drew.
+ * <p>A resource pack is written against that promise, and would break quietly if the counter ever reached it.
  */
 class MapIdsTest {
 
@@ -31,7 +28,7 @@ class MapIdsTest {
         assertEquals(first - 1, second, "two surfaces on one id is one drawn with the other's pixels");
     }
 
-    /** A thousand of them, and the top one is {@code Integer.MAX_VALUE} itself, which is the obvious one to reach for. */
+    /** A thousand of them, the top one being {@code Integer.MAX_VALUE} itself. */
     @Test
     void theBandIsWhereTheDocsSayItIs() {
         assertEquals(1024, MapIds.RESERVED);

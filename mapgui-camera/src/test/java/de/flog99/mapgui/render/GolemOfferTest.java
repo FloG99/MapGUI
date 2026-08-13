@@ -10,8 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The arm an iron golem holds out while it is offering a poppy.
  *
- * <p>Worth a test rather than a look, because the flower is placed off this arm: get the turn's sign wrong and the
- * poppy is drawn behind the golem, which is a wrong answer that reads as a placement bug rather than a pose one.
+ * <p>The flower hangs off this arm, so the turn's sign decides whether it is drawn in front of the golem or behind.
  */
 class GolemOfferTest {
 

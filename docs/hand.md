@@ -146,15 +146,10 @@ definition or every other map in the game loses its colours.
 Nothing polices which of the thousand you take, so two plugins both reaching for `MAX_VALUE - 1` would collide. If
 yours is one of several on a server, count down from somewhere of your own rather than from the top.
 
-A collision costs you the *model*, not the machinery: MapGUI recognises its own items by the GUI name in their
-persistent data rather than by the id, so two screens sharing one still open the right screen, in the right hand,
-and get taken back at the right time. Only the pack is confused, since it has nothing else to go on.
-
-**One id means one picture per client.** A pinned id is shared by everybody with that screen open, and map pixels
-go down one connection, so each player still sees their own. The exception is a real `ITEM`, which other players can
-genuinely see in third person: a viewer who has the same screen open sees *their own* pixels on somebody else's
-phone. The faked carries have no such problem, since nobody but their owner can see them at all. Pin an id for the
-model; leave it alone if third-person accuracy matters more.
+A collision costs you the model and nothing else: MapGUI recognises its own items by the GUI name in their
+persistent data, not by the id, so two screens sharing one still work.
+Each player is sent their own pixels for it, so a pinned id shows everybody their own screen - two copies in sight at
+once are the only exception, and they show one picture between them.
 
 ## Your item, MapGUI's screen
 

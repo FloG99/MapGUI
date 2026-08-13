@@ -16,9 +16,6 @@ import org.bukkit.plugin.java.JavaPlugin;
  * <p>Each demo lives in its own package and registers itself, so lifting one into your plugin is a matter of
  * copying that package and calling it from here. The MapGUI dependency is declared once, in paper-plugin.yml,
  * and that block is the other half worth copying.
- *
- * <p>Registering is deliberately not clever - no scanning, no registry of demos, just a call each. A list you
- * can read is worth more here than a list that maintains itself.
  */
 public final class ExamplesPlugin extends JavaPlugin {
 

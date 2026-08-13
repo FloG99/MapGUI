@@ -337,20 +337,12 @@ final class MobEquipment {
      * Both placements are {@code CarriedBlockLayer}'s and {@code IronGolemFlowerLayer}'s own chains composed down to
      * one offset and one turn each, in this module's frame.
      *
-     * <p>A chain has to be composed rather than copied because a pose is a single transform, and the order matters:
-     * the client turns about X, then about Y, then flips - do those in any other order and the block picks up a roll
-     * it should not have. So the whole product is worked out and read back as the three angles a part states, which
-     * reproduces the matrix exactly rather than approximately.
+     * <p>Composed rather than copied, since a pose is one transform and the client's order decides the result.
      *
-     * <p><b>Two frames are crossed here, not one.</b> A mob's mesh is a half circle about Z from the model space the
-     * client's chain is written in, which is what turns a position's X and Y round. A block's mesh is a half circle
-     * about <i>Y</i> from the model the block states - it keeps its up, and swaps its north for south and its east
-     * for west, which is what {@code aBlocksSidesLandOnTheMeshSidesTheHalfTurnPutsThem} pins. So a turn converts as
-     * {@code Z half turn * the client's turn * Y half turn}, and leaving that last one out draws every block upside
-     * down and back to front - invisible on a cobblestone, not on a grass block or a poppy.
-     *
-     * <p>The block ends up around waist height and three quarters of a block out, which is lower and further forward
-     * than it looks like it should be.
+     * <p><b>Two frames are crossed, not one.</b> A mesh is a half circle about Z from the space the chain is written
+     * in, and a block's mesh a half circle about <i>Y</i> from the model it states - so a turn converts as
+     * {@code Z half turn * the client's turn * Y half turn}. Leaving the last off draws every block upside down and
+     * back to front, which shows on a grass block and not on a cobblestone. Measured by CarriedBlockAxesTest.
      */
     private static final ItemPoses.Pose CARRIED = new ItemPoses.Pose(
             new float[]{0, -10.06f, -12.34f},
@@ -361,13 +353,9 @@ final class MobEquipment {
      * The golem's is off the arm it holds the poppy in, twenty five pixels down it - the fist, near the bottom of a
      * thirty pixel arm - and seven out in front.
      *
-     * <p>{@code IronGolemFlowerLayer} translates by {@code -1.1875, 1.0625, -0.9375} blocks and then turns the block
-     * a quarter circle about X inside the {@code +0.5 / scale / -0.5} sandwich that turns one about its own middle.
-     * Taking that middle out of the chain leaves this offset, so the numbers land on whole pixels. The turn lays the
-     * poppy flat and pointing away from the golem rather than standing it up: the stem ends three pixels in front of
-     * the fist and the flower eleven.
-     *
-     * <p>Its quarter turn comes out negative here, not positive, for the reason {@link #CARRIED} gives.
+     * <p>{@code IronGolemFlowerLayer}'s own {@code -1.1875, 1.0625, -0.9375} blocks with the middle of its
+     * turn-about-the-centre sandwich taken out, which lands on whole pixels. The quarter turn lays the poppy flat
+     * pointing away rather than standing it up, and is negative here for the reason {@link #CARRIED} gives.
      */
     private static final ItemPoses.Pose OFFERED = new ItemPoses.Pose(
             new float[]{11f, -25f, -7f}, new float[]{(float) Math.toRadians(-90), 0, 0}, 0.5f);

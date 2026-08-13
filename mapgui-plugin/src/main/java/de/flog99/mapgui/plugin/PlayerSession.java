@@ -415,13 +415,8 @@ final class PlayerSession implements Session {
     /**
      * Which stack in the inventory this session's screen belongs to, for the carry modes where that is a real item.
      *
-     * <p>Two things can be it, and both are recognised out of the item's own data rather than by its map id. The
-     * player's own copy of the screen, by the GUI's registered name - a phone they found in a chest. Or the bare item
-     * MapGUI handed over because they had none, by the token stamped into it.
-     *
-     * <p>Never the map id. That is what the <i>client</i> looks up pixels by and nothing more: a screen can pin one,
-     * and then every copy of it and even an unrelated screen pinned to the same number would answer to it - which
-     * would have this naming the wrong hand and taking the cursor there.
+     * <p>Either the player's own copy, by the GUI's registered name, or the bare one MapGUI handed them, by its
+     * token. Never the map id: a pinned one is worn by every copy of a screen and could name the wrong hand.
      */
     private Predicate<ItemStack> mine() {
         HandItems items = plugin.handItems();

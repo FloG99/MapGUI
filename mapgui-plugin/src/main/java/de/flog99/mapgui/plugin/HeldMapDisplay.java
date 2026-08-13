@@ -44,10 +44,8 @@ final class HeldMapDisplay {
      * @param item         what the client is told the faked slots hold, and null for a real item, which needs
      *                     nothing told about it
      * @param mapId        what the client is sent pixels under, which is the item's own for a real one
-     * @param mine         whether a stack is the one this session belongs to. Its own question, because it is not
-     *                     the same one as {@code mapId}: a pinned id can be shared by every copy of a screen and
-     *                     even by two unrelated ones, so what recognises a stack is its own data - see
-     *                     {@link PlayerSession#mine}
+     * @param mine         whether a stack is the one this session belongs to, which {@code mapId} cannot answer
+     *                     once a screen pins one - see {@link PlayerSession#mine}
      */
     private record Held(HandOptions options, int previousSlot, int slot, EquipmentSlot hand, int mapId,
                         Predicate<ItemStack> mine, @Nullable ItemStack item, boolean minted) {

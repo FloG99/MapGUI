@@ -14,16 +14,11 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Which way up a block hung on a mob's joint ends up, which is the one thing a placement taken off the client cannot
- * be read straight out of.
+ * Which way up a block hung on a mob's joint ends up.
  *
- * <p>Two frames are crossed when a mob carries a block, and only one of them is obvious. A mesh is a half circle
- * about Z from the model space the client's chains are written in, so a position's X and Y run backwards. A block's
- * mesh is a half circle about <b>Y</b> from the model the block states, so its up stays up while its north and its
- * east swap. Compose a client chain with the first rule alone and the block comes out upside down and back to front,
- * which is invisible on a cobblestone and obvious on a grass block or a poppy.
- *
- * <p>Measured here rather than argued about, because the arithmetic is short and the answer was wrong twice.
+ * <p>Two frames are crossed and only one is obvious: a mesh is a half circle about Z from the space a client chain is
+ * written in, and a block's mesh a half circle about <b>Y</b> from the model it states. Use the first rule alone and
+ * every carried block is upside down and back to front. Measured rather than argued about - it was wrong twice.
  */
 class CarriedBlockAxesTest {
 
@@ -83,11 +78,7 @@ class CarriedBlockAxesTest {
         assertEquals(-7, at[2], 0.01, "and the model's south is the mesh's north");
     }
 
-    /**
-     * The turn a golem's poppy is placed with, which is the client's own quarter circle about X carried across both
-     * frames. It lays the block down pointing the way the mob faces: what was the top of the block ends up in front
-     * of it, at a negative Z, and getting the sign wrong points it backwards and stands the flower on its head.
-     */
+    /** A golem's poppy: the client's quarter circle about X across both frames, laying the block's top forwards. */
     @Test
     void aQuarterTurnBackAboutXLaysABlocksTopForwards() throws IOException {
         float[] at = corner(new float[]{(float) Math.toRadians(-90), 0, 0});

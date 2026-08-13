@@ -50,9 +50,8 @@ final class HandItems {
     /**
      * Which GUI each player's session was opened for, so a swap to a different one is noticed.
      *
-     * <p>The GUI's name rather than the map id of the stack it came from, because an id need not tell two items
-     * apart: a plugin can pin one for a resource pack to recognise, and then every phone shares it. Swapping between
-     * two of the same thing leaves the screen alone, which is the answer that keeps its scroll position.
+     * <p>By name, since a pinned map id is shared by every copy. Swapping between two of the same screen therefore
+     * leaves it alone, which keeps its scroll position.
      */
     private final Map<UUID, String> showing = new HashMap<>();
 
@@ -130,8 +129,8 @@ final class HandItems {
      * screen, with no registered name behind it - so when it leaves them, the screen simply ends rather than
      * opening for whoever picked it up. The sweep ignores it for exactly that reason, since it has no GUI to name.
      *
-     * <p>The token is how the session knows this stack from any other. Not the map id, which says only what the
-     * client draws it by: a screen can pin one, and then every copy of it wears the same number.
+     * <p>The token is how the session knows this stack from any other - not the map id, which a pinned screen
+     * shares between every copy.
      */
     ItemStack blank(int mapId, UUID own) {
         ItemStack item = new ItemStack(Material.FILLED_MAP);

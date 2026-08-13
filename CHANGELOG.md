@@ -552,8 +552,7 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   otherwise have handed that id to the second screen opened after every restart. Ids at or below 0 are refused at the
   other end, since the server allocates real map ids upwards from there and painting one replaces the picture of a
   map somebody owns. See [carrying a GUI](docs/hand.md#giving-a-resource-pack-something-to-recognise) for the
-  `items/filled_map.json` side of it, and for the one case where sharing an id shows through - a real item, seen in
-  somebody else's hands, by a viewer who has the same screen open.
+  `items/filled_map.json` side of it.
 - **A carried screen now recognises its own item by name rather than by map id.** Which hand holds it, whether it is
   still being carried, and which stack to take back when it closes were all answered by comparing the id stamped into
   the stack - fine while every item had one of its own, wrong the moment two share one. Two screens pinned to the same

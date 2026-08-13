@@ -1,6 +1,5 @@
-// One plugin holding every demo, so trying MapGUI is two jars in plugins/ and nothing to unpack. The demos stay
-// a module each: that boundary is what keeps "copy this package into your own plugin" the unit of reuse, and it
-// stops one demo quietly leaning on another.
+// One plugin holding every demo, so trying MapGUI is two jars in plugins/ and nothing to unpack. A module each
+// keeps "copy this package into your own plugin" the unit of reuse.
 plugins {
     alias(libs.plugins.shadow)
 }
@@ -15,8 +14,7 @@ dependencies {
 }
 
 tasks {
-    // The video an admin places with /mapgui wall place. Carried in the jar rather than downloaded beside it -
-    // see SampleVideo, which writes it out where that command looks.
+    // The video an admin places with /mapgui wall place, carried in the jar - see SampleVideo.
     processResources {
         from(rootProject.file("examples/media")) {
             include("polish-cow-transparent.gif")
@@ -26,8 +24,7 @@ tasks {
     shadowJar {
         archiveBaseName = "MapGUI-examples"
         archiveClassifier = ""
-        // Nothing third-party lands in here: the demos take mapgui-api and paper-api compileOnly, so the only
-        // classes shadow finds are the demos themselves.
+        // Nothing third-party: the demos take mapgui-api and paper-api compileOnly.
     }
 
     assemble {

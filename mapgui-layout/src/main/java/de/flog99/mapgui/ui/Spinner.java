@@ -19,12 +19,7 @@ import java.awt.Color;
  */
 public final class Spinner extends AbstractNode<Spinner> {
 
-    /**
-     * Big enough for eight dots to sit apart on a map, small enough to put a caption under.
-     *
-     * <p>An even number of pixels around a two pixel dot, which is what lets the ring fill its box exactly - see
-     * {@link #spanOf}. Thirteen would draw a twelve pixel ring with a spare row and column beside it.
-     */
+    /** Eight dots sit apart at this size, and the ring fills it exactly - thirteen would leave a spare row. */
     public static final int DEFAULT_SIZE = 14;
 
     /** One turn a second reads as working without reading as frantic. */
@@ -84,11 +79,8 @@ public final class Spinner extends AbstractNode<Spinner> {
     /**
      * The largest ring that lands on whole pixels, which is the edge or a pixel less of it.
      *
-     * <p>A dot sits its own width in from the far edge, so the two facing each other across the ring are
-     * {@code edge - dot} apart. Where that is odd their middle falls between two pixels, every dot rounds to the
-     * same side of it, and the ring leans that way - its top and bottom half a pixel right, its sides half a pixel
-     * down. Giving up the odd pixel costs half of one and buys a ring that is exactly itself turned a quarter
-     * circle.
+     * <p>Two facing dots are {@code edge - dot} apart, so an odd gap puts their middle between two pixels and every
+     * dot rounds to the same side of it - a ring that leans. Half a pixel for a ring symmetric under a quarter turn.
      */
     private static int spanOf(int edge) {
         return (edge - dotOf(edge)) % 2 == 0 ? edge : edge - 1;
@@ -129,9 +121,8 @@ public final class Spinner extends AbstractNode<Spinner> {
     /**
      * How far out along one axis a dot sits, rounded away from the middle rather than upwards.
      *
-     * <p>{@link Math#round} breaks a tie towards positive infinity, which is not the same thing on both sides of a
-     * ring: it would send 3.5 out to 4 and -3.5 in to -3, and one dot of a facing pair would sit a pixel nearer the
-     * middle than the other.
+     * <p>{@link Math#round} breaks a tie upwards, sending 3.5 out to 4 and -3.5 in to -3 - a facing pair at
+     * different distances.
      */
     private static int reach(double along) {
         int whole = (int) Math.round(Math.abs(along));

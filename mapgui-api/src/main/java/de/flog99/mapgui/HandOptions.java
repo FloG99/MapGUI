@@ -163,24 +163,10 @@ public record HandOptions(Carry carry, Focus focus, int slot, boolean movable, b
     /**
      * Draws this screen under a map id you choose, rather than one invented per session.
      *
-     * <p><b>For a resource pack to recognise it.</b> The client renders a filled map from its {@code map_id}
-     * component and reads nothing else about it, so an id is the only handle a pack has on one map item as against
-     * another. Pin one and an {@code items/filled_map.json} override can give that screen its own model - a phone
-     * that looks like a phone rather than a paper map. Nothing else about MapGUI needs this.
-     *
-     * <p><b>Take one off the top: {@code Integer.MAX_VALUE - 1} and downwards.</b> {@link MapIds#RESERVED} ids up
-     * there are never handed out to anything else, so they stay yours - the server allocates its real ones upwards
-     * from 0, and MapGUI's counter starts below the band and walks down. {@link MapIds#LOWEST_PINNABLE} is as far
-     * down as the band goes.
-     *
-     * <p>Nothing polices which of them you take, and two plugins both reaching for the obvious number would collide
-     * - so if yours is one of several on a server, count down from somewhere of your own rather than from the top.
-     *
-     * <p><b>The trade.</b> An id invented per session is one nobody else has pixels for, which is why an unfamiliar
-     * map draws blank. A pinned one is shared by everybody with this screen open, and map pixels go down one
-     * connection - so with {@link Carry#ITEM}, where the item is genuinely in the inventory and other players can
-     * see it in third person, a viewer who has the same screen open sees <b>their own</b> pixels on it. Harmless for
-     * the faked carries, which nobody but their owner can see at all.
+     * <p>For a resource pack: the client renders a filled map from its {@code map_id} and reads nothing else, so an
+     * id is the only handle a pack has to give one screen a model of its own. Take from the {@link MapIds#RESERVED}
+     * at the top of the range, {@code Integer.MAX_VALUE - 1} downwards, which MapGUI never hands out - and from a
+     * number of your own if other plugins might pin too, since nothing polices which you take.
      */
     public HandOptions mapId(int value) {
         return new HandOptions(carry, focus, slot, movable, offhandAllowed, value);
