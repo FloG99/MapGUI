@@ -419,6 +419,12 @@ public abstract class Screen {
         return animator.animating() || pressing() || keepDrawing();
     }
 
+    /**
+     * Which tree the hover state was built against, so a rebuild (a new {@link #root}) is always
+     * re-hit-tested even if the aim has not moved.
+     */
+    private Node cursorRoot;
+
     @ApiStatus.Internal
     public final void sneakChanged(boolean sneaking) {
         onSneak(sneaking);
@@ -474,10 +480,15 @@ public abstract class Screen {
     /** Returns true if the hovered node changed, i.e. a repaint is needed. */
     @ApiStatus.Internal
     public final boolean cursorMoved(int x, int y) {
+        // The common case on an animating wall: nobody moved their head, and the screen repaints for
+        // the animation. Skip the tree walk entirely rather than hit-testing an aim that did not move.
+        if (x == cursorX && y == cursorY && root == cursorRoot) return false;
+
         Node hit = root == null ? null : root.hitTest(x, y);
         boolean moved = x != cursorX || y != cursorY;
         cursorX = x;
         cursorY = y;
+        cursorRoot = root;
 
         // Still the same node, so nothing has changed unless it draws at the cursor itself.
         if (hit == hovered) return moved && hit != null && hit.tracksCursor();
