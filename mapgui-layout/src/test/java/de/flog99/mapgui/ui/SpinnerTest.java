@@ -103,13 +103,31 @@ class SpinnerTest {
         root.paint(painter);
     }
 
+    /**
+     * The square it asked for where the ring fits it, and the largest one under that where it does not - never a
+     * box with a spare row and column beside the ring, which is a spinner that looks off centre in its own space.
+     */
     @Test
-    void itTakesTheSquareItWasAskedFor() {
-        Spinner spinner = Spinner().size(20);
+    void itTakesTheRingItCanDrawRatherThanEverythingItAskedFor() {
+        Spinner fits = Spinner().size(21);
+        paintAt(0, Column(fits));
+        assertEquals(21, fits.bounds().width(), "21 around a 3 pixel dot leaves an even gap");
+        assertEquals(21, fits.bounds().height());
+
+        Spinner trimmed = Spinner().size(20);
+        paintAt(0, Column(trimmed));
+        assertEquals(19, trimmed.bounds().width(), "20 around a 3 pixel dot does not, so the ring is 19");
+        assertEquals(19, trimmed.bounds().height());
+    }
+
+    /** The default is a size the ring fills exactly, so the common case wastes nothing. */
+    @Test
+    void theDefaultSizeIsOneTheRingFills() {
+        Spinner spinner = Spinner();
         paintAt(0, Column(spinner));
 
-        assertEquals(20, spinner.bounds().width());
-        assertEquals(20, spinner.bounds().height());
+        assertEquals(Spinner.DEFAULT_SIZE, spinner.bounds().width());
+        assertEquals(Spinner.DEFAULT_SIZE, spinner.bounds().height());
     }
 
     /** A spinner never finishes, so it has to keep asking for frames or it would turn once and stop. */

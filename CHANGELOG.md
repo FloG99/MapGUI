@@ -19,9 +19,12 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   same way, which left the ring symmetric about nothing.
   A dot sits its own width in from the far edge, so the two facing each other are `size - dot` apart - and where that
   was odd their middle fell between two pixels and every dot rounded to the same side of it. The ring now gives up
-  that odd pixel and lands on whole ones, which makes it **exactly itself turned a quarter circle**. Eight dots on a
-  thirteen pixel ring still cannot all sit on a circle, but they are now all equally not-quite rather than differently
-  so, and that is the part an eye picks up.
+  that odd pixel and lands on whole ones, which makes it **exactly itself turned a quarter circle, and under both
+  mirrors too**. Eight dots on a small ring still cannot all sit on a circle, but they are now all equally not-quite
+  rather than differently so, and that is the part an eye picks up.
+  `size` became a limit rather than an order with it: a spinner measures itself at the ring it can actually draw, so
+  there is never a spare row and column beside it for a caption to line up against. The default is 14 rather than 13,
+  which is a size the ring fills exactly.
 
 - Fixed: **a carried block wore no tint, so a grass block had a grey top.** A block being carried has no biome to ask,
   and `grass_block_top` is a flat grey until something colors it.

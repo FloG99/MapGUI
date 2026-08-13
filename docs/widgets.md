@@ -186,9 +186,14 @@ length nobody was told, a capture, a query - usually cannot give one. **A percen
 seconds reads as broken; a spinner reads as busy**, which is the truth. Keep the number for a command, where a
 reader wanting one can go and ask.
 
-`size`, `dots`, `period` and `color` are the knobs, and the defaults are a 13-pixel ring of eight, one turn a
+`size`, `dots`, `period` and `color` are the knobs, and the defaults are a 14-pixel ring of eight, one turn a
 second. It steps from dot to dot rather than sliding between them: on a 128-pixel map of 61 colours a smooth fade
 lands on the same few indices anyway, so snapping is crisper to look at *and* cheaper to send.
+
+`size` is a limit rather than an order. A ring only lands on whole pixels when the gap between two facing dots is
+even, so a size that would leave an odd one draws the largest ring under it that does, and the node measures itself
+at that - never a box with a spare row and column down one side. What you get back is symmetric under a quarter
+turn and under both mirrors, which is as round as eight squares on a grid this small can be.
 
 **It never finishes by itself**, so it costs frames for as long as it is on screen - see
 [animation](animation.md#frame-limits). That is fine at a dozen pixels square and is not fine across a whole

@@ -19,8 +19,13 @@ import java.awt.Color;
  */
 public final class Spinner extends AbstractNode<Spinner> {
 
-    /** Big enough for eight dots to sit apart on a map, small enough to put a caption under. */
-    public static final int DEFAULT_SIZE = 13;
+    /**
+     * Big enough for eight dots to sit apart on a map, small enough to put a caption under.
+     *
+     * <p>An even number of pixels around a two pixel dot, which is what lets the ring fill its box exactly - see
+     * {@link #spanOf}. Thirteen would draw a twelve pixel ring with a spare row and column beside it.
+     */
+    public static final int DEFAULT_SIZE = 14;
 
     /** One turn a second reads as working without reading as frantic. */
     public static final int DEFAULT_PERIOD_MS = 1000;
@@ -38,7 +43,13 @@ public final class Spinner extends AbstractNode<Spinner> {
     private int periodMs = DEFAULT_PERIOD_MS;
     private Color color = Color.WHITE;
 
-    /** Both edges, since a ring in a rectangle is a ring in the square inside it. */
+    /**
+     * Both edges, since a ring in a rectangle is a ring in the square inside it.
+     *
+     * <p>Taken as a limit rather than an order: a size whose ring would not land on whole pixels gives the largest
+     * one that does, a pixel under. The node is then exactly the ring it draws, with nothing spare down one side
+     * for a caption underneath to line up against.
+     */
     public Spinner size(int pixels) {
         this.size = pixels;
         return this;
@@ -62,7 +73,25 @@ public final class Spinner extends AbstractNode<Spinner> {
 
     @Override
     protected Measured measureContent(LayoutContext context, int availableWidth, int availableHeight) {
-        return new Measured(Math.min(size, availableWidth), Math.min(size, availableHeight));
+        int edge = spanOf(Math.min(size, Math.min(availableWidth, availableHeight)));
+        return new Measured(edge, edge);
+    }
+
+    private static int dotOf(int edge) {
+        return Math.max(2, edge / 6);
+    }
+
+    /**
+     * The largest ring that lands on whole pixels, which is the edge or a pixel less of it.
+     *
+     * <p>A dot sits its own width in from the far edge, so the two facing each other across the ring are
+     * {@code edge - dot} apart. Where that is odd their middle falls between two pixels, every dot rounds to the
+     * same side of it, and the ring leans that way - its top and bottom half a pixel right, its sides half a pixel
+     * down. Giving up the odd pixel costs half of one and buys a ring that is exactly itself turned a quarter
+     * circle.
+     */
+    private static int spanOf(int edge) {
+        return (edge - dotOf(edge)) % 2 == 0 ? edge : edge - 1;
     }
 
     @Override
@@ -71,17 +100,13 @@ public final class Spinner extends AbstractNode<Spinner> {
         int edge = Math.min(box.width(), box.height());
         if (edge < TOO_SMALL || color == null) return;
 
-        int dot = Math.max(2, edge / 6);
+        int dot = dotOf(edge);
 
-        // The ring's own square, which is the box or a pixel less of it. A dot sits its own width from the far
-        // edge, so the two on an axis are `edge - dot` apart - and if that is odd their middle falls between two
-        // pixels. Every dot then rounds to the same side of it and the ring leans that way: the top and bottom of
-        // it half a pixel right, the sides half a pixel down, which is a ring that is symmetric about nothing.
-        //
-        // Giving up the odd pixel costs half of one and buys a ring that is exactly itself turned a quarter circle.
-        int span = (edge - dot) % 2 == 0 ? edge : edge - 1;
+        // Normally the box itself, since this node measures itself at exactly the ring it can draw. A parent that
+        // stretches it past that is the case this centres for.
+        int span = spanOf(edge);
 
-        // Whole pixels now, so nothing below is a tie to break.
+        // Whole pixels, so nothing below is a tie to break.
         int radius = (span - dot) / 2;
         int left = box.x() + (box.width() - span) / 2;
         int top = box.y() + (box.height() - span) / 2;
