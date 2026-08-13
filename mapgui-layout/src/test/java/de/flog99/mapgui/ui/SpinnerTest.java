@@ -197,12 +197,17 @@ class SpinnerTest {
 
             for (int y = ring.y(); y < ring.y() + ring.height(); y++) {
                 for (int x = ring.x(); x < ring.x() + ring.width(); x++) {
-                    // A quarter turn clockwise about the ring's own middle.
+                    // A quarter turn clockwise about the ring's own middle, and the two mirrors.
                     int turnedX = ring.x() + ring.width() - 1 - (y - ring.y());
                     int turnedY = ring.y() + (x - ring.x());
+                    int mirroredX = ring.x() + ring.width() - 1 - (x - ring.x());
+                    int mirroredY = ring.y() + ring.height() - 1 - (y - ring.y());
 
-                    assertEquals(surface.get(x, y) != 0, surface.get(turnedX, turnedY) != 0,
+                    boolean on = surface.get(x, y) != 0;
+                    assertEquals(on, surface.get(turnedX, turnedY) != 0,
                             "size " + size + ": " + x + "," + y + " and the pixel a quarter turn round from it");
+                    assertEquals(on, surface.get(mirroredX, y) != 0, "size " + size + ": " + x + "," + y + " mirrored across");
+                    assertEquals(on, surface.get(x, mirroredY) != 0, "size " + size + ": " + x + "," + y + " mirrored down");
                 }
             }
         }
