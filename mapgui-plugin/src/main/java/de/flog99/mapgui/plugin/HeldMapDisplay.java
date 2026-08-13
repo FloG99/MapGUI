@@ -46,8 +46,8 @@ final class HeldMapDisplay {
      * @param mapId        what the client is sent pixels under, which is the item's own for a real one
      * @param mine         whether a stack is the one this session belongs to. Its own question, because it is not
      *                     the same one as {@code mapId}: a pinned id can be shared by every copy of a screen and
-     *                     even by two different screens, so what recognises the item is the name in its own data -
-     *                     see {@link PlayerSession#start}
+     *                     even by two unrelated ones, so what recognises a stack is its own data - see
+     *                     {@link PlayerSession#mine}
      */
     private record Held(HandOptions options, int previousSlot, int slot, EquipmentSlot hand, int mapId,
                         Predicate<ItemStack> mine, @Nullable ItemStack item, boolean minted) {
@@ -72,11 +72,12 @@ final class HeldMapDisplay {
     /**
      * Starts carrying the map.
      *
-     * @param mapId the id to draw under. A real item's own, since the client looks up pixels by the id stamped
-     *              into the item, and freshly invented for everything else
-     * @param mine  which stack in the inventory this session's screen belongs to
+     * @param mapId   the id to draw under. A real item's own, since the client looks up pixels by the id stamped
+     *                into the item, and freshly invented for everything else
+     * @param mine    which stack in the inventory this session's screen belongs to
+     * @param carried the item to hand over if the player has none of their own, for a real carry and null otherwise
      */
-    void open(Session session, HandOptions options, int mapId, Predicate<ItemStack> mine) {
+    void open(Session session, HandOptions options, int mapId, Predicate<ItemStack> mine, @Nullable ItemStack carried) {
         Player player = session.player();
         int selected = player.getInventory().getHeldItemSlot();
         EquipmentSlot hand = options.reachesMainHand() ? EquipmentSlot.HAND : EquipmentSlot.OFF_HAND;
@@ -86,7 +87,7 @@ final class HeldMapDisplay {
         // any of this runs, and handing them a second one would be a duplicate of the thing they are carrying.
         boolean minted = real && !alreadyCarrying(player, mine);
         if (minted) {
-            hand(player, HandItems.blank(mapId));
+            hand(player, carried);
         }
 
         held.put(player.getUniqueId(), new Held(options, selected, startingSlot(options, selected), hand, mapId, mine,

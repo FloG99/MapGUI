@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -120,6 +121,9 @@ final class PlayerSession implements Session {
     /** The catalog entry an admin opened this from, or null when a plugin opened it itself. */
     @Nullable
     private String openedFrom;
+
+    /** Marks the bare item handed over for this session, so it is known from every other map in the inventory. */
+    private final UUID own = UUID.randomUUID();
 
     private final Map<String, MapCursor.Type> cursorTypes = new HashMap<>();
 
@@ -394,7 +398,8 @@ final class PlayerSession implements Session {
     // ---- lifecycle ----
 
     void start(int mapId) {
-        display.open(this, hand, mapId, mine(mapId));
+        ItemStack carried = hand.carry() == HandOptions.Carry.ITEM ? plugin.handItems().blank(mapId, own) : null;
+        display.open(this, hand, mapId, mine(), carried);
         refocus();
         player.sendActionBar(Component.text(controls()));
 
@@ -410,19 +415,18 @@ final class PlayerSession implements Session {
     /**
      * Which stack in the inventory this session's screen belongs to, for the carry modes where that is a real item.
      *
-     * <p>By the GUI's own name where it has one, out of the item's persistent data, rather than by the map id
-     * stamped into it. The id is what the <i>client</i> looks up pixels by and nothing more: several copies of a
-     * screen can share one where a plugin has pinned it, and two unrelated screens can be pinned to the same number
-     * by mistake, either of which would have this answering with the wrong hand and taking the cursor to it.
+     * <p>Two things can be it, and both are recognised out of the item's own data rather than by its map id. The
+     * player's own copy of the screen, by the GUI's registered name - a phone they found in a chest. Or the bare item
+     * MapGUI handed over because they had none, by the token stamped into it.
      *
-     * <p>A screen opened with no registered name behind it has nothing to recognise but its id, and needs nothing
-     * more: MapGUI minted that item itself, for this session, and takes it back when the screen ends.
+     * <p>Never the map id. That is what the <i>client</i> looks up pixels by and nothing more: a screen can pin one,
+     * and then every copy of it and even an unrelated screen pinned to the same number would answer to it - which
+     * would have this naming the wrong hand and taking the cursor there.
      */
-    private Predicate<ItemStack> mine(int mapId) {
+    private Predicate<ItemStack> mine() {
+        HandItems items = plugin.handItems();
         String gui = openedFrom;
-        return gui == null
-                ? stack -> HandItems.mapIdOf(stack) == mapId
-                : stack -> gui.equals(plugin.handItems().guiOf(stack));
+        return stack -> own.equals(items.ownOf(stack)) || (gui != null && gui.equals(items.guiOf(stack)));
     }
 
     /** What to tell the player they can do, which depends on how the map got into their hands. */

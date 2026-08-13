@@ -45,6 +45,7 @@ final class HandItems {
     private final MapGuiPlugin plugin;
     private final NamespacedKey guiKey;
     private final NamespacedKey focusKey;
+    private final NamespacedKey ownKey;
 
     /**
      * Which GUI each player's session was opened for, so a swap to a different one is noticed.
@@ -68,6 +69,7 @@ final class HandItems {
         this.plugin = plugin;
         this.guiKey = new NamespacedKey(plugin, "gui");
         this.focusKey = new NamespacedKey(plugin, "focus");
+        this.ownKey = new NamespacedKey(plugin, "own");
     }
 
     /**
@@ -122,16 +124,34 @@ final class HandItems {
     }
 
     /**
-     * A map item bound to nothing but its own id.
+     * A map item belonging to one session and nothing else.
      *
      * <p>What {@code open(player, screen, HandOptions.item())} hands over: a real item for one player and one
      * screen, with no registered name behind it - so when it leaves them, the screen simply ends rather than
      * opening for whoever picked it up. The sweep ignores it for exactly that reason, since it has no GUI to name.
+     *
+     * <p>The token is how the session knows this stack from any other. Not the map id, which says only what the
+     * client draws it by: a screen can pin one, and then every copy of it wears the same number.
      */
-    static ItemStack blank(int mapId) {
+    ItemStack blank(int mapId, UUID own) {
         ItemStack item = new ItemStack(Material.FILLED_MAP);
         item.setData(DataComponentTypes.MAP_ID, MapId.mapId(mapId));
+        item.editMeta(MapMeta.class, meta -> meta.getPersistentDataContainer().set(ownKey, PersistentDataType.STRING, own.toString()));
         return item;
+    }
+
+    /** The session a bare item was handed over for, or null for anything that is not one. */
+    @Nullable
+    UUID ownOf(@Nullable ItemStack item) {
+        if (item == null || item.getType() != Material.FILLED_MAP || !item.hasItemMeta()) return null;
+
+        String stored = item.getItemMeta().getPersistentDataContainer().get(ownKey, PersistentDataType.STRING);
+        try {
+            return stored == null ? null : UUID.fromString(stored);
+        } catch (IllegalArgumentException e) {
+            // Somebody's edited item. It is not one of ours, which is all this had to answer.
+            return null;
+        }
     }
 
     /** The map id stamped into an item, or -1 for anything that is not a map with one. */
