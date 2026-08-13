@@ -179,6 +179,18 @@ public final class RayTracer {
     private final int[] fluidCorners = new int[FLUID_SLOTS];
     private final float[] fluidFlows = new float[FLUID_SLOTS];
 
+    /**
+     * The same again for tints, on the same argument: neighbouring pixels look at the same few blocks, and a tint
+     * is a biome lookup rather than a field of the state - {@link BiomeBlend} makes it four of them.
+     *
+     * <p>Worth its own table rather than being folded into the fluid one because most of what it answers for is not
+     * fluid at all: a hillside of grass and leaves is where nearly every tinted pixel in a frame comes from.
+     */
+    private static final int TINT_SLOTS = 1024;
+
+    private final long[] tintKeys = new long[TINT_SLOTS];
+    private final int[] tintValues = new int[TINT_SLOTS];
+
     /** Set by {@link #enterBox}, which finds the face and the point along with the distance it returns. */
     private Direction boxFace;
     private double boxHitX;
@@ -277,6 +289,8 @@ public final class RayTracer {
         // Emptied per frame rather than trusted across them: the same tracer renders the next snapshot too, and the
         // water in it has moved. A thousand longs is nothing next to a frame.
         Arrays.fill(fluidKeys, NO_POSITION);
+        // And the biome under a camera that has been carried somewhere else since.
+        Arrays.fill(tintKeys, NO_POSITION);
         CameraView.Frame frame = view.frame();
         EntityScreen screen = entities.isEmpty() ? null : new EntityScreen(entities, view, width, height);
 
@@ -1015,12 +1029,33 @@ public final class RayTracer {
 
         if (drawn.tint() != Tints.NONE) {
             int fixed = Tints.fixed(drawn.tint());
-            int tint = fixed != 0 ? fixed : world.tintAt(blockX, blockY, blockZ, drawn.tint());
+            int tint = fixed != 0 ? fixed : tintOf(world, blockX, blockY, blockZ, drawn.tint());
             red = red * (tint >> 16 & 0xFF) / 255;
             green = green * (tint >> 8 & 0xFF) / 255;
             blue = blue * (tint & 0xFF) / 255;
         }
 
         return (texel & 0xFF000000) | red << 16 | green << 8 | blue;
+    }
+
+    /**
+     * A position's tint, remembered per position the way {@link #remember} remembers a fluid's corners, and good for
+     * the same reason: the world a frame traces is a snapshot and cannot change under it.
+     *
+     * <p>The index is part of the key rather than a table per index. A face carries one of four the world answers -
+     * grass, foliage, dry foliage, water - and a block can show two of them at once, a lily pad over a pond being
+     * the everyday case.
+     */
+    private int tintOf(VoxelSource world, int x, int y, int z, int index) {
+        // The index takes the low five bits, which is exactly the range that gets here: anything from Tints.FIRST_FIXED
+        // up was answered before the call.
+        long key = (long) (x & 0xFFFFF) << 41 | (long) (y & 0xFFFF) << 25 | (long) (z & 0xFFFFF) << 5 | index & 0x1F;
+        int slot = (int) (key ^ key >>> 32) & TINT_SLOTS - 1;
+        if (tintKeys[slot] == key) return tintValues[slot];
+
+        int tint = world.tintAt(x, y, z, index);
+        tintValues[slot] = tint;
+        tintKeys[slot] = key;
+        return tint;
     }
 }

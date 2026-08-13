@@ -1,12 +1,14 @@
 package de.flog99.mapgui.plugin.camera;
 
 import de.flog99.mapgui.render.BakedState;
+import de.flog99.mapgui.render.BiomeBlend;
 import de.flog99.mapgui.render.BlockModels;
 import de.flog99.mapgui.render.EmptySpace;
 import de.flog99.mapgui.render.Sky;
 import de.flog99.mapgui.render.VoxelSource;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.Material;
+import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Waterlogged;
 
@@ -210,12 +212,55 @@ final class SnapshotWorld implements VoxelSource {
         return Math.max(chunk.getBlockEmittedLight(x & 15, y, z & 15), fromSky);
     }
 
+    /**
+     * The tint at a block, blended across the biomes around it the way the client blends them.
+     *
+     * <p>{@link BiomeBlend} is where the arithmetic and the reason for it are. Here it is four biome reads, and
+     * usually four of the same biome - a square five blocks wide is inside one biome nearly everywhere, and the
+     * server hands back the same interned object for each, so the common answer is one comparison away and the
+     * average is never computed.
+     */
     @Override
     public int tintAt(int x, int y, int z, int index) {
-        ChunkSnapshot chunk = chunkAt(x, z);
-        if (chunk == null) return 0xFFFFFFFF;
+        // The height is the block's own, and the biome read at it is the 3D one: a lush cave under a desert tints
+        // its own vines green while the sand over it stays sand.
+        int level = Math.clamp(y, minY, maxY);
+        int west = BiomeBlend.low(x);
+        int east = BiomeBlend.high(x);
+        int north = BiomeBlend.low(z);
+        int south = BiomeBlend.high(z);
 
-        return tints.of(chunk.getBiome(x & 15, Math.clamp(y, minY, maxY), z & 15), index);
+        Biome northWest = biomeAt(west, level, north);
+        Biome northEast = biomeAt(east, level, north);
+        Biome southWest = biomeAt(west, level, south);
+        Biome southEast = biomeAt(east, level, south);
+
+        // A corner outside what was captured takes another corner's biome rather than dragging the average toward
+        // some default. It is two blocks past the edge of the region, which is further out than any ray reaches, and
+        // nothing at all is known about what is there.
+        Biome captured = northWest != null ? northWest
+                : northEast != null ? northEast
+                : southWest != null ? southWest : southEast;
+        if (captured == null) return 0xFFFFFFFF;
+
+        if (northWest == null) northWest = captured;
+        if (northEast == null) northEast = captured;
+        if (southWest == null) southWest = captured;
+        if (southEast == null) southEast = captured;
+
+        if (northWest == northEast && northWest == southWest && northWest == southEast) {
+            return tints.of(northWest, index);
+        }
+
+        return BiomeBlend.mix(tints.of(northWest, index), tints.of(northEast, index),
+                tints.of(southWest, index), tints.of(southEast, index),
+                BiomeBlend.weight(x), BiomeBlend.weight(z));
+    }
+
+    /** Null outside the captured region, which is what the caller substitutes a neighbouring corner for. */
+    private Biome biomeAt(int x, int y, int z) {
+        ChunkSnapshot chunk = chunkAt(x, z);
+        return chunk == null ? null : chunk.getBiome(x & 15, y, z & 15);
     }
 
     @Override

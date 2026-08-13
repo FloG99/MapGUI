@@ -7,6 +7,28 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 
 ### Running a server
 
+- **Biome tints are blended across the biomes around a block**, the way the client blends them, so a border is a ramp
+  over five blocks rather than a line drawn across the ground.
+  Grass, foliage and water are one flat colour per biome, so a plains meeting a forest used to change green between
+  two neighbouring blocks - which the eye finds immediately, and which reads as a mown lawn rather than as a wood
+  starting. A river through a swamp had its banks stencilled in. All four tints the world answers go through it:
+  grass, foliage, dry foliage and water.
+  The client walks all twenty-five blocks of its 5x5 square for every block it draws. This reads **four**. A biome is
+  one value across a 4x4x4 cell and a run of five blocks crosses exactly one cell boundary whatever it is aligned to,
+  so the square covers at most four cells, and those twenty-five samples are those four weighted by how many blocks
+  each covers - the same sum over the same numbers, divided the same way, so it comes out bit-identical.
+  `BiomeBlendTest` holds it against a brute-force walk of all twenty-five, at every alignment and both signs.
+  **It does not cost a frame anything measurable.** Four biome reads instead of one, on the pixels that see a tinted
+  face and nowhere else, and only where the four disagree is anything averaged - a square five blocks wide is inside
+  one biome nearly everywhere, and the server hands back the same interned biome for each corner, so the common
+  answer is three reference comparisons away. Measured over a 128x128 frame: about 7 ns more per tint resolved and
+  2,200 of them in the frame, so 15 µs against a trace that takes tens of milliseconds.
+  A tint is also **remembered per position for the frame**, the way a fluid's corners already were and good for the
+  same reason - the world a frame traces is a snapshot and cannot change under it. That takes 42% of the tint lookups
+  out of the same frame, including the ones a single sample was already paying for.
+  The biome is read at the block's own height, which is what it already was: **biomes are 3D**, and a lush cave under
+  a desert tints its own vines while the sand over it stays sand. The square itself is flat, as the client's is.
+
 - **The block an enderman is carrying and the poppy an iron golem is offering are both drawn**, and both mobs take the
   pose their own model takes to hold one.
   An enderman brings both arms up and carries the block at waist height; a golem holds its right arm out, leaves the

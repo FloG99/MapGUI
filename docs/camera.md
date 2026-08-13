@@ -709,6 +709,11 @@ with whatever is hanging in it, at the place and size the client hangs one.
 - **Biome tints for a datapack biome exactly.** Vanilla biomes are exact - their definitions ship inside the client
   jar. A biome a datapack invented has no definition to read, so its climate is asked of the server and the colormap
   does the rest, which gets the green right and leaves the water at the default blue.
+- **Biome borders ramp straight rather than raggedly.** Tints are blended across the 5x5 square of biomes around a
+  block, as the client blends them, so a border is a gradient over five blocks and not a line drawn across the grass.
+  What is missing is the wobble under it: the client jitters the biome lookup itself with a hash of the world's seed,
+  which frays the edge, and a snapshot reads the biome straight off the 4 block grid it is stored on. Eight hashes per
+  sample is not a thing to put in front of every tinted pixel for an edge that is already five blocks wide.
 - **The clouds the viewer is actually seeing.** Whether a client draws clouds at all, and which of the two kinds, is
   not in the settings packet, so it is a setting on the capture rather than a reading. Same for field of view.
   Render distance *is* sent, which is why `maxDistance` can follow it.
