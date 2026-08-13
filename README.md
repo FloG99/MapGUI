@@ -90,6 +90,8 @@ plugins/
 2. **Restart the server.** `/reload` is not enough: the examples declare `load: BEFORE` on MapGUI, and that
    ordering is only honoured at startup.
 3. As an operator, run any of these. Every permission defaults to `op`, so there is nothing to configure first.
+   **The demos register no commands of their own** - everything they can do is reached through `/mapgui hand open`
+   and `/mapgui wall place`, so installing them costs your server no command surface at all.
 
 | Command | Shows |
 |---|---|
@@ -102,8 +104,9 @@ plugins/
 | `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
 | `/mapgui wall place polish-cow-transparent.gif` | a GIF on the wall. Shipped inside the examples jar, and no FFmpeg needed |
 
-Move the mouse to aim, **right-click to select, Q to close**, and the wheel to scroll. Walking, jumping and
-sneaking all still work. Placing a wall is left-click for the bottom-left corner, look at the far corner to
+Move the mouse to aim, **right-click to select**, and the wheel to scroll. **Q closes** the ones that fill the
+hotbar; the minimap and the camera are worn in the offhand, where **swapping hands** puts them away. Walking, jumping
+and sneaking all still work. Placing a wall is left-click for the bottom-left corner, look at the far corner to
 size it, then left-click again - or right-click to cancel.
 
 Delete the examples jar when you are done; that is the whole off switch, and MapGUI keeps working without it.
