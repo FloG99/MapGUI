@@ -82,7 +82,11 @@ final class HandItems {
         ItemStack item = new ItemStack(Material.FILLED_MAP);
         // The id vanilla renders by. Deliberately not a MapView: nothing about this map exists on the server, so
         // there is no view to attach and no id for the world to keep.
-        item.setData(DataComponentTypes.MAP_ID, MapId.mapId(MapIds.next()));
+        //
+        // Stamped once and then carried by the stack for good, which is why a pinned id belongs here as much as on
+        // the session: a pack keying on the id has to recognise the item sitting in a chest, not only the open one.
+        int mapId = hand.mapId() == HandOptions.ANY_MAP_ID ? MapIds.next() : hand.mapId();
+        item.setData(DataComponentTypes.MAP_ID, MapId.mapId(mapId));
         item.editMeta(MapMeta.class, meta -> {
             meta.getPersistentDataContainer().set(guiKey, PersistentDataType.STRING, gui);
             meta.getPersistentDataContainer().set(focusKey, PersistentDataType.STRING, hand.focus().name());

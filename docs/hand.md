@@ -93,6 +93,58 @@ player and that screen. With no registered name behind it, though, so when the i
 screen ends and the item goes with it - MapGUI handed it over, so MapGUI takes it back. An item somebody found for
 themselves is never confiscated that way.
 
+## Giving a resource pack something to recognise
+
+A filled map is drawn from its `map_id` component and nothing else - the client reads no NBT, no custom data, no
+name. So the id is the only handle a pack has on one map item as against another, and by default MapGUI hands out
+ids nobody can predict.
+
+`mapId` pins one:
+
+```java
+HandOptions phone = HandOptions.item().mapId(Integer.MAX_VALUE - 1);
+
+MapGui.get().guis().registerOpenable("phone", "A phone", player -> new PhoneScreen(player));
+ItemStack item = MapGui.get().item("phone", phone);
+```
+
+Then a pack overrides `assets/minecraft/items/filled_map.json` and gives that id its own model, so a phone looks
+like a phone rather than a rolled-up paper map:
+
+```json
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:component",
+    "component": "minecraft:map_id",
+    "cases": [
+      { "when": 2147483646, "model": { "type": "minecraft:model", "model": "myserver:item/phone" } }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/filled_map",
+      "tints": [
+        { "type": "minecraft:constant", "value": -1 },
+        { "type": "minecraft:map_color", "default": 4603950 }
+      ]
+    }
+  }
+}
+```
+
+A map id serialises as a plain integer, so `when` is the number itself. Keep the `fallback` as vanilla's own
+definition or every other map in the game loses its colours.
+
+**Pick from the top down**, `Integer.MAX_VALUE` and under. The server allocates real map ids upwards from 0, so a
+low number is a map somebody owns - painting it would replace their picture with your menu. Ids at or below 0 are
+refused for that reason.
+
+**One id means one picture per client.** A pinned id is shared by everybody with that screen open, and map pixels
+go down one connection, so each player still sees their own. The exception is a real `ITEM`, which other players can
+genuinely see in third person: a viewer who has the same screen open sees *their own* pixels on somebody else's
+phone. The faked carries have no such problem, since nobody but their owner can see them at all. Pin an id for the
+model; leave it alone if third-person accuracy matters more.
+
 ## Your item, MapGUI's screen
 
 The other shape of the same idea: the item is **yours** and the map sits somewhere else. A camera with its

@@ -175,7 +175,10 @@ public record MapGuiConfig(
                 focus,
                 config.getInt("hand.slot", 8),
                 config.getBoolean("hand.movable", false),
-                config.getBoolean("hand.offhand", false)
+                config.getBoolean("hand.offhand", false),
+                // Not a setting: a pinned id is a plugin's arrangement with its own resource pack, and a server
+                // owner setting one for every screen at once would have them all drawing to the same map.
+                HandOptions.ANY_MAP_ID
         ).sane();
     }
 

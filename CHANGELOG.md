@@ -542,6 +542,15 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   `Focus` rather than a whole `HandOptions`, because the screen is always in the offhand: any other carry mode puts
   the map in the hotbar, where reaching for it would mean letting go of the item that opened it.
 - Both are swept once a tick rather than listened for, since an item reaches a hand a dozen ways.
+- **`HandOptions#mapId` pins the map id a screen is drawn under**, so a resource pack can recognise one map item as
+  against another and give it its own model - a phone that looks like a phone rather than a rolled-up paper map.
+  The client draws a filled map from its `map_id` component and reads nothing else about it, so the id is the only
+  handle a pack has, and MapGUI's own ids are picked to be unpredictable. A pinned one is stamped into the item as
+  well as used for the session, so a pack recognises the item in a chest and not only the open screen. Ids at or
+  below 0 are refused: the server allocates real map ids upwards from there, and painting one replaces the picture
+  of a map somebody owns. See [carrying a GUI](docs/hand.md#giving-a-resource-pack-something-to-recognise) for the
+  `items/filled_map.json` side of it, and for the one case where sharing an id shows through - a real item, seen in
+  somebody else's hands, by a viewer who has the same screen open.
 - **A swallowed right-click now puts the held slot back.** Eating the packet is what stops the item being used, but
   the client had already predicted that use and was never told otherwise - so a trigger item passed to
   `openWhileHolding` appeared to be consumed, scoped or drawn, and stayed that way until something unrelated

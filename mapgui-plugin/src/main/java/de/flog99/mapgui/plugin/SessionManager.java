@@ -55,7 +55,11 @@ final class SessionManager implements MapGui {
      * closed while its classes are still loaded - the next repaint of one would otherwise fail to find them.
      */
     Session from(Player player, Screen screen, @Nullable HandOptions hand, @Nullable String entry) {
-        return open(player, screen, carry(screen, hand), entry, MapIds.next());
+        HandOptions carried = carry(screen, hand);
+        // A pinned id where the screen asked for one, so a resource pack has something to recognise it by, and one
+        // nobody else is drawing to otherwise.
+        int mapId = carried.mapId() == HandOptions.ANY_MAP_ID ? MapIds.next() : carried.mapId();
+        return open(player, screen, carried, entry, mapId);
     }
 
     /**

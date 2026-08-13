@@ -78,14 +78,14 @@ class HandOptionsTest {
      */
     @Test
     void anImpossibleModeIsMadePossible() {
-        HandOptions offSlot = new HandOptions(HandOptions.Carry.PINNED, HandOptions.Focus.MAIN_HAND, 47, false, false).sane();
+        HandOptions offSlot = new HandOptions(HandOptions.Carry.PINNED, HandOptions.Focus.MAIN_HAND, 47, false, false, 0).sane();
         assertEquals(8, offSlot.slot(), "there are nine hotbar slots and 47 is not one of them");
 
-        HandOptions confusedPopup = new HandOptions(HandOptions.Carry.POPUP, HandOptions.Focus.MAIN_HAND, 0, true, true).sane();
+        HandOptions confusedPopup = new HandOptions(HandOptions.Carry.POPUP, HandOptions.Focus.MAIN_HAND, 0, true, true, 0).sane();
         assertFalse(confusedPopup.offhandAllowed(), "a popup reports the offhand empty to draw itself large");
         assertFalse(confusedPopup.movable(), "and is in every slot, so there is nowhere to move it to");
 
-        HandOptions offhand = new HandOptions(HandOptions.Carry.OFFHAND, HandOptions.Focus.SWAP_HANDS, 0, false, false).sane();
+        HandOptions offhand = new HandOptions(HandOptions.Carry.OFFHAND, HandOptions.Focus.SWAP_HANDS, 0, false, false, 0).sane();
         assertTrue(offhand.offhandAllowed(), "the offhand is where it lives, whatever the flag said");
     }
 
@@ -104,5 +104,23 @@ class HandOptionsTest {
 
         assertFalse(MapSlots.offhandOnly().shows(0), "the whole hotbar is the player's own");
         assertFalse(MapSlots.none().any(), "a real item is in the slot, so nothing is pretended about it");
+    }
+
+    /**
+     * A pinned map id survives every other change, and a nonsense one is dropped rather than drawn to.
+     *
+     * <p>The floor is the point: the server allocates real map ids upwards from 0, so a low number is a map
+     * somebody owns and painting it would replace their picture with somebody's menu.
+     */
+    @Test
+    void aPinnedMapIdIsKeptAndAnImpossibleOneIsNot() {
+        HandOptions pinned = HandOptions.item().mapId(Integer.MAX_VALUE - 3);
+        assertEquals(Integer.MAX_VALUE - 3, pinned.mapId());
+        assertEquals(Integer.MAX_VALUE - 3, pinned.focus(HandOptions.Focus.ALWAYS).movable(false).sane().mapId(),
+                "changing anything else leaves the id alone");
+
+        assertEquals(HandOptions.ANY_MAP_ID, HandOptions.popup().mapId(), "nothing is pinned unless it is asked for");
+        assertEquals(HandOptions.ANY_MAP_ID, HandOptions.item().mapId(-7).sane().mapId(),
+                "a negative id is no id, not a map somebody owns");
     }
 }

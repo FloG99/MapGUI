@@ -26,8 +26,10 @@ import org.bukkit.inventory.EquipmentSlot;
  * @param offhandAllowed whether the player may carry it in the offhand, where {@code focus} then decides whether
  *                       it is usable. Ignored for a popup, which refuses the offhand, and for
  *                       {@link Carry#OFFHAND}, which is nowhere else
+ * @param mapId          the map id to draw this screen under, or 0 for one nobody else will get. Pin one to give a
+ *                       resource pack something to recognise - see {@link #mapId(int)}
  */
-public record HandOptions(Carry carry, Focus focus, int slot, boolean movable, boolean offhandAllowed) {
+public record HandOptions(Carry carry, Focus focus, int slot, boolean movable, boolean offhandAllowed, int mapId) {
 
     /** What the player is holding, and whether anything can take it from them. */
     public enum Carry {
@@ -119,40 +121,64 @@ public record HandOptions(Carry carry, Focus focus, int slot, boolean movable, b
         NEVER
     }
 
+    /** No pinned id, which is what almost every screen wants: one nobody else is drawing to. */
+    public static final int ANY_MAP_ID = 0;
+
     /** The whole hotbar, unmovable, always focused - what MapGUI has always done. */
     public static HandOptions popup() {
-        return new HandOptions(Carry.POPUP, Focus.MAIN_HAND, 0, false, false);
+        return new HandOptions(Carry.POPUP, Focus.MAIN_HAND, 0, false, false, ANY_MAP_ID);
     }
 
     /** A real item, in the first free slot, usable in either hand and a picture in the offhand. */
     public static HandOptions item() {
-        return new HandOptions(Carry.ITEM, Focus.MAIN_HAND, -1, true, true);
+        return new HandOptions(Carry.ITEM, Focus.MAIN_HAND, -1, true, true, ANY_MAP_ID);
     }
 
     /** A fake item locked to one hotbar slot, 0 to 8, and not allowed in the offhand until you say so. */
     public static HandOptions pinned(int slot) {
-        return new HandOptions(Carry.PINNED, Focus.MAIN_HAND, slot, false, false);
+        return new HandOptions(Carry.PINNED, Focus.MAIN_HAND, slot, false, false, ANY_MAP_ID);
     }
 
     /** A fake item in the offhand, reached by swapping hands since it cannot be held in the other one. */
     public static HandOptions offhand() {
-        return new HandOptions(Carry.OFFHAND, Focus.SWAP_HANDS, -1, false, true);
+        return new HandOptions(Carry.OFFHAND, Focus.SWAP_HANDS, -1, false, true, ANY_MAP_ID);
     }
 
     public HandOptions focus(Focus value) {
-        return new HandOptions(carry, value, slot, movable, offhandAllowed);
+        return new HandOptions(carry, value, slot, movable, offhandAllowed, mapId);
     }
 
     public HandOptions slot(int value) {
-        return new HandOptions(carry, focus, value, movable, offhandAllowed);
+        return new HandOptions(carry, focus, value, movable, offhandAllowed, mapId);
     }
 
     public HandOptions movable(boolean value) {
-        return new HandOptions(carry, focus, slot, value, offhandAllowed);
+        return new HandOptions(carry, focus, slot, value, offhandAllowed, mapId);
     }
 
     public HandOptions allowOffhand(boolean value) {
-        return new HandOptions(carry, focus, slot, movable, value);
+        return new HandOptions(carry, focus, slot, movable, value, mapId);
+    }
+
+    /**
+     * Draws this screen under a map id you choose, rather than one invented per session.
+     *
+     * <p><b>For a resource pack to recognise it.</b> The client renders a filled map from its {@code map_id}
+     * component and reads nothing else about it, so an id is the only handle a pack has on one map item as against
+     * another. Pin one and an {@code items/filled_map.json} override can give that screen its own model - a phone
+     * that looks like a phone rather than a paper map. Nothing else about MapGUI needs this.
+     *
+     * <p>Pick from the top down, {@code Integer.MAX_VALUE} and under, the way {@link MapIds} does: the server
+     * allocates real map ids upwards from 0, and a low number is a real map somebody owns.
+     *
+     * <p><b>The trade.</b> An id invented per session is one nobody else has pixels for, which is why an unfamiliar
+     * map draws blank. A pinned one is shared by everybody with this screen open, and map pixels go down one
+     * connection - so with {@link Carry#ITEM}, where the item is genuinely in the inventory and other players can
+     * see it in third person, a viewer who has the same screen open sees <b>their own</b> pixels on it. Harmless for
+     * the faked carries, which nobody but their owner can see at all.
+     */
+    public HandOptions mapId(int value) {
+        return new HandOptions(carry, focus, slot, movable, offhandAllowed, value);
     }
 
     /** Whether the map only exists on the client, and so cannot be taken, dropped or lost. */
@@ -206,6 +232,9 @@ public record HandOptions(Carry carry, Focus focus, int slot, boolean movable, b
     public HandOptions sane() {
         int wanted = carry == Carry.PINNED ? Math.clamp(slot, 0, 8) : slot;
         boolean offhand = carry == Carry.OFFHAND || (carry != Carry.POPUP && offhandAllowed);
-        return new HandOptions(carry, focus, wanted, carry != Carry.POPUP && movable, offhand);
+        // A real map id is one the server could have allocated, so a pinned one under 1 is dropped rather than
+        // trusted: it would paint over whatever map somebody already owns with that number.
+        return new HandOptions(carry, focus, wanted, carry != Carry.POPUP && movable, offhand,
+                Math.max(ANY_MAP_ID, mapId));
     }
 }
