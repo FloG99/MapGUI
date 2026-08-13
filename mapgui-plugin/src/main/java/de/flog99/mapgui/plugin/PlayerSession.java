@@ -23,6 +23,7 @@ import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.map.MapCursor;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Drives one player's menu.
@@ -392,7 +394,7 @@ final class PlayerSession implements Session {
     // ---- lifecycle ----
 
     void start(int mapId) {
-        display.open(this, hand, mapId);
+        display.open(this, hand, mapId, mine(mapId));
         refocus();
         player.sendActionBar(Component.text(controls()));
 
@@ -403,6 +405,24 @@ final class PlayerSession implements Session {
         plugin.router().claim(player, gestures);
         // Opening with the cursor already up is the same move as it appearing later, and reaim() has made it.
         task = player.getScheduler().runAtFixedRate(plugin, scheduled -> tick(), null, 1L, 1L);
+    }
+
+    /**
+     * Which stack in the inventory this session's screen belongs to, for the carry modes where that is a real item.
+     *
+     * <p>By the GUI's own name where it has one, out of the item's persistent data, rather than by the map id
+     * stamped into it. The id is what the <i>client</i> looks up pixels by and nothing more: several copies of a
+     * screen can share one where a plugin has pinned it, and two unrelated screens can be pinned to the same number
+     * by mistake, either of which would have this answering with the wrong hand and taking the cursor to it.
+     *
+     * <p>A screen opened with no registered name behind it has nothing to recognise but its id, and needs nothing
+     * more: MapGUI minted that item itself, for this session, and takes it back when the screen ends.
+     */
+    private Predicate<ItemStack> mine(int mapId) {
+        String gui = openedFrom;
+        return gui == null
+                ? stack -> HandItems.mapIdOf(stack) == mapId
+                : stack -> gui.equals(plugin.handItems().guiOf(stack));
     }
 
     /** What to tell the player they can do, which depends on how the map got into their hands. */

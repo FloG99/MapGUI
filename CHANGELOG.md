@@ -554,6 +554,13 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   map somebody owns. See [carrying a GUI](docs/hand.md#giving-a-resource-pack-something-to-recognise) for the
   `items/filled_map.json` side of it, and for the one case where sharing an id shows through - a real item, seen in
   somebody else's hands, by a viewer who has the same screen open.
+- **A carried screen now recognises its own item by name rather than by map id.** Which hand holds it, whether it is
+  still being carried, and which stack to take back when it closes were all answered by comparing the id stamped into
+  the stack - fine while every item had one of its own, wrong the moment two share one. Two screens pinned to the same
+  id would have resolved to whichever hand matched first, taking the cursor and the pitch clamp with it, and a swap
+  between them would have left the first screen up. The GUI's name is in the item's data already, so that is what is
+  asked now. Swapping between two copies of the same screen also stops throwing it away and reopening it, which
+  keeps its scroll position.
 - **A swallowed right-click now puts the held slot back.** Eating the packet is what stops the item being used, but
   the client had already predicted that use and was never told otherwise - so a trigger item passed to
   `openWhileHolding` appeared to be consumed, scoped or drawn, and stayed that way until something unrelated

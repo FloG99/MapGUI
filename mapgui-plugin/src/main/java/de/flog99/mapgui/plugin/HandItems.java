@@ -46,8 +46,14 @@ final class HandItems {
     private final NamespacedKey guiKey;
     private final NamespacedKey focusKey;
 
-    /** The map id of the item each player's session was opened for, so a swap to a different one is noticed. */
-    private final Map<UUID, Integer> showing = new HashMap<>();
+    /**
+     * Which GUI each player's session was opened for, so a swap to a different one is noticed.
+     *
+     * <p>The GUI's name rather than the map id of the stack it came from, because an id need not tell two items
+     * apart: a plugin can pin one for a resource pack to recognise, and then every phone shares it. Swapping between
+     * two of the same thing leaves the screen alone, which is the answer that keeps its scroll position.
+     */
+    private final Map<UUID, String> showing = new HashMap<>();
 
     /**
      * Players whose screen was closed while they were still holding the item.
@@ -96,7 +102,7 @@ final class HandItems {
 
     /** The GUI an item opens, or null for an item that is not one of ours. */
     @Nullable
-    private String guiOf(@Nullable ItemStack item) {
+    String guiOf(@Nullable ItemStack item) {
         if (item == null || item.getType() != Material.FILLED_MAP || !item.hasItemMeta()) return null;
 
         return item.getItemMeta().getPersistentDataContainer().get(guiKey, PersistentDataType.STRING);
@@ -175,8 +181,8 @@ final class HandItems {
         }
 
         int mapId = mapIdOf(held);
-        Integer open = showing.get(id);
-        if (open != null && open == mapId) {
+        String open = showing.get(id);
+        if (open != null && open.equals(guiOf(held))) {
             // Ours, and gone under us: closed by the screen itself, by a command, by another plugin. Left closed
             // until the item is put down, or "done" would be a button that does nothing.
             if (session == null) {
@@ -204,7 +210,7 @@ final class HandItems {
         // Recorded after the open, not before: opening closes whatever was up first, and that close is what would
         // have thrown this away again.
         plugin.sessions().openCarried(player, screen, HandOptions.item().focus(focusOf(held)), gui, mapId);
-        showing.put(player.getUniqueId(), mapId);
+        showing.put(player.getUniqueId(), gui);
     }
 
     /** The item of ours in either hand, main hand first, or null for a player holding none. */
