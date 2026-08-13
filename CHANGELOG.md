@@ -26,6 +26,9 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   there is never a spare row and column beside it for a caption to line up against. The default is 14 rather than 13,
   which is a size the ring fills exactly.
 
+- Fixed: **FFmpeg printed a stream dump to the console every time it opened a video.** Codec tables, bitrates and
+  handler names, in a log a server owner reads for their own reasons. Its level is set to errors on the way in now.
+
 - Fixed: **a carried block wore no tint, so a grass block had a grey top.** A block being carried has no biome to ask,
   and `grass_block_top` is a flat grey until something colors it.
   Vanilla writes the answer down on the block's own item - grass at a fixed climate, a constant for every leaf - which

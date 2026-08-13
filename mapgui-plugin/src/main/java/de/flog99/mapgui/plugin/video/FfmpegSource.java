@@ -2,6 +2,7 @@ package de.flog99.mapgui.plugin.video;
 
 import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.media.LiveSource;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
@@ -25,6 +26,12 @@ import java.awt.image.DataBufferByte;
  * the only reason it is affordable at all.
  */
 public final class FfmpegSource implements LiveSource {
+
+    static {
+        // FFmpeg prints the whole stream layout to the console every time it opens something, which is a server
+        // owner's log filling up with codec tables they did not ask for. Errors still come through.
+        avutil.av_log_set_level(avutil.AV_LOG_ERROR);
+    }
 
     private final String source;
     private final int width;
