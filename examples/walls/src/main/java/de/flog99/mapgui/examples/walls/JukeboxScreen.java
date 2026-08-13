@@ -1,5 +1,6 @@
 package de.flog99.mapgui.examples.walls;
 
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.ui.Align;
 import de.flog99.mapgui.ui.Node;
@@ -54,6 +55,12 @@ public final class JukeboxScreen extends Screen {
     @Override
     public Color background() {
         return new Color(24, 22, 34);
+    }
+
+    /** Only asked in a hand - a wall states its own size and place. A popup there, since it is buttons to press. */
+    @Override
+    public HandOptions hand() {
+        return HandOptions.popup();
     }
 
     @Override

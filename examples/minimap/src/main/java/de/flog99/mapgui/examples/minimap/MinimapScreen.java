@@ -107,7 +107,7 @@ public final class MinimapScreen extends Screen {
                 Row(Text(this::coordinates).color(Color.WHITE).shadow().padding(1, 3)
                         .background(panel).radius(2)).justify(Justify.CENTER).fillWidth(),
                 Spacer(),
-                Row(Text("press Q to close").color(new Color(200, 200, 200)).padding(1, 3)
+                Row(Text("swap hands to close").color(new Color(200, 200, 200)).padding(1, 3)
                         .background(panel).radius(2)).justify(Justify.CENTER).fillWidth()
         ).gap(2).padding(4).align(Align.STRETCH);
     }

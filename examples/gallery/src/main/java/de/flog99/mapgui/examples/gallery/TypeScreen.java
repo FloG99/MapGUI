@@ -1,6 +1,7 @@
 package de.flog99.mapgui.examples.gallery;
 
 import de.flog99.mapgui.RichText;
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.ui.AwtFont;
 import de.flog99.mapgui.ui.Node;
@@ -54,6 +55,12 @@ public final class TypeScreen extends Screen {
     @Override
     public TextFont font() {
         return FACE;
+    }
+
+    /** Stated rather than left to config, so the demo is the same whatever a server sets for everything else. */
+    @Override
+    public HandOptions hand() {
+        return HandOptions.popup();
     }
 
     @Override

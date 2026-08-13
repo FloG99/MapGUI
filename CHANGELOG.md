@@ -34,7 +34,9 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 - **The examples state how they are carried** rather than following the server's default, so each demo is the same
   wherever it is installed. The gallery, the to-do list and the claim map are popups, since all three want the wheel
   and the clicks; the minimap and the camera are worn in the offhand, where the hotbar stays the player's. Swapping
-  hands puts the minimap away, which a screen with no cursor and no clicks otherwise has no key for.
+  hands puts the minimap away, which a screen with no cursor and no clicks otherwise has no key for. All seven of
+  them, including the two that are a second registration rather than a demo of their own - the gallery's type page
+  and the jukebox in a hand.
 
 - Fixed: **FFmpeg printed a stream dump to the console every time it opened a video.** Codec tables, bitrates and
   handler names, in a log a server owner reads for their own reasons. Its level is set to errors on the way in now.
