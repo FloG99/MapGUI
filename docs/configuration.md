@@ -16,10 +16,8 @@ groups, and each takes the same three verbs.
 | `/mapgui wall place [content]` | `mapgui.command.wall` | with a name, starts placing it on blocks; without one, lists what there is |
 | `/mapgui wall remove [name]` | `mapgui.command.wall` | the nearest within 32 blocks, or one by name |
 | `/mapgui wall list` | `mapgui.command.wall` | every saved wall, with coordinates you can click to teleport |
-| `/mapgui camera status` | `mapgui.command.camera` | what state the capture textures are in, and for anything wrong, what to do about it |
 | `/mapgui camera performance` | `mapgui.command.camera` | what captures are costing the server and which plugin is asking - see [camera](camera.md#what-to-watch) |
-| `/mapgui camera fetch-assets` | `mapgui.command.camera` | downloads the client jar the textures come out of |
-| `/mapgui camera reload` | `mapgui.command.camera` | re-reads the packs on disk without a restart |
+| `/mapgui camera reload` | `mapgui.command.camera` | re-reads the packs on disk without a restart, and says what the camera is drawing with afterwards |
 | `/mapgui status` | `mapgui.command.status` | how many are in hand, how many saved walls are actually showing, and anything that is failing |
 | `/mapgui performance` | `mapgui.command.performance` | what it is costing in bandwidth and main-thread time - see [performance](performance.md) |
 | `/mapgui reload` | `mapgui.command.reload` | re-reads `config.yml` and applies it to walls already up |

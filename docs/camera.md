@@ -18,13 +18,12 @@ A capture is a `CameraShot`, which is a `Frames` of exactly one frame - so
 Draw(context -> new VideoPlayer(shot).fit(VideoPlayer.Fit.COVER).paint(context.painter(), context.bounds(), 0))
 ```
 
-Try it with `/mapgui hand open camera`, or `/snapshot` from the example plugin. Aim with your head, left-click
-or sneak to shoot, right-click for settings.
+Try it with `/mapgui hand open camera`. Aim with your head, left-click or sneak to shoot, right-click for settings.
 
-`/snapshot x4` takes one 256x256 capture and hands back **four real map items**, a quarter each, to hang in item
-frames in a 2x2 square - their names say which corner each one goes in. A map is 128 pixels and nothing changes that,
-so the way to a bigger picture is more maps rather than a scaled-down one, and each tile is one pixel per pixel with
-nothing resampled.
+**Print** in those settings takes one 256x256 capture and hands back **four real map items**, a quarter each, to hang
+in item frames in a 2x2 square - their names say which corner each one goes in. A map is 128 pixels and nothing
+changes that, so the way to a bigger picture is more maps rather than a scaled-down one, and each tile is one pixel
+per pixel with nothing resampled.
 
 The example does not do that for itself - it is an API feature, so your plugin can print any capture onto real maps:
 
@@ -68,11 +67,11 @@ for a feature nobody has called is not something a plugin should do unasked. The
 ```
 [MapGUI] Camera textures are not installed. They will download from Mojang the first time
 [MapGUI] something takes a capture.
-[MapGUI] To get it over with now, run 'mapgui camera fetch-assets' from the console.
+[MapGUI] To turn that off, set camera.assets.download to false in config.yml.
 ```
 
-To pre-seed it instead of waiting, run `mapgui camera fetch-assets` from the **server console**. To turn it off
-entirely, set `camera.assets.download: false` - MapGUI then never makes an outbound connection.
+To turn it off entirely, set `camera.assets.download: false` - MapGUI then never makes an outbound connection. To
+have the textures in place before anybody asks, take one capture yourself.
 
 The mob shapes are baked out of the same download and kept in the same file, because they are not in the assets to
 copy - see [how mobs and items are drawn](#how-mobs-and-items-are-drawn). Nothing extra comes down for them.
@@ -169,7 +168,7 @@ for an id that states no namespace, which is how vanilla's own files are written
 
 > A pack replaced while the server has it open cannot be picked up, and worse, cannot go on being read: the
 > table of contents was read at open time and now points into bytes that have moved. MapGUI notices and says so
-> after the next capture, and `/mapgui camera status` lists the layer - but the fix is a restart. If a plugin of
+> after the next capture, and `/mapgui camera reload` names the layer - but the fix is a restart. If a plugin of
 > yours installs a pack here, write it before MapGUI enables.
 
 A client jar also carries the mob shapes, and one you supply is read for them the same way a downloaded one is. A
@@ -180,8 +179,8 @@ boxes.
 
 ### When it goes wrong
 
-`/mapgui camera status` says what state the textures are in, and for anything wrong, both what is wrong and what
-to do about it. Check `Camera#assets()` from code rather than after the fact:
+`/mapgui camera reload` re-reads the packs and then says what state the textures are in, and for anything wrong,
+both what is wrong and what to do about it. Check `Camera#assets()` from code rather than after the fact:
 
 ```java
 if (MapGui.get().camera().assets().ready()) {
@@ -628,10 +627,6 @@ Plus one that is per player rather than server-wide, for a plugin debugging its 
 ```java
 double fps = MapGui.get().camera().frameRate(player);
 ```
-
-The camera example ships `/snapshot debug` built on nothing else, for a server that turns MapGUI's own commands off
-with `commands.enabled: false` and would rather have one place to look - see
-[`SnapshotDebug`](../examples/camera/src/main/java/de/flog99/mapgui/examples/camera/SnapshotDebug.java).
 
 Nothing has to be switched on for any of this; it is counted whether anybody is looking or not, over a rolling few
 seconds, and a `/mapgui reload` starts it over.

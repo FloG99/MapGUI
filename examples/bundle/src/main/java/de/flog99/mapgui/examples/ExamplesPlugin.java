@@ -31,12 +31,11 @@ public final class ExamplesPlugin extends JavaPlugin {
         SampleVideo.install(this);
 
         gallery.register(this);
-        todo.register(this);
-        minimap.register(this);
+        todo.register();
+        minimap.register();
         camera.register(this);
-        // The one demo that needs nothing from its plugin: a GUI an admin opens is the API and no more.
         claims.register();
-        walls.register(this);
+        walls.register();
     }
 
     /**

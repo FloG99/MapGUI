@@ -101,9 +101,6 @@ plugins/
 | `/mapgui wall place draw` | a wall everyone draws on, with a palette only you can see |
 | `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
 | `/mapgui wall place polish-cow-transparent.gif` | a GIF on the wall. Shipped inside the examples jar, and no FFmpeg needed |
-| `/snapshot` | the camera with its own command, aim with your head and left-click to shoot |
-| `/todo` | the same list, opened by the plugin rather than by an admin - which is how your users reach a GUI |
-| `/walls here` | a plugin placing a wall itself rather than letting an admin site it |
 
 Move the mouse to aim, **right-click to select, Q to close**, and the wheel to scroll. Walking, jumping and
 sneaking all still work. Placing a wall is left-click for the bottom-left corner, look at the far corner to

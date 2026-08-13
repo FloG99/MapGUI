@@ -28,19 +28,9 @@ public final class CameraCommand {
         return Commands.literal("camera")
                 .requires(allowed)
                 .executes(context -> {
-                    status(context.getSource().getSender(), plugin);
+                    performance(context.getSource().getSender(), plugin);
                     return Command.SINGLE_SUCCESS;
                 })
-                .then(Commands.literal("status")
-                        .executes(context -> {
-                            status(context.getSource().getSender(), plugin);
-                            return Command.SINGLE_SUCCESS;
-                        }))
-                .then(Commands.literal("fetch-assets")
-                        .executes(context -> {
-                            fetch(context.getSource().getSender(), plugin.cameraAssets());
-                            return Command.SINGLE_SUCCESS;
-                        }))
                 .then(Commands.literal("reload")
                         .executes(context -> {
                             plugin.cameraAssets().reload();
@@ -50,9 +40,7 @@ public final class CameraCommand {
                         }))
                 .then(Commands.literal("performance")
                         .executes(context -> {
-                            for (Component line : CameraReport.lines(plugin.camera().stats())) {
-                                context.getSource().getSender().sendMessage(line);
-                            }
+                            performance(context.getSource().getSender(), plugin);
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.literal("follow")
@@ -131,18 +119,9 @@ public final class CameraCommand {
         player.sendMessage(Component.text("No longer following your captures.", NamedTextColor.YELLOW));
     }
 
-    private static void fetch(CommandSender sender, CameraAssetStore assets) {
-        if (assets.state() instanceof CameraAssets.Loading loading) {
-            sender.sendMessage(Component.text("Already downloading, " + loading.percent() + "%.", NamedTextColor.YELLOW));
-            return;
+    private static void performance(CommandSender sender, MapGuiPlugin plugin) {
+        for (Component line : CameraReport.lines(plugin.camera().stats())) {
+            sender.sendMessage(line);
         }
-
-        if (assets.fetchNow()) {
-            sender.sendMessage(Component.text("Downloading camera textures from Mojang. Watch the console, or run /mapgui camera status.", NamedTextColor.GREEN));
-            return;
-        }
-
-        sender.sendMessage(Component.text("camera.assets.download is false in config.yml, so MapGUI will not fetch anything.", NamedTextColor.RED));
-        sender.sendMessage(Component.text("Set it to true and run /mapgui camera reload, or put a client jar in plugins/MapGUI/assets/ and list it under camera.assets.packs.", NamedTextColor.YELLOW));
     }
 }

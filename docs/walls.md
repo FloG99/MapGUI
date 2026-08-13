@@ -262,8 +262,8 @@ public void onDisable() {
 One call whether you registered one surface or both, which is the point of a single catalog: a missed
 `unregister` leaves an entry pointing at classes that are about to be unloaded.
 
-`examples/walls` is those registrations plus one command showing the other route - a plugin placing a wall
-itself and holding onto it.
+`examples/walls` is those registrations. The other route - a plugin opening a wall itself through `MapGui.wall()`
+and holding onto it - is a few lines from here, and is what furniture with a screen wants.
 
 ## Driving maps MapGUI is not putting up
 

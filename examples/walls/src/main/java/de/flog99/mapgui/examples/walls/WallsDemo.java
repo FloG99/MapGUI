@@ -1,34 +1,19 @@
 package de.flog99.mapgui.examples.walls;
 
-import com.mojang.brigadier.Command;
 import de.flog99.mapgui.MapGui;
 import de.flog99.mapgui.GuiCatalog;
-import de.flog99.mapgui.WallDisplay;
-import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-import org.bukkit.entity.Player;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.util.RayTraceResult;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * Two interactive walls, and both ways a plugin can put one up.
+ * Two interactive walls, put up from the catalog.
  *
- * <p><b>The catalog</b> is the {@code register} calls: an admin then sizes and places them with
+ * <p><b>The catalog</b> is the {@code register} calls: an admin sizes and places them with
  * {@code /mapgui wall place draw} and {@code /mapgui wall place jukebox}, and MapGUI saves where they went and puts them
  * back after a restart. No command, no config and no listener needed for that.
  *
- * <p><b>{@code /walls here}</b> is the other way, for a plugin that already knows where its walls belong -
- * furniture, a television, a painting. It opens one itself through {@link MapGui#wall()} and holds onto it,
- * which means it is also responsible for closing it and for remembering where it went. This one deliberately
- * remembers nothing, so its walls are gone on restart; a real plugin would save the coordinates alongside
- * whatever the wall belongs to.
+ * <p>A plugin that already knows where its walls belong - furniture, a television, a painting - opens one itself
+ * through {@link MapGui#wall()} instead, and is then responsible for closing it and for remembering where it went.
  *
- * <p><b>The two of them also show the thing that is easy to get wrong: where you build a
+ * <p><b>The registrations also show the thing that is easy to get wrong: where you build a
  * {@link de.flog99.mapgui.SharedModel} decides how far it is shared.</b> Nothing in the API says so - it falls
  * out of ordinary Java scope, which is why it is worth pointing at:
  *
@@ -52,10 +37,7 @@ public final class WallsDemo {
      */
     private final Jukebox jukebox = new Jukebox();
 
-    /** Ours to close, since nothing else knows about a wall this demo opened. */
-    private final List<WallDisplay> owned = new ArrayList<>();
-
-    public void register(JavaPlugin plugin) {
+    public void register() {
         GuiCatalog screens = MapGui.get().guis();
 
         // A screen each over one shared picture, so the drawing is common and the palette is private.
@@ -77,63 +59,18 @@ public final class WallsDemo {
 
         // The same jukebox in a hand as well, which is all it takes for one screen to work in both places.
         screens.registerOpenable(JUKEBOX, "Jukebox - one queue the whole room shares", player -> new JukeboxScreen(jukebox));
-
-        registerOwnCommand(plugin);
     }
 
     /**
      * Taken back out, so MapGUI stops offering something this plugin can no longer draw.
      *
      * <p>Walls placed from the catalog close themselves with it and stay in {@code walls.yml}, so putting the
-     * plugin back brings them back. The ones opened by {@code /walls} are this demo's own, and nothing else
-     * will close them.
+     * plugin back brings them back.
      */
     public void unregister() {
         GuiCatalog screens = MapGui.get().guis();
         screens.unregister(DRAW);
         // One call, even though the jukebox was registered for both surfaces.
         screens.unregister(JUKEBOX);
-
-        for (WallDisplay wall : owned) wall.close();
-        owned.clear();
-    }
-
-    private void registerOwnCommand(JavaPlugin plugin) {
-        plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar()
-                .register(Commands.literal("walls")
-                        .requires(source -> source.getSender().hasPermission("mapgui.command.wall"))
-                        .then(Commands.literal("here").executes(context -> {
-                            if (context.getSource().getSender() instanceof Player player) {
-                                placeJukebox(player);
-                            }
-                            return Command.SINGLE_SUCCESS;
-                        }))
-                        .then(Commands.literal("clear").executes(context -> {
-                            for (WallDisplay wall : owned) wall.close();
-                            context.getSource().getSender().sendRichMessage("<gray>Closed " + owned.size() + " wall(s).");
-                            owned.clear();
-                            return Command.SINGLE_SUCCESS;
-                        }))
-                        .build(), "Put up a wall this plugin owns")
-        );
-    }
-
-    /** Straight onto whatever block face the player is looking at, with no sizing gesture. */
-    private void placeJukebox(Player player) {
-        RayTraceResult hit = player.rayTraceBlocks(6);
-        Block block = hit == null ? null : hit.getHitBlock();
-        BlockFace face = hit == null ? null : hit.getHitBlockFace();
-        if (block == null || face == null) {
-            player.sendRichMessage("<red>Look at a block within six blocks.");
-            return;
-        }
-
-        owned.add(MapGui.get().wall()
-                .at(block, face)
-                .size(2, 1)
-                .screenForEveryone(new JukeboxScreen(jukebox))
-                .open()
-        );
-        player.sendRichMessage("<green>Put a jukebox up. <gray>/walls clear takes it down.");
     }
 }

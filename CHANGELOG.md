@@ -26,6 +26,16 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   there is never a spare row and column beside it for a caption to line up against. The default is 14 rather than 13,
   which is a size the ring fills exactly.
 
+- **The examples have no commands of their own.** Every demo is reached through `/mapgui hand open` and
+  `/mapgui wall place`, so a server installing them gains no command surface at all. `/todo`, `/minimap`,
+  `/snapshot` and `/walls` are gone with everything that hung off them: the camera's map printing moved into the
+  screen's settings, where a **Print** row hands back four real maps, and its debug dump went - what it reported is
+  `/mapgui camera performance`, which stays.
+
+- **`/mapgui camera status` and `fetch-assets` are gone.** Status said what the textures were doing, which
+  `/mapgui camera reload` now reports after re-reading them, and the bare `/mapgui camera` prints the performance
+  report instead. Fetching by hand only did early what the first capture does anyway. Both are out of the docs.
+
 - **Q closes a map pinned to the main hand**, where it used to be swallowed and do nothing. The key already could not
   reach anything else there - it would have thrown away whatever real item the map is covering - so the map was the
   only thing it could mean. A screen with no mouse keeps the old behaviour, since one carried rather than used is not

@@ -62,13 +62,13 @@ public final class CameraAssetStore {
         this.downloadEnabled = downloadEnabled;
         this.allowVersionMismatch = allowVersionMismatch;
         // Replaced by announce() during onEnable, so nothing observes this.
-        this.state = new CameraAssets.Unavailable(CameraAssets.Cause.NOT_INSTALLED, "Camera textures have not been checked yet.", "Run '/mapgui camera status'.");
+        this.state = new CameraAssets.Unavailable(CameraAssets.Cause.NOT_INSTALLED, "Camera textures have not been checked yet.", "They are read on the first capture.");
     }
 
     /**
      * Reads what is on disk and says what will happen about it. Called once, at enable.
      *
-     * <p>Reading is not fetching, and doing it now is what lets {@code /mapgui camera status} answer before
+     * <p>Reading is not fetching, and doing it now is what lets the first capture answer before
      * anybody has taken a capture. The download still waits for something to ask for one.
      */
     public synchronized void announce() {
@@ -76,7 +76,7 @@ public final class CameraAssetStore {
 
         if (downloadEnabled && state instanceof CameraAssets.Unavailable unavailable && unavailable.cause() == CameraAssets.Cause.NOT_INSTALLED) {
             plugin.getLogger().info("Camera textures are not installed. They will download from Mojang the first time something takes a capture.");
-            plugin.getLogger().info("To get it over with now, run 'mapgui camera fetch-assets' from the console. To turn it off, set camera.assets.download to false in config.yml.");
+            plugin.getLogger().info("To turn that off, set camera.assets.download to false in config.yml.");
         }
     }
 
@@ -207,7 +207,7 @@ public final class CameraAssetStore {
             state = new CameraAssets.Unavailable(
                     CameraAssets.Cause.NOT_INSTALLED,
                     "Camera textures for Minecraft " + missing.wantedVersion() + " are not installed",
-                    "They download on the first capture. To do it now, run 'mapgui camera fetch-assets' from the console."
+                    "They download on the first capture."
             );
             return;
         }
@@ -262,7 +262,7 @@ public final class CameraAssetStore {
 
         if (downloadEnabled) {
             // Will right itself on the first capture, so this is a heads-up rather than a fault.
-            state = new CameraAssets.Unavailable(CameraAssets.Cause.VERSION_MISMATCH, detail, "The correct textures download on the first capture. To do it now, run 'mapgui camera fetch-assets' from the console.");
+            state = new CameraAssets.Unavailable(CameraAssets.Cause.VERSION_MISMATCH, detail, "The correct textures download on the first capture.");
             plugin.getLogger().warning(detail + ". The correct ones will be downloaded on the first capture.");
             return;
         }
