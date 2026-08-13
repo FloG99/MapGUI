@@ -72,15 +72,19 @@ public final class Spinner extends AbstractNode<Spinner> {
         if (edge < TOO_SMALL || color == null) return;
 
         int dot = Math.max(2, edge / 6);
-        // Measured to the dot's own middle, so the ring sits inside the box rather than half outside it.
-        double radius = (edge - dot) / 2.0;
 
-        // The middle of the box rather than the middle pixel of it, and the dot's own half taken off as a half
-        // rather than as an integer. Both are half a pixel, both used to be dropped, and a dropped half pixel is a
-        // whole one by the time a dot has been placed and rounded - which put the ring a pixel high, with its top
-        // dot half outside the box and a blank row underneath.
-        double centerX = box.x() + box.width() / 2.0;
-        double centerY = box.y() + box.height() / 2.0;
+        // The ring's own square, which is the box or a pixel less of it. A dot sits its own width from the far
+        // edge, so the two on an axis are `edge - dot` apart - and if that is odd their middle falls between two
+        // pixels. Every dot then rounds to the same side of it and the ring leans that way: the top and bottom of
+        // it half a pixel right, the sides half a pixel down, which is a ring that is symmetric about nothing.
+        //
+        // Giving up the odd pixel costs half of one and buys a ring that is exactly itself turned a quarter circle.
+        int span = (edge - dot) % 2 == 0 ? edge : edge - 1;
+
+        // Whole pixels now, so nothing below is a tie to break.
+        int radius = (span - dot) / 2;
+        int left = box.x() + (box.width() - span) / 2;
+        int top = box.y() + (box.height() - span) / 2;
         double head = step();
 
         for (int i = 0; i < dots; i++) {
@@ -91,13 +95,22 @@ public final class Spinner extends AbstractNode<Spinner> {
             int alpha = TRAIL_ALPHA + (int) Math.round((255 - TRAIL_ALPHA) * (1 - behind));
 
             double angle = Math.PI * 2 * at;
-            // Rounded once, at the end. Rounding the reach first and then subtracting leaves the two dots on an
-            // axis at different distances, since Math.round breaks a tie upwards and so treats -5.5 and 5.5
-            // differently.
-            int x = (int) Math.round(centerX + Math.sin(angle) * radius - dot / 2.0);
-            int y = (int) Math.round(centerY - Math.cos(angle) * radius - dot / 2.0);
+            int x = left + radius + reach(Math.sin(angle) * radius);
+            int y = top + radius - reach(Math.cos(angle) * radius);
             target.fill(new Rect(x, y, dot, dot), Colors.alpha(color, alpha));
         }
+    }
+
+    /**
+     * How far out along one axis a dot sits, rounded away from the middle rather than upwards.
+     *
+     * <p>{@link Math#round} breaks a tie towards positive infinity, which is not the same thing on both sides of a
+     * ring: it would send 3.5 out to 4 and -3.5 in to -3, and one dot of a facing pair would sit a pixel nearer the
+     * middle than the other.
+     */
+    private static int reach(double along) {
+        int whole = (int) Math.round(Math.abs(along));
+        return along < 0 ? -whole : whole;
     }
 
     /**

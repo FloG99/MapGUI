@@ -173,32 +173,38 @@ class SpinnerTest {
     }
 
     /**
-     * Every dot whole, and the ring the same distance out on all four sides.
+     * The ring is exactly itself turned a quarter circle, which is the strongest thing "round" can mean on a grid
+     * this small and the one a player is really looking at.
      *
-     * <p>Half a pixel is dropped twice when a dot is placed - the middle of a box is not the middle of a pixel, and
-     * half of an even dot is not a whole number - and two halves in the same direction move the ring a whole pixel.
-     * That is what it looked like: the top dot half outside the box with its other half cut off, and a blank row
-     * under the bottom one.
+     * <p>Eight dots on a thirteen pixel ring cannot all land on a circle, so some of them are a fraction out. What
+     * must not happen is that the fraction goes a different way in different quarters: the eye reads a ring that is
+     * a pixel wider on one side than the other long before it notices that all eight dots are equally not-quite.
      *
-     * <p>Sizes either side of the odd and even cases, since the dot's own size is the box's sixth and so changes
-     * parity with it.
+     * <p>Sizes either side of both parities, since the dot's own size is the box's sixth and changes parity with it.
      */
     @Test
-    void everyDotIsWholeAndTheRingIsCentred() {
+    void theRingIsTheSameInEveryQuarter() {
         for (int size : new int[]{13, 14, 20, 21}) {
             Spinner spinner = Spinner().size(size).dots(8);
             paintAt(0, Column(spinner));
 
             Rect box = spinner.bounds();
             int dot = Math.max(2, Math.min(box.width(), box.height()) / 6);
-
             assertEquals(8 * dot * dot, lit(box), "size " + size + ": eight whole dots, none clipped by the box");
 
-            // The far side of the ring is as far from the middle as the near side, which is the whole of round.
-            assertEquals(first(box, true) - box.x(), box.x() + box.width() - 1 - last(box, true),
-                    "size " + size + ": as far in from the left as from the right");
-            assertEquals(first(box, false) - box.y(), box.y() + box.height() - 1 - last(box, false),
-                    "size " + size + ": as far in from the top as from the bottom");
+            Rect ring = ringOf(box);
+            assertEquals(ring.width(), ring.height(), "size " + size + ": the ring is square");
+
+            for (int y = ring.y(); y < ring.y() + ring.height(); y++) {
+                for (int x = ring.x(); x < ring.x() + ring.width(); x++) {
+                    // A quarter turn clockwise about the ring's own middle.
+                    int turnedX = ring.x() + ring.width() - 1 - (y - ring.y());
+                    int turnedY = ring.y() + (x - ring.x());
+
+                    assertEquals(surface.get(x, y) != 0, surface.get(turnedX, turnedY) != 0,
+                            "size " + size + ": " + x + "," + y + " and the pixel a quarter turn round from it");
+                }
+            }
         }
     }
 
@@ -213,27 +219,23 @@ class SpinnerTest {
         return count;
     }
 
-    private int first(Rect box, boolean across) {
-        for (int at = 0; at < (across ? box.width() : box.height()); at++) {
-            if (anyAt(box, across, at)) return (across ? box.x() : box.y()) + at;
-        }
-        return -1;
-    }
+    /** What the ring actually covers, which is the box or a pixel less of it. */
+    private Rect ringOf(Rect box) {
+        int leastX = Integer.MAX_VALUE;
+        int leastY = Integer.MAX_VALUE;
+        int mostX = Integer.MIN_VALUE;
+        int mostY = Integer.MIN_VALUE;
 
-    private int last(Rect box, boolean across) {
-        for (int at = (across ? box.width() : box.height()) - 1; at >= 0; at--) {
-            if (anyAt(box, across, at)) return (across ? box.x() : box.y()) + at;
-        }
-        return -1;
-    }
+        for (int y = box.y(); y < box.y() + box.height(); y++) {
+            for (int x = box.x(); x < box.x() + box.width(); x++) {
+                if (surface.get(x, y) == 0) continue;
 
-    private boolean anyAt(Rect box, boolean across, int at) {
-        int length = across ? box.height() : box.width();
-        for (int other = 0; other < length; other++) {
-            int x = across ? box.x() + at : box.x() + other;
-            int y = across ? box.y() + other : box.y() + at;
-            if (surface.get(x, y) != 0) return true;
+                leastX = Math.min(leastX, x);
+                leastY = Math.min(leastY, y);
+                mostX = Math.max(mostX, x);
+                mostY = Math.max(mostY, y);
+            }
         }
-        return false;
+        return new Rect(leastX, leastY, mostX - leastX + 1, mostY - leastY + 1);
     }
 }

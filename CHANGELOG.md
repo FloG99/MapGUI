@@ -15,10 +15,13 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   offset and one turn, so what a capture shows and what a player is looking at agree.
 
 - Fixed: **the spinner was not round.** Its ring sat a pixel high, so the top dot was half outside the box with the
-  rest of it cut off, and there was a blank row under the bottom one.
-  Placing a dot dropped half a pixel twice, both the same way: the middle of a box is not the middle of a pixel, and
-  half of a two pixel dot is not a whole number. The two halves made a whole one. At the default size every dot is now
-  square and the ring is as far from the middle on all four sides.
+  rest of it cut off and a blank row under the bottom one, and the four dots on the axes each leaned half a pixel the
+  same way, which left the ring symmetric about nothing.
+  A dot sits its own width in from the far edge, so the two facing each other are `size - dot` apart - and where that
+  was odd their middle fell between two pixels and every dot rounded to the same side of it. The ring now gives up
+  that odd pixel and lands on whole ones, which makes it **exactly itself turned a quarter circle**. Eight dots on a
+  thirteen pixel ring still cannot all sit on a circle, but they are now all equally not-quite rather than differently
+  so, and that is the part an eye picks up.
 
 - Fixed: **a carried block wore no tint, so a grass block had a grey top.** A block being carried has no biome to ask,
   and `grass_block_top` is a flat grey until something colors it.
