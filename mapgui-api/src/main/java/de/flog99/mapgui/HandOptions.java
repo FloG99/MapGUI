@@ -234,7 +234,6 @@ public record HandOptions(Carry carry, Focus focus, int slot, boolean movable, b
         boolean offhand = carry == Carry.OFFHAND || (carry != Carry.POPUP && offhandAllowed);
         // A real map id is one the server could have allocated, so a pinned one under 1 is dropped rather than
         // trusted: it would paint over whatever map somebody already owns with that number.
-        return new HandOptions(carry, focus, wanted, carry != Carry.POPUP && movable, offhand,
-                Math.max(ANY_MAP_ID, mapId));
+        return new HandOptions(carry, focus, wanted, carry != Carry.POPUP && movable, offhand, Math.max(ANY_MAP_ID, mapId));
     }
 }
