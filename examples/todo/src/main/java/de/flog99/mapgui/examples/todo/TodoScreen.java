@@ -37,9 +37,6 @@ import static de.flog99.mapgui.ui.Ui.each;
  */
 public final class TodoScreen extends Screen {
 
-    /** The hotbar slot it is carried in - the last one, since a list is something to reach for. */
-    private static final int SLOT = 8;
-
     private static final Map<UUID, List<Task>> STORE = new HashMap<>();
 
     private static final Color BG = new Color(20, 22, 30);
@@ -78,10 +75,10 @@ public final class TodoScreen extends Screen {
         return Component.text("To-Do", NamedTextColor.AQUA);
     }
 
-    /** Carried in one hotbar slot rather than filling the bar, so the player keeps their own. Q puts it away. */
+    /** A popup, because the list scrolls: the plain wheel is the menu's own only where every slot shows the map. */
     @Override
     public HandOptions hand() {
-        return HandOptions.pinned(SLOT);
+        return HandOptions.popup();
     }
 
     @Override

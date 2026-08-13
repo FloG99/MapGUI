@@ -1,5 +1,6 @@
 package de.flog99.mapgui.examples.gallery;
 
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.media.VideoPlayer;
 import de.flog99.mapgui.ui.Align;
@@ -95,6 +96,12 @@ public final class GalleryScreen extends Screen {
     @Override
     public Theme theme() {
         return THEME;
+    }
+
+    /** Stated rather than left to config, so the demo is the same whatever a server sets for everything else. */
+    @Override
+    public HandOptions hand() {
+        return HandOptions.popup();
     }
 
     @Override

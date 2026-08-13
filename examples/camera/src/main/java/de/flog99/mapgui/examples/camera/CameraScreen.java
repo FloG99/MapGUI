@@ -3,6 +3,7 @@ package de.flog99.mapgui.examples.camera;
 import de.flog99.mapgui.Click;
 import de.flog99.mapgui.MapGui;
 import de.flog99.mapgui.Marker;
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.camera.CameraAssets;
@@ -57,6 +58,17 @@ public final class CameraScreen extends Screen {
     @Override
     public Component title() {
         return Component.text("Camera", NamedTextColor.AQUA);
+    }
+
+    /**
+     * In the offhand, so the main hand stays the player's while they line a shot up.
+     *
+     * <p>Swapping hands is the way in and out of it, since a viewfinder that ate every click would leave nobody
+     * able to mine with a camera up.
+     */
+    @Override
+    public HandOptions hand() {
+        return HandOptions.offhand();
     }
 
     /** Only the settings panel has anything to point at, so only it takes the player's aim. */

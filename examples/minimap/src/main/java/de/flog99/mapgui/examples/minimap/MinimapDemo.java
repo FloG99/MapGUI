@@ -48,7 +48,7 @@ public final class MinimapDemo {
 
         MapGui.get().open(player, new MinimapScreen());
         player.sendMessage(Component.text("Minimap on.", NamedTextColor.GRAY)
-                .append(Component.text(" Run /minimap again to put it away.", NamedTextColor.DARK_GRAY)));
+                .append(Component.text(" Swap hands, or run /minimap again, to put it away.", NamedTextColor.DARK_GRAY)));
     }
 
     public void unregister() {

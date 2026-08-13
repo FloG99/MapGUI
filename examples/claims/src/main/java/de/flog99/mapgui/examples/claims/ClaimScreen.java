@@ -1,6 +1,7 @@
 package de.flog99.mapgui.examples.claims;
 
 import de.flog99.mapgui.Click;
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.ui.Align;
 import de.flog99.mapgui.ui.Colors;
@@ -62,6 +63,12 @@ public final class ClaimScreen extends Screen {
     @Override
     public boolean terrain() {
         return true;
+    }
+
+    /** Stated rather than left to config, so the demo is the same whatever a server sets for everything else. */
+    @Override
+    public HandOptions hand() {
+        return HandOptions.popup();
     }
 
     @Override

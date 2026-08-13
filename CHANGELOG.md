@@ -29,7 +29,12 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 - **Q closes a map pinned to the main hand**, where it used to be swallowed and do nothing. The key already could not
   reach anything else there - it would have thrown away whatever real item the map is covering - so the map was the
   only thing it could mean. A screen with no mouse keeps the old behaviour, since one carried rather than used is not
-  something Q should end. The action bar says so, and the to-do example is carried this way now rather than as a popup.
+  something Q should end. The action bar says so.
+
+- **The examples state how they are carried** rather than following the server's default, so each demo is the same
+  wherever it is installed. The gallery, the to-do list and the claim map are popups, since all three want the wheel
+  and the clicks; the minimap and the camera are worn in the offhand, where the hotbar stays the player's. Swapping
+  hands puts the minimap away, which a screen with no cursor and no clicks otherwise has no key for.
 
 - Fixed: **FFmpeg printed a stream dump to the console every time it opened a video.** Codec tables, bitrates and
   handler names, in a log a server owner reads for their own reasons. Its level is set to errors on the way in now.
