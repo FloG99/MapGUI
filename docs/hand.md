@@ -5,7 +5,7 @@ large, and while it is up the player is in it. That is the right answer for a me
 done.
 
 It is the wrong answer for a bingo card, a phone, a quest log or a television remote. Those want to be *carried* -
-in one slot, alongthe player's own things, put away and taken out again. So how a screen is carried is a setting.
+in one slot, along the player's own things, put away and taken out again. So how a screen is carried is a setting.
 
 ```java
 MapGui.get().open(player, new BingoCard(player), HandOptions.pinned(8).allowOffhand(true));
@@ -102,7 +102,7 @@ ids nobody can predict.
 `mapId` pins one:
 
 ```java
-HandOptions phone = HandOptions.item().mapId(1_500_000_000);
+HandOptions phone = HandOptions.item().mapId(Integer.MAX_VALUE - 1);
 
 MapGui.get().guis().registerOpenable("phone", "A phone", player -> new PhoneScreen(player));
 ItemStack item = MapGui.get().item("phone", phone);
@@ -118,7 +118,7 @@ like a phone rather than a rolled-up paper map:
     "property": "minecraft:component",
     "component": "minecraft:map_id",
     "cases": [
-      { "when": 1500000000, "model": { "type": "minecraft:model", "model": "myserver:item/phone" } }
+      { "when": 2147483646, "model": { "type": "minecraft:model", "model": "myserver:item/phone" } }
     ],
     "fallback": {
       "type": "minecraft:model",
@@ -135,13 +135,16 @@ like a phone rather than a rolled-up paper map:
 A map id serialises as a plain integer, so `when` is the number itself. Keep the `fallback` as vanilla's own
 definition or every other map in the game loses its colours.
 
-**Pick something between a billion and two.** Both ends of the range are taken, and for different reasons:
+**Take one off the top**, `Integer.MAX_VALUE - 1` and downwards. The range has three parts:
 
-| Range | Whose | Why not to pin there |
-|---|---|---|
-| 0 upwards | the server's real maps | painting one replaces the picture of a map somebody owns. Ids at or below 0 are refused outright |
-| `Integer.MAX_VALUE` downwards | MapGUI's own, from `MapIds` | a number near the top is one this plugin is about to hand a wall tile or a session |
-| **1,000,000,000 to 2,000,000,000** | **yours** | clear of both: a billion real maps, or 147 million MapGUI surfaces, before either reaches it |
+| Range | Whose |
+|---|---|
+| 0 upwards | the server's real maps. Painting one replaces the picture of a map somebody owns, which is why ids at or below 0 are refused outright |
+| **the top `MapIds.RESERVED` (1024), down to `MapIds.LOWEST_PINNABLE`** | **yours to pin.** MapGUI never hands these out |
+| everything below that, downwards | MapGUI's own, from `MapIds` - wall tiles, video frames, sessions |
+
+Nothing polices which of the thousand you take, so two plugins both reaching for `MAX_VALUE - 1` would collide. If
+yours is one of several on a server, count down from somewhere of your own rather than from the top.
 
 **One id means one picture per client.** A pinned id is shared by everybody with that screen open, and map pixels
 go down one connection, so each player still sees their own. The exception is a real `ITEM`, which other players can

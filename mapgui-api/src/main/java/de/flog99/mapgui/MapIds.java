@@ -4,7 +4,8 @@ package de.flog99.mapgui;
  * Hands out map ids the server never allocated.
  *
  * <p>Nothing registers these - the client makes a cache entry for whatever id it is sent pixels for. They
- * count down from the top so they cannot paint over a real map the player has looked at.
+ * count down from the top so they cannot paint over a real map the player has looked at, starting just under the
+ * handful left for {@link HandOptions#mapId(int)} to pin.
  *
  * <p>One counter for the whole plugin: held maps and walls draw from the same range, and two counters
  * starting at the top would hand out the same numbers twice.
@@ -25,7 +26,19 @@ package de.flog99.mapgui;
  */
 public final class MapIds {
 
-    private static int next = Integer.MAX_VALUE;
+    /**
+     * How many ids at the very top are never handed out, so a plugin can pin one and keep it.
+     *
+     * <p>A thousand of them, because the cost is nothing - a two billionth of the range - and because the top is
+     * where anybody would reach first. Without the band, {@code Integer.MAX_VALUE - 1} is the second id this hands
+     * out, which is the worst possible answer to "which one is safe to write into my resource pack".
+     */
+    public static final int RESERVED = 1024;
+
+    /** The lowest id this will never draw to, so the lowest one a plugin can pin and be sure of. */
+    public static final int LOWEST_PINNABLE = Integer.MAX_VALUE - RESERVED + 1;
+
+    private static int next = LOWEST_PINNABLE - 1;
 
     private MapIds() {
     }

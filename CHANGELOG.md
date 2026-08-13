@@ -546,9 +546,12 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   against another and give it its own model - a phone that looks like a phone rather than a rolled-up paper map.
   The client draws a filled map from its `map_id` component and reads nothing else about it, so the id is the only
   handle a pack has, and MapGUI's own ids are picked to be unpredictable. A pinned one is stamped into the item as
-  well as used for the session, so a pack recognises the item in a chest and not only the open screen. Ids at or
-  below 0 are refused: the server allocates real map ids upwards from there, and painting one replaces the picture
-  of a map somebody owns. See [carrying a GUI](docs/hand.md#giving-a-resource-pack-something-to-recognise) for the
+  well as used for the session, so a pack recognises the item in a chest and not only the open screen.
+  **The top 1024 ids are reserved for it**, `MapIds.RESERVED`, so `Integer.MAX_VALUE - 1` is a number a pack can be
+  written against and keep. MapGUI's own counter starts below the band rather than at the very top, where it would
+  otherwise have handed that id to the second screen opened after every restart. Ids at or below 0 are refused at the
+  other end, since the server allocates real map ids upwards from there and painting one replaces the picture of a
+  map somebody owns. See [carrying a GUI](docs/hand.md#giving-a-resource-pack-something-to-recognise) for the
   `items/filled_map.json` side of it, and for the one case where sharing an id shows through - a real item, seen in
   somebody else's hands, by a viewer who has the same screen open.
 - **A swallowed right-click now puts the held slot back.** Eating the packet is what stops the item being used, but
