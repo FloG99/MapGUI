@@ -1,5 +1,6 @@
 package de.flog99.mapgui.examples.todo;
 
+import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.prompt.TextPrompt;
 import de.flog99.mapgui.ui.Align;
@@ -35,6 +36,9 @@ import static de.flog99.mapgui.ui.Ui.each;
  * <p>Tasks live in memory, so they survive reopening the menu but not a restart.
  */
 public final class TodoScreen extends Screen {
+
+    /** The hotbar slot it is carried in - the last one, since a list is something to reach for. */
+    private static final int SLOT = 8;
 
     private static final Map<UUID, List<Task>> STORE = new HashMap<>();
 
@@ -72,6 +76,12 @@ public final class TodoScreen extends Screen {
     @Override
     public Component title() {
         return Component.text("To-Do", NamedTextColor.AQUA);
+    }
+
+    /** Carried in one hotbar slot rather than filling the bar, so the player keeps their own. Q puts it away. */
+    @Override
+    public HandOptions hand() {
+        return HandOptions.pinned(SLOT);
     }
 
     @Override

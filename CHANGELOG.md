@@ -26,6 +26,11 @@ surface is `mapgui-api`, which carries the layout engine inside it.
   there is never a spare row and column beside it for a caption to line up against. The default is 14 rather than 13,
   which is a size the ring fills exactly.
 
+- **Q closes a map pinned to the main hand**, where it used to be swallowed and do nothing. The key already could not
+  reach anything else there - it would have thrown away whatever real item the map is covering - so the map was the
+  only thing it could mean. A screen with no mouse keeps the old behaviour, since one carried rather than used is not
+  something Q should end. The action bar says so, and the to-do example is carried this way now rather than as a popup.
+
 - Fixed: **FFmpeg printed a stream dump to the console every time it opened a video.** Codec tables, bitrates and
   handler names, in a log a server owner reads for their own reasons. Its level is set to errors on the way in now.
 

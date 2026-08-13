@@ -204,6 +204,7 @@ a plugin first.
   nothing pretended about the cursor.
 - **Keep the real item in a covered slot usable.** A pinned map hides whatever is really in its slot, and an
   offhand map hides a shield. Both are inert while the screen is up and both come straight back when it closes -
-  nothing is destroyed, and nothing can be dropped by accident either, since Q is swallowed there.
+  nothing is destroyed, and nothing can be dropped by accident either, since Q never reaches the covered item. On a
+  pinned map in the main hand Q closes the screen instead; on one with no mouse it does nothing at all.
 - **Survive a logout by itself.** A real item does, being an item, and the screen opens again the moment its owner
   picks it up. A faked map is session state and goes when the session does.

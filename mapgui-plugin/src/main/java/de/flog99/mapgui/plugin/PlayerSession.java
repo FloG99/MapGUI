@@ -435,7 +435,9 @@ final class PlayerSession implements Session {
         return hint + switch (hand.carry()) {
             case POPUP -> ", Q to close";
             case ITEM -> ", scroll away to put it down";
-            case PINNED, OFFHAND -> focusHint();
+            // Q reaches a pinned map in the main hand, where it is the thing being held.
+            case PINNED -> hand.reachesMainHand() ? focusHint() + ", Q to close" : focusHint();
+            case OFFHAND -> focusHint();
         };
     }
 
@@ -460,25 +462,24 @@ final class PlayerSession implements Session {
     private final PacketInput.Handler gestures = new PacketInput.Handler() {
 
         /**
-         * Q closes a popup, which has no other way out and nothing to drop.
+         * Q closes a faked map the player is using: a popup, which has no other way out, and one in the main hand,
+         * where the key would otherwise throw away whatever real item the map is covering.
          *
-         * <p>Otherwise it is swallowed only when the faked map is the thing Q would throw away, which means the
-         * main hand: there is nothing of ours to drop, and letting it through would discard whatever is really in
-         * the slot the map is covering.
+         * <p>Swallowed rather than closing for a screen with no mouse, which is carried rather than used - there is
+         * still nothing of ours to drop, but ending it is not what its player meant.
          *
-         * <p>Anywhere else it is the player's own item being dropped and the key is theirs. That covers an offhand
-         * map, where Q always drops from the other hand - swallowing it there left a player holding a real item
-         * unable to drop it, for a map the key was never going to reach. A real item is left alone too, since
-         * dropping it is allowed and is how the player puts the screen away.
+         * <p>Anywhere else the key is theirs. That covers an offhand map, where Q always drops from the other hand -
+         * swallowing it there left a player holding a real item unable to drop it, for a map the key was never going
+         * to reach. A real item is left alone too, since dropping it is how the player puts that screen away.
          */
         @Override
         public boolean drop() {
-            if (hand.fillsHotbar()) {
-                onMainThread(PlayerSession.this::close);
-                return true;
-            }
+            if (!hand.fillsHotbar() && !(hand.faked() && mapInMainHand)) return false;
 
-            return hand.faked() && mapInMainHand;
+            if (hand.fillsHotbar() || focused) {
+                onMainThread(PlayerSession.this::close);
+            }
+            return true;
         }
 
         @Override
