@@ -47,18 +47,12 @@ final class WallRegistry implements Listener, LiveWalls {
      */
     private final Set<WallDisplay> open = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    private final Map<UUID, PacketInput.Handler> claims = new HashMap<>();
-
     /**
-     * The set that {@link #tick} iterates over, built once and refreshed only when {@link #open} changes.
-     *
-     * <p>Kept separate from {@link #open} because a tick runs twenty times a second and a wall that sits
-     * still must not pay for a {@code List.copyOf} each time. Invalidated from the same two places that
-     * mutate {@code open} - the builder's registration and {@link #forget} - both on the main thread, and
-     * the network thread never reads this.
+     * The per-tick iteration list, rebuilt only when {@link #open} changes - see {@link WallSnapshot}.
      */
-    private List<WallDisplay> snapshot = List.of();
-    private boolean snapshotDirty = true;
+    private final WallSnapshot walls = new WallSnapshot(open);
+
+    private final Map<UUID, PacketInput.Handler> claims = new HashMap<>();
 
     WallRegistry(Plugin plugin, MapTransport transport, PromptRegistry prompts, InputRouter router) {
         this.plugin = plugin;
@@ -89,21 +83,17 @@ final class WallRegistry implements Listener, LiveWalls {
 
     private void registered(WallDisplay wall) {
         open.add(wall);
-        snapshotDirty = true;
+        walls.invalidate();
     }
 
     private void forget(WallDisplay wall) {
         open.remove(wall);
-        snapshotDirty = true;
+        walls.invalidate();
     }
 
     /** Copied, since content is free to close its own wall while being painted. */
     void tick(long now) {
-        if (snapshotDirty) {
-            snapshot = List.copyOf(open);
-            snapshotDirty = false;
-        }
-        List<WallDisplay> walls = snapshot;
+        List<WallDisplay> walls = this.walls.snapshot();
 
         // Before painting, so the cursor a wall draws this frame is the one it just won or lost.
         for (Player player : plugin.getServer().getOnlinePlayers()) aimNearest(player, walls);
@@ -190,7 +180,7 @@ final class WallRegistry implements Listener, LiveWalls {
         for (WallDisplay wall : List.copyOf(open)) wall.close();
         open.clear();
         claims.clear();
-        snapshotDirty = true;
+        walls.invalidate();
     }
 
     /**
