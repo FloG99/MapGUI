@@ -168,8 +168,11 @@ public record HandOptions(Carry carry, Focus focus, int slot, boolean movable, b
      * another. Pin one and an {@code items/filled_map.json} override can give that screen its own model - a phone
      * that looks like a phone rather than a paper map. Nothing else about MapGUI needs this.
      *
-     * <p>Pick from the top down, {@code Integer.MAX_VALUE} and under, the way {@link MapIds} does: the server
-     * allocates real map ids upwards from 0, and a low number is a real map somebody owns.
+     * <p><b>Pick something between a billion and two.</b> Both ends of the range are taken: the server allocates
+     * real map ids upwards from 0, so a low number is a map somebody owns, and {@link MapIds} hands out MapGUI's own
+     * downwards from {@code Integer.MAX_VALUE}, so a number near the top is one this plugin is about to draw to
+     * itself. The middle is clear of both by a wide margin - a billion real maps, or 147 million MapGUI surfaces,
+     * before either reaches it.
      *
      * <p><b>The trade.</b> An id invented per session is one nobody else has pixels for, which is why an unfamiliar
      * map draws blank. A pinned one is shared by everybody with this screen open, and map pixels go down one

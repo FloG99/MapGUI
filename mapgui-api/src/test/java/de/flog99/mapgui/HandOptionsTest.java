@@ -114,9 +114,10 @@ class HandOptionsTest {
      */
     @Test
     void aPinnedMapIdIsKeptAndAnImpossibleOneIsNot() {
-        HandOptions pinned = HandOptions.item().mapId(Integer.MAX_VALUE - 3);
-        assertEquals(Integer.MAX_VALUE - 3, pinned.mapId());
-        assertEquals(Integer.MAX_VALUE - 3, pinned.focus(HandOptions.Focus.ALWAYS).movable(false).sane().mapId(),
+        // The range the javadoc recommends: clear of the server's real ids counting up and MapGUI's counting down.
+        HandOptions pinned = HandOptions.item().mapId(1_500_000_000);
+        assertEquals(1_500_000_000, pinned.mapId());
+        assertEquals(1_500_000_000, pinned.focus(HandOptions.Focus.ALWAYS).movable(false).sane().mapId(),
                 "changing anything else leaves the id alone");
 
         assertEquals(HandOptions.ANY_MAP_ID, HandOptions.popup().mapId(), "nothing is pinned unless it is asked for");
