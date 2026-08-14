@@ -42,7 +42,7 @@ class ItemModelsTest {
 
     private int pixel(TestWorld world, EntitySnapshot entity, CameraView view) {
         int[] out = new int[1];
-        new RayTracer(world).render(world, view, List.of(entity), 1, 1, out);
+        new RayCaster(world).render(world, view, List.of(entity), 1, 1, out);
         return out[0];
     }
 

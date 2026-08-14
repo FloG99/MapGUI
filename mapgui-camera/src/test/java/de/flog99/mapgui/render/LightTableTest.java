@@ -19,7 +19,7 @@ class LightTableTest {
     @Test
     void moreLightIsNeverDarker() {
         for (float ambient : AMBIENTS) {
-            float[] table = RayTracer.lightTable(ambient);
+            float[] table = RayCaster.lightTable(ambient);
 
             for (int level = 1; level < table.length; level++) {
                 assertTrue(table[level] >= table[level - 1],
@@ -36,7 +36,7 @@ class LightTableTest {
     @Test
     void fullLightIsLeftWhereTheClientPutIt() {
         for (float ambient : AMBIENTS) {
-            float[] table = RayTracer.lightTable(ambient);
+            float[] table = RayCaster.lightTable(ambient);
 
             assertTrue(table[15] > 0.98f && table[15] <= 1f,
                     "ambient " + ambient + ": full light came out at " + table[15]);

@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * A frame traced across several threads, as bands of rows.
  *
  * <p>The rays of a frame do not interact - each walks the world, reads immutable textures and writes one pixel - and
- * {@link RayTracer} keeps its scratch per instance, so one tracer per thread and a band each leaves nothing to
+ * {@link RayCaster} keeps its scratch per instance, so one caster per thread and a band each leaves nothing to
  * synchronize. Bands rather than tiles, because a row is contiguous in the output array and two threads writing
  * neighbouring rows never touch the same cache line.
  *
@@ -37,8 +37,8 @@ public final class FrameTracer implements AutoCloseable {
     private final int threads;
     private final ExecutorService pool;
 
-    /** One per thread, created once. Building a tracer allocates its scratch, so this is not per frame work. */
-    private final ThreadLocal<RayTracer> tracers;
+    /** One per thread, created once. Building a caster allocates its scratch, so this is not per frame work. */
+    private final ThreadLocal<RayCaster> casters;
 
     public FrameTracer(Textures atlas) {
         this(atlas, Canopy.DEFAULT);
@@ -55,7 +55,7 @@ public final class FrameTracer implements AutoCloseable {
     FrameTracer(Textures atlas, Canopy canopy, int threads) {
         this.atlas = atlas;
         this.threads = threads;
-        this.tracers = ThreadLocal.withInitial(() -> new RayTracer(atlas, canopy));
+        this.casters = ThreadLocal.withInitial(() -> new RayCaster(atlas, canopy));
         this.pool = threads > 1 ? Executors.newFixedThreadPool(threads, named()) : null;
     }
 
@@ -83,7 +83,7 @@ public final class FrameTracer implements AutoCloseable {
     public void render(VoxelSource world, CameraView view, List<EntitySnapshot> entities, int width, int height, int[] out) {
         int bands = Math.min(threads, height);
         if (pool == null || bands <= 1) {
-            tracers.get().render(world, view, entities, width, height, out);
+            casters.get().render(world, view, entities, width, height, out);
             return;
         }
 
@@ -91,7 +91,7 @@ public final class FrameTracer implements AutoCloseable {
         for (int band = 0; band < bands; band++) {
             int fromRow = height * band / bands;
             int toRow = height * (band + 1) / bands;
-            pending.add(pool.submit(() -> tracers.get().render(world, view, entities, width, height, out, fromRow, toRow)));
+            pending.add(pool.submit(() -> casters.get().render(world, view, entities, width, height, out, fromRow, toRow)));
         }
 
         for (Future<?> band : pending) {

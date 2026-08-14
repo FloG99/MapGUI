@@ -79,7 +79,7 @@ class SheepWoolTest {
 
     private static int pixel(TestWorld world, List<EntitySnapshot> sheep) {
         int[] out = new int[1];
-        new RayTracer(world).render(world, atFleece(), sheep, 1, 1, out);
+        new RayCaster(world).render(world, atFleece(), sheep, 1, 1, out);
         return out[0];
     }
 

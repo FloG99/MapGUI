@@ -29,7 +29,7 @@ public final class ChunkFrustum {
 
     /**
      * Blocks of slack on both the height bound and the range. A ray point lies somewhere inside a block, which
-     * reaches a corner further out, and {@link RayTracer} then reads that block's neighbour for face culling and
+     * reaches a corner further out, and {@link RayCaster} then reads that block's neighbour for face culling and
      * for the light falling on the face - so the chunk a ray needs is not always the chunk the ray is in.
      */
     private static final double BLOCK_SLACK = 1 + Math.sqrt(3);

@@ -86,7 +86,7 @@ class MapPictureTest {
         CameraView view = new CameraView(BLOCK_X + 0.5, BLOCK_Y + 0.5, BLOCK_Z + 2, 180, 0, 60, PROBE);
 
         int[] out = new int[PROBE * PROBE];
-        new RayTracer(world).render(world, view, drawn, PROBE, PROBE, out);
+        new RayCaster(world).render(world, view, drawn, PROBE, PROBE, out);
         return out;
     }
 

@@ -53,7 +53,7 @@ class EmptySkipTest {
 
     private static int[] rendered(TestWorld world, CameraView view, List<EntitySnapshot> entities, boolean skip) {
         int[] out = new int[SIZE * SIZE];
-        new RayTracer(world, skip).render(world, view, entities, SIZE, SIZE, out);
+        new RayCaster(world, skip).render(world, view, entities, SIZE, SIZE, out);
         return out;
     }
 

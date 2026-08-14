@@ -74,7 +74,7 @@ class EntityTracerTest {
 
     private int pixel(TestWorld world, EntitySnapshot entity, CameraView view) {
         int[] out = new int[1];
-        new RayTracer(world).render(world, view, List.of(entity), 1, 1, out);
+        new RayCaster(world).render(world, view, List.of(entity), 1, 1, out);
         return out[0];
     }
 
@@ -295,7 +295,7 @@ class EntityTracerTest {
         List<EntitySnapshot> crowd = List.of(standing(0), EntitySnapshot.player(2.5, 0, 1.5, 45, 45, 0, true, SkinLayers.ALL, "skin"));
 
         int[] out = new int[32 * 32];
-        new RayTracer(world).render(world, from(0.5, 6, 180), crowd, 32, 32, out);
+        new RayCaster(world).render(world, from(0.5, 6, 180), crowd, 32, 32, out);
 
         for (int i = 0; i < out.length; i++) {
             assertEquals(0xFF, out[i] >>> 24, "pixel " + i);

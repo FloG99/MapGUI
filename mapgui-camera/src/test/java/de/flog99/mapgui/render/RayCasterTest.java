@@ -6,14 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class RayTracerTest {
+class RayCasterTest {
 
     private static final int WHITE = 0xFFFFFFFF;
 
     /** One pixel looking exactly where the camera looks, which is the whole frame at 1x1. */
     private int pixel(TestWorld world, CameraView view) {
         int[] out = new int[1];
-        new RayTracer(world).render(world, view, 1, 1, out);
+        new RayCaster(world).render(world, view, 1, 1, out);
         return out[0];
     }
 
@@ -32,7 +32,7 @@ class RayTracerTest {
      * arithmetic, and the copy in this file went stale the first time the weighting was retuned.
      */
     private static int shaded(double faceFactor) {
-        return (int) (255 * faceFactor * RayTracer.lightTable(0)[15]);
+        return (int) (255 * faceFactor * RayCaster.lightTable(0)[15]);
     }
 
     /**
@@ -286,7 +286,7 @@ class RayTracerTest {
         }
 
         int[] out = new int[32 * 32];
-        new RayTracer(world).render(world, at(0.5, 0.5, 0.5, 0, 0), 32, 32, out);
+        new RayCaster(world).render(world, at(0.5, 0.5, 0.5, 0, 0), 32, 32, out);
 
         for (int i = 0; i < out.length; i++) {
             assertEquals(0xFF, out[i] >>> 24, "pixel " + i + " should be opaque");
@@ -305,7 +305,7 @@ class RayTracerTest {
         }
 
         int[] out = new int[16 * 16];
-        new RayTracer(world).render(world, at(0.5, 0.5, 0.5, 0, 0), 16, 16, out);
+        new RayCaster(world).render(world, at(0.5, 0.5, 0.5, 0, 0), 16, 16, out);
 
         for (int pixel : out) {
             assertEquals(out[0], pixel, "a flat wall lit evenly should be one color");

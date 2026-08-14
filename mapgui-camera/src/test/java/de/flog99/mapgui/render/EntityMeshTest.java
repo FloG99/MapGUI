@@ -62,7 +62,7 @@ class EntityMeshTest {
     private int pixel(EntityModel model, float bodyYaw, float headYaw, CameraView view) {
         TestWorld world = new TestWorld().texture("hide", skin());
         int[] out = new int[1];
-        new RayTracer(world).render(world, view, List.of(standing(model, bodyYaw, headYaw)), 1, 1, out);
+        new RayCaster(world).render(world, view, List.of(standing(model, bodyYaw, headYaw)), 1, 1, out);
         return out[0];
     }
 
@@ -117,7 +117,7 @@ class EntityMeshTest {
 
         int[] out = new int[1];
         // The turn puts the box between 10 and 14 pixels up, so the ray goes through the middle of that.
-        new RayTracer(world).render(world, new CameraView(0.5, 0.75, 4, 180, 0, 70, 64),
+        new RayCaster(world).render(world, new CameraView(0.5, 0.75, 4, 180, 0, 70, 64),
                 List.of(new EntitySnapshot(0.5, 0, 0.5, 0, 0, 0, 1f, laid, "hide")), 1, 1, out);
 
         assertPatch(CROWN, out[0], "the turn brings the box's top round to the front");
@@ -195,7 +195,7 @@ class EntityMeshTest {
 
     private int trace(TestWorld world, EntityModel model, CameraView view) {
         int[] out = new int[1];
-        new RayTracer(world).render(world, view, List.of(standing(model, 0, 0)), 1, 1, out);
+        new RayCaster(world).render(world, view, List.of(standing(model, 0, 0)), 1, 1, out);
         return out[0];
     }
 
@@ -275,7 +275,7 @@ class EntityMeshTest {
 
         TestWorld world = new TestWorld().texture("hide", skin());
         int[] out = new int[1];
-        new RayTracer(world).render(world, new CameraView(0.5, 0.25, 4, 180, 0, 70, 64),
+        new RayCaster(world).render(world, new CameraView(0.5, 0.25, 4, 180, 0, 70, 64),
                 List.of(standing(nothing, 0, 0)), 1, 1, out);
 
         assertEquals(TestWorld.SKY, out[0], "a cube with no faces draws nothing");
@@ -286,7 +286,7 @@ class EntityMeshTest {
     void everyPixelOfAFrameWithAMeshIsWritten() {
         TestWorld world = new TestWorld().texture("hide", skin());
         int[] out = new int[16 * 16];
-        new RayTracer(world).render(world, atHead(), List.of(standing(headOnBody(), 30, 60)), 16, 16, out);
+        new RayCaster(world).render(world, atHead(), List.of(standing(headOnBody(), 30, 60)), 16, 16, out);
 
         for (int i = 0; i < out.length; i++) {
             assertEquals(0xFF, out[i] >>> 24, "pixel " + i);

@@ -18,7 +18,7 @@ import java.util.List;
  * <p>Not thread safe: one instance per rendering thread, with the scratch arrays and the fragment list reused across
  * every pixel rather than 16384 rays each allocating a vector.
  */
-public final class RayTracer {
+public final class RayCaster {
 
     /**
      * What vanilla multiplies a face by for its direction, since there is no real lighting model to ask. Down
@@ -215,19 +215,19 @@ public final class RayTracer {
     /** The light table this frame reads, which depends on the dimension and so cannot be static. */
     private float[] lights = LIGHT;
 
-    public RayTracer(Textures atlas) {
+    public RayCaster(Textures atlas) {
         this(atlas, Canopy.DEFAULT);
     }
 
-    public RayTracer(Textures atlas, Canopy canopy) {
+    public RayCaster(Textures atlas, Canopy canopy) {
         this(atlas, canopy, true);
     }
 
-    RayTracer(Textures atlas, boolean skipEmpty) {
+    RayCaster(Textures atlas, boolean skipEmpty) {
         this(atlas, Canopy.DEFAULT, skipEmpty);
     }
 
-    RayTracer(Textures atlas, Canopy canopy, boolean skipEmpty) {
+    RayCaster(Textures atlas, Canopy canopy, boolean skipEmpty) {
         this.atlas = atlas;
         this.canopy = canopy;
         this.skipEmpty = skipEmpty;
@@ -253,7 +253,7 @@ public final class RayTracer {
     }
 
     /**
-     * One horizontal band of a frame, so several tracers can share the work. Bands rather than tiles because a row is
+     * One horizontal band of a frame, so several casters can share the work. Bands rather than tiles because a row is
      * contiguous in {@code out}, so two threads never write the same cache line, and everything a band reads is
      * immutable or its own.
      *
@@ -286,7 +286,7 @@ public final class RayTracer {
 
         frameView = view;
         frameEmpty = skipEmpty ? world.emptySpace() : EmptySpace.NONE;
-        // Emptied per frame rather than trusted across them: the same tracer renders the next snapshot too, and the
+        // Emptied per frame rather than trusted across them: the same caster renders the next snapshot too, and the
         // water in it has moved. A thousand longs is nothing next to a frame.
         Arrays.fill(fluidKeys, NO_POSITION);
         // And the biome under a camera that has been carried somewhere else since.

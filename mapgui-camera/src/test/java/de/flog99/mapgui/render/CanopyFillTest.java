@@ -30,7 +30,7 @@ class CanopyFillTest {
         // Looking down +Z from the middle of a block, so the near face of the block at z is distance z - 0.5 away.
         CameraView view = new CameraView(0.5, 0.5, 0.5, 0, 0, CameraView.DEFAULT_FOV, 256);
         int[] out = new int[1];
-        new RayTracer(world, canopy).render(world, view, 1, 1, out);
+        new RayCaster(world, canopy).render(world, view, 1, 1, out);
         return out[0];
     }
 
