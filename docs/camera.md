@@ -260,6 +260,26 @@ instead - the nearest thing to a neutral near-black in the palette - and the hor
 dome keeps a faint gradient instead of flattening to one shade. Warm sky belongs to dawn and dusk, where the glow
 band puts it near the horizon on the sun's own side.
 
+**The band at dawn and dusk is the client's own, colour and shape both.** Its colour comes out of the same arithmetic
+the client bakes its `minecraft:visual/sunrise_sunset_color` keyframes from, and its shape is the fan the client
+draws: an apex on the horizon where the sun is going down, a rim that runs the whole way round the camera, and the
+colour interpolated between. That is worth taking rather than approximating, because the shape is not something an
+eye can tune from a screenshot - the band covers **the whole half of the sky the sun is on**, tapering to nothing at
+exactly a quarter turn round, and it is only about 18 degrees tall at its middle, less as it fades. Any falloff
+written to look right beside the sun is wrong ninety degrees away from it, in a way you only notice standing there.
+
+**And it hangs far deeper than it rises**, which is the other half of what a sunrise looks like. Above the sun the
+fan's rim ends it inside those 18 degrees; below there is no rim in the way, so the sheet carries on under the camera
+and the colour goes down with it - eighteen degrees over the sun there is nothing left, eighteen under there is still
+seven tenths. Nothing hides that half either: the client's dark disc is drawn only while the eye is *below* the
+world's horizon height, so anybody standing on the surface at dawn is looking at the underside of this wherever the
+world does not cover it. In a photograph that is the bottom of the frame, past where the copied world runs out.
+
+One thing is deliberately not copied. On screen that fan is enormous, nearly flat, and the camera sits all but
+exactly in its plane, so turning toward the moon can drop the orange out of the middle of the view - the same sky at
+the same moment drawing differently depending on where you are pointed. A photograph cannot have that, so the band
+is solved for along each ray instead: one sky, whichever way the camera was turned.
+
 There is no brightness setting. There was one, with presets, and it existed to escape a curve that was wrong.
 
 Entities go through the same three. Drawn at their texture's own brightness they are lit for noon wherever they

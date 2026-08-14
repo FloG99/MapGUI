@@ -27,42 +27,6 @@ public final class Sky {
     private static final double MOON_RADIUS = Math.atan(20.0 / 100.0);
 
     /**
-     * How near the horizon the sun has to be for it to color the sky, as the sine of its elevation. Half puts the
-     * evening band across about 3.1 minutes of a 20 minute day.
-     */
-    private static final double GLOW_WINDOW = 0.50;
-
-    /** Below 1 so the band holds near full strength across the middle of its window instead of peaking for a moment. */
-    private static final double GLOW_CURVE = 0.8;
-
-    /** How fast the band fades upward: 1.4 carries it 45 degrees above the horizon. */
-    private static final double GLOW_HEIGHT_FALLOFF = 1.4;
-
-    /**
-     * The shape of that upward fade, below 1 so it holds on rather than falling away in a straight line. Softening
-     * this warms the sky halfway up, where the band was fading to grey; raising the strength only brightens the sun's
-     * own patch, which was already near full.
-     */
-    private static final double GLOW_HEIGHT_CURVE = 0.6;
-
-    /** How fast it fades round from the sun's own azimuth: 0.65 holds half strength 80 degrees round. */
-    private static final double GLOW_ARC_FALLOFF = 0.65;
-
-    /**
-     * The most of the glow color any one direction takes. Below one on purpose: at full strength the sun's own patch
-     * flattens into a disc of orange with no gradient left in it.
-     */
-    private static final float GLOW_STRENGTH = 0.80f;
-
-    /**
-     * The band's own two colors: a deep orange at the skyline easing to a warm yellow above it. One color made the
-     * top of the band grey, since the glow thins with height and a mid orange over a dimmed blue averages to neutral.
-     */
-    private static final int GLOW_LOW = 0xFFFF661C;
-
-    private static final int GLOW_HIGH = 0xFFFFC069;
-
-    /**
      * The most the night takes off a block's sky light. The client subtracts eleven, leaving open ground at level 4;
      * seven leaves it at 8, for the same reason the renderer lifts the dark end of its light table.
      */
@@ -113,8 +77,14 @@ public final class Sky {
     /** 0 at night, 1 in full day, easing through dawn and dusk. */
     private final float daylight;
 
-    /** How much dawn or dusk color to add, peaking as the sun crosses the horizon. */
+    /** The dawn or dusk band's color, from {@link SunGlow}, and 0 for a sun nowhere near a horizon. */
+    private final int glowColor;
+
+    /** Its alpha on its own, since the haze at the skyline warms with the band rather than with the fan's shape. */
     private final float glow;
+
+    /** Which way along x the sun lies, so the band sits on its own side. */
+    private final double glowSide;
 
     private final int zenith;
     private final int horizon;
@@ -143,7 +113,9 @@ public final class Sky {
         this.sunX = 1;
         this.sunY = 0;
         this.daylight = 1;
+        this.glowColor = 0;
         this.glow = 0;
+        this.glowSide = 1;
         this.zenith = argb;
         this.horizon = argb;
         this.fogColor = argb;
@@ -218,7 +190,12 @@ public final class Sky {
 
         // Full day once the sun is a little clear of the horizon, and the ramp either side is dawn and dusk.
         this.daylight = dome.daylit ? (float) Math.clamp((sunY + 0.18) / 0.36, 0, 1) : 1f;
-        this.glow = dome.daylit ? (float) Math.pow(Math.max(0, 1 - Math.abs(sunY) / GLOW_WINDOW), GLOW_CURVE) : 0f;
+
+        // The band's own color and strength, both the client's - see SunGlow. Its side is the sun's: sunX is only
+        // ever zero with the sun straight overhead or straight under, and neither is a sunset.
+        this.glowColor = dome.daylit ? SunGlow.colorAt(sunY) : 0;
+        this.glow = (glowColor >>> 24) / 255f;
+        this.glowSide = sunX < 0 ? -1 : 1;
 
         // The client's own curve, which holds full brightness across the middle of the day rather than peaking at
         // noon and falling away from it.
@@ -242,8 +219,13 @@ public final class Sky {
     /**
      * How far round its circle the sun is, 0 at noon and 0.5 at midnight. The client's easing: a quarter-turn offset
      * so the cosine is measured from noon, then two thirds of a linear ramp blended with one third of a cosine one.
+     *
+     * <p>26.2 states the same curve as a cubic bezier on its {@code minecraft:visual/sun_angle} track rather than as
+     * arithmetic. Held against it across the day the two are within 0.06 degrees of sun angle, so this stays as it
+     * is - and package-private, since {@code SunGlowTest} needs it to check the band against the colors the client
+     * ships for a tick.
      */
-    private static double fractionOfDay(long timeOfDay) {
+    static double fractionOfDay(long timeOfDay) {
         double turns = Math.floorMod(timeOfDay, 24000L) / 24000.0 - 0.25;
         double fraction = turns - Math.floor(turns);
         double eased = 0.5 - Math.cos(fraction * Math.PI) / 2;
@@ -317,24 +299,21 @@ public final class Sky {
     }
 
     /**
-     * Dawn and dusk, banded around the sun's own side of the sky.
+     * Dawn and dusk, over the sun's own half of the sky.
      *
-     * <p>Concentrated near the horizon and near the sun's azimuth, so the glow sits where the sun is going down
-     * rather than washing the whole dome orange.
+     * <p>The band is the client's fan, solved for per ray - {@link SunGlow} has the geometry and where it came from.
+     * Here it is only the three components that fan is stated in: along the horizon toward the sun, along the
+     * horizon at right angles to that, and up. The sun's circle is the x-y plane, so its own side is x and the one
+     * across it is z.
+     *
+     * <p>Composited as the client composites it, which is a plain alpha blend over the sky behind it: the color is
+     * the band's, the alpha is its own times how much of the fan this direction meets.
      */
     private int addGlow(int color, double dx, double dy, double dz) {
-        double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        double towardSun = (dx * sunX + dy * sunY) / length;
-
-        // How far up the band this direction is, 0 at the skyline and 1 at the top of it - which decides both how
-        // much glow there is and which of its two colors.
-        float up = (float) Math.min(1, Math.abs(dy / length) * GLOW_HEIGHT_FALLOFF);
-        float nearSun = (float) Math.max(0, towardSun);
-        float amount = glow * GLOW_STRENGTH * (float) Math.pow(1 - up, GLOW_HEIGHT_CURVE)
-                * (float) Math.pow(nearSun, GLOW_ARC_FALLOFF);
+        float amount = glow * SunGlow.coverage(dx * glowSide, dz, dy, glow);
         if (amount <= 0.001f) return color;
 
-        return warmed(mix(color, mix(GLOW_LOW, GLOW_HIGH, up), Math.min(1, amount)), amount);
+        return warmed(mix(color, glowColor, amount), amount);
     }
 
     /**

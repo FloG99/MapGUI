@@ -7,6 +7,33 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 
 ### Running a server
 
+- **The band at dawn and dusk is the client's own now**, in colour and in shape, where it was a falloff curve with two
+  hand-picked oranges in it.
+  What was wrong was the shape rather than the colour. Vanilla's band covers **the whole half of the sky the sun is
+  on**, tapering to nothing at exactly a quarter turn round - so looking at the point half way between the sun and the
+  moon you catch the last of it as a shallow slanted edge. Ours faded on a curve that was near enough beside the sun
+  and had run out well before that, and it went on to a hard stop 46 degrees up, where vanilla's band is only about 18
+  degrees tall at its middle and thinner as it fades.
+  It is also **not symmetric about the skyline**, which is most of what a sunrise looks like: over the sun the fan's
+  rim ends it within those 18 degrees, and under it there is no rim in the way, so the sheet carries on beneath the
+  camera and the colour hangs a long way down. Eighteen degrees above the sun there is nothing left; eighteen below,
+  seven tenths of it. That half is not a detail that never shows - the client's dark disc, the one thing that would
+  hide it, is only drawn while the eye is *below* the world's horizon height - and it is exactly the half a capture
+  puts low in the frame, past where the copied world runs out.
+  Both halves are read out of the 26.2 client rather than matched by eye. The colour is the arithmetic its
+  `minecraft:visual/sunrise_sunset_color` keyframes are baked from - `SunGlowTest` holds it against all 32 of them,
+  tick and ARGB verbatim, and every channel of every one lands within 1 of 255, which for a keyframe rounded to a
+  byte is exact. The shape is `SkyRenderer.buildSunriseFan`: an apex 100 out on the horizon at the sun's side, a rim
+  of radius 120 running right round the camera lifted `40 * alpha` on that side, and the colour interpolated from one
+  to the other.
+  **Traced rather than rasterized**, which is the one deliberate difference. That fan is enormous, nearly flat, and
+  the camera sits all but exactly in its plane - the arrangement a near plane cuts through - so on screen turning
+  toward the moon can drop the orange out of the middle of the view, and the same sky at the same moment draws
+  differently depending on where you are pointed. Solving for the surface along each ray asks where the band is
+  rather than where it lands on a screen, so a capture of one sky is one sky whichever way the camera was turned.
+  It costs nothing: the fan is a ruled surface, so where a ray meets it comes out in closed form, with no
+  trigonometry and no stepping round its sixteen segments.
+
 - **Biome tints are blended across the biomes around a block**, the way the client blends them, so a border is a ramp
   over five blocks rather than a line drawn across the ground.
   Grass, foliage and water are one flat colour per biome, so a plains meeting a forest used to change green between
@@ -66,9 +93,22 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 - **The examples state how they are carried** rather than following the server's default, so each demo is the same
   wherever it is installed. The gallery, the to-do list and the claim map are popups, since all three want the wheel
   and the clicks; the minimap and the camera are worn in the offhand, where the hotbar stays the player's. Swapping
-  hands puts the minimap away, which a screen with no cursor and no clicks otherwise has no key for. All seven of
+  hands puts the minimap and the camera away, which a screen with no cursor otherwise has no key for. All seven of
   them, including the two that are a second registration rather than a demo of their own - the gallery's type page
   and the jukebox in a hand.
+
+- Fixed: **the camera ignored the first clicks after it was opened, and swapping hands appeared to do nothing.** An
+  offhand map's default is for the swap key to toggle whether the screen has the player's clicks, which the camera
+  took - but a viewfinder has no cursor, so the toggle changed nothing anybody could see and the shutter was simply
+  dead until the key had been pressed once, with no way to tell that from a camera that was broken. It is a mode
+  now: it has the clicks from the moment it is raised, and the same key puts it away, through the `onSwapHands`
+  the minimap already closes on.
+
+- Fixed: **the action bar described the state after the focus key rather than the one it was read in.** A map that
+  toggles - by swapping hands or by right-clicking the air - opens with the player carrying it rather than using it,
+  and the line greeting them said what a click would do and offered to put down a map they had not yet picked up. It
+  says how to raise it instead, and says it again when the key is pressed, so it tracks the toggle rather than
+  standing from the moment the screen opened.
 
 - Fixed: **FFmpeg printed a stream dump to the console every time it opened a video.** Codec tables, bitrates and
   handler names, in a log a server owner reads for their own reasons. Its level is set to errors on the way in now.
