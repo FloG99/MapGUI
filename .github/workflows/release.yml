@@ -66,6 +66,9 @@ jobs:
       # The plugin is all a server needs. The examples are optional, and the two library jars are for anyone
       # who would rather drag a jar in than add a dependency - sources included, for a usable IDE.
       #
+      # No javadoc jar. Central requires one and gets one, but here it is four megabytes of html nobody unzips:
+      # a build tool attaches it from Central on its own, and everyone else reads it on javadoc.io.
+      #
       # Named by version rather than globbed, and unmatched is fatal: the action is happy to publish a release
       # with an asset missing, so a renamed jar would otherwise go out as a release nobody can install.
       - uses: softprops/action-gh-release@v2
@@ -76,4 +79,5 @@ jobs:
           files: |
             mapgui-plugin/build/libs/MapGUI-${{ env.VERSION }}.jar
             examples/bundle/build/libs/MapGUI-examples-${{ env.VERSION }}.jar
-            mapgui-api/build/libs/*.jar
+            mapgui-api/build/libs/mapgui-api-${{ env.VERSION }}.jar
+            mapgui-api/build/libs/mapgui-api-${{ env.VERSION }}-sources.jar
