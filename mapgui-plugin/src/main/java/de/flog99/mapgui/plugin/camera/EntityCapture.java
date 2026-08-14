@@ -655,12 +655,15 @@ final class EntityCapture {
      * toward where it is going per tick. So one that has stopped is still pointing wherever it last swam, which is
      * something no amount of arithmetic on a velocity of nothing can recover.
      *
-     * <p>Both angles run backwards here, as every X and Y rotation does in the space a mesh is kept in.
+     * <p>Neither angle is turned round, and the spin goes inside the tip. The client states both in the space a mesh
+     * is kept in - outside the flip it draws a model through, alongside the half block it turns a squid about - so
+     * unlike a pose stated in the model's own axes, they come across as they are. Read the flip into the tip and a
+     * squid comes out a half circle wrong: tentacles leading, mantle astern.
      */
     private static EntitySnapshot swimming(Entity entity, EntitySnapshot mob, String type, EntityDetails details) {
         float[] swim = details == null ? null : details.swimming(entity);
         if (swim != null) {
-            return mob.tilted((float) Math.toRadians(-swim[0]), (float) Math.toRadians(-swim[1]), SQUID_PIVOT);
+            return mob.swimming((float) Math.toRadians(swim[0]), (float) Math.toRadians(swim[1]), SQUID_PIVOT);
         }
 
         if (entity instanceof Fish && !entity.isInWater()) {

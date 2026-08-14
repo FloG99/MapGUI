@@ -192,6 +192,22 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
     }
 
     /**
+     * The same model tipped over about X and then spun about its own axis, which is how a squid's renderer points one
+     * along whatever it is jetting: the spin sits <i>inside</i> the tip, so it carries the mantle round the way the
+     * animal is going rather than tipping it further over.
+     *
+     * <p>Composed and taken back apart rather than handed straight to {@link #tilted}, because a part applies its own
+     * three angles Z, then Y, then X - the other order - and no triple in that order is this rotation. For a squid
+     * swimming level it falls out as the tip and a turn about Z, which is where the two orders happen to agree.
+     *
+     * @param pivotY in entity pixels off the feet
+     */
+    EntityModel swimming(float tip, float spin, float pivotY) {
+        float[] angles = Turns.angles(Turns.times(Turns.x(tip), Turns.y(spin)));
+        return tilted(angles[0], angles[1], angles[2], pivotY);
+    }
+
+    /**
      * A model from its parts, measuring the extent of the tree rather than taking it on trust - so an extracted mesh
      * and an authored one bound themselves the same way, and neither states a height that could drift from its own
      * geometry.

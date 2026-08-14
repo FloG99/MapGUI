@@ -317,6 +317,18 @@ public record EntitySnapshot(
     }
 
     /**
+     * The same mob pointing where a squid is swimming: tipped over about X and then spun about its own axis.
+     *
+     * <p>Not two of {@link #tilted}'s three angles, because the spin belongs inside the tip rather than beside it -
+     * which is where the client applies it, and the two do not commute.
+     *
+     * @param pivotY where the turn happens, in entity pixels off the feet
+     */
+    public EntitySnapshot swimming(float tip, float spin, float pivotY) {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.swimming(tip, spin, pivotY), texture, tint);
+    }
+
+    /**
      * The same turned bodily about all three axes, for a block entity that sits on whichever of its block's six faces
      * it was placed against.
      *
