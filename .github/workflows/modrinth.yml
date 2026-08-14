@@ -1,0 +1,58 @@
+name: Modrinth
+
+# Runs when a GitHub release is published, which is the gate the rest of this pipeline already uses:
+# the release is drafted by release.yml and waits for you. Modrinth has no draft state, so publishing
+# on the tag itself would put a version live before you had looked at it.
+#
+# Only the plugin jar goes up. The api and examples jars are for developers, who get them from Central.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  SLUG: mapgui
+  # Adding a supported Minecraft version means adding it here.
+  GAME_VERSIONS: '["26.2"]'
+  LOADERS: '["paper"]'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+      NOTES: ${{ github.event.release.body }}
+    steps:
+      - name: Check the token is set
+        run: test -n "$MODRINTH_TOKEN" || { echo "::error::MODRINTH_TOKEN is not set"; exit 1; }
+
+      - name: Take the plugin jar from the release
+        run: |
+          version="${TAG#v}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" --pattern "MapGUI-$version.jar" --dir dist
+          ls -l dist
+
+      # The lookup is authenticated so it still works while the project is unlisted or waiting on
+      # Modrinth's review queue - an anonymous GET returns 404 for those.
+      - name: Publish to Modrinth
+        run: |
+          auth="Authorization: $MODRINTH_TOKEN"
+          project=$(curl --fail-with-body -sS -H "$auth" "https://api.modrinth.com/v2/project/$SLUG" | jq -r .id)
+          data=$(jq -n \
+            --arg name "MapGUI $VERSION" \
+            --arg version "$VERSION" \
+            --arg changelog "$NOTES" \
+            --arg project "$project" \
+            --argjson game_versions "$GAME_VERSIONS" \
+            --argjson loaders "$LOADERS" \
+            '{name: $name, version_number: $version, changelog: $changelog, project_id: $project,
+              game_versions: $game_versions, loaders: $loaders, version_type: "release", featured: true,
+              dependencies: [], file_parts: ["file"], primary_file: "file"}')
+          curl --fail-with-body -sS -X POST "https://api.modrinth.com/v2/version" \
+            -H "$auth" -F data="$data" -F file=@"dist/MapGUI-$VERSION.jar" > response.json
+          echo "published $(jq -r .id response.json)"
