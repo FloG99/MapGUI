@@ -123,7 +123,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.github.flog99:mapgui-api:1.0.0")
+    compileOnly("io.github.flog99:mapgui-api:1.1.0")
 }
 ```
 

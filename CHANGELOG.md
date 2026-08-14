@@ -3,7 +3,11 @@
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
 surface is `mapgui-api`, which carries the layout engine inside it.
 
-## Unreleased
+## 1.1.0
+
+The camera: the world photographed onto a map, with real block textures, the people in view wearing their own skins,
+and a sky with the sun, moon and stars where they actually are.
+Also real map printing, more ways to carry a GUI, and a live view driven for you.
 
 ### Running a server
 
