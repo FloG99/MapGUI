@@ -98,7 +98,7 @@ plugins/
 | `/mapgui hand open gallery` | every widget, and the layout rules side by side |
 | `/mapgui hand open todo` | state, scrolling, text prompts, per-row closures |
 | `/mapgui hand open minimap` | terrain rendering, and a screen with no cursor - worn in the offhand, swap hands to put it away |
-| `/mapgui hand open camera` | a screenshot of the world, and a screen that aims instead of pointing - offhand, swap hands for the mouse |
+| `/mapgui hand open camera` | a screenshot of the world, and a screen that aims instead of pointing - offhand, raised as a mode, swap hands to put it away |
 | `/mapgui hand open claims` | a full-screen map, one `Draw` node standing in for a grid, cursor tracking |
 | `/mapgui wall place draw` | a wall everyone draws on, with a palette only you can see |
 | `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
