@@ -18,7 +18,8 @@ A capture is a `CameraShot`, which is a `Frames` of exactly one frame - so
 Draw(context -> new VideoPlayer(shot).fit(VideoPlayer.Fit.COVER).paint(context.painter(), context.bounds(), 0))
 ```
 
-Try it with `/mapgui hand open camera`. Aim with your head, left-click or sneak to shoot, right-click for settings.
+Try it with `/mapgui hand open camera`. Aim with your head, left-click or sneak to shoot, right-click for settings,
+and swap hands - F, unless you have rebound it - to put the camera away.
 
 **Print** in those settings takes one 256x256 capture and hands back **four real map items**, a quarter each, to hang
 in item frames in a 2x2 square - their names say which corner each one goes in. A map is 128 pixels and nothing

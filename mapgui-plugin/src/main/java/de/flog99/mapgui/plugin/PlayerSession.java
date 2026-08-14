@@ -296,6 +296,12 @@ final class PlayerSession implements Session {
 
         focused = wanted;
         needsPaint = true;
+        // Under a toggling mode the line says something different either side of the key, and the key is the
+        // player's own - so say it again rather than leaving the one from opening standing. Never before
+        // start() has sent the first, or opening would send two.
+        if (task != null && hand.togglesFocus()) {
+            player.sendActionBar(Component.text(controls()));
+        }
         reaim();
     }
 
@@ -424,8 +430,17 @@ final class PlayerSession implements Session {
         return stack -> own.equals(items.ownOf(stack)) || (gui != null && gui.equals(items.guiOf(stack)));
     }
 
-    /** What to tell the player they can do, which depends on how the map got into their hands. */
+    /**
+     * What to tell the player they can do, which depends on how the map got into their hands - and on whether they
+     * have picked it up yet.
+     *
+     * <p>A toggling mode opens with the map down, where nothing takes a click at all. Saying what a click does there,
+     * and calling the toggle a way to put the map <i>down</i>, described the state after the key rather than the one
+     * the line is read in - so the only true thing to say is how to pick the map up.
+     */
     private String controls() {
+        if (!focused && hand.togglesFocus()) return pickUp();
+
         String hint = switch (screen().activateOn()) {
             case RIGHT -> "Right-click to select";
             case LEFT -> "Left-click to select";
@@ -438,6 +453,16 @@ final class PlayerSession implements Session {
             // Q reaches a pinned map in the main hand, where it is the thing being held.
             case PINNED -> hand.reachesMainHand() ? focusHint() + ", Q to close" : focusHint();
             case OFFHAND -> focusHint();
+        };
+    }
+
+    /** The other half of a toggle, for the map the player is carrying but has not raised. */
+    private String pickUp() {
+        return switch (hand.focus()) {
+            case SWAP_HANDS -> "Swap hands to use it";
+            case RIGHT_CLICK -> "Right-click the air to use it";
+            // Nothing else toggles, so nothing else reaches here.
+            default -> "";
         };
     }
 

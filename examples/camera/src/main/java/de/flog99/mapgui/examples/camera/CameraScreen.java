@@ -33,7 +33,7 @@ import static de.flog99.mapgui.ui.Ui.Spinner;
 import static de.flog99.mapgui.ui.Ui.Text;
 
 /**
- * Aim with your head, left-click or sneak to capture, right-click for settings.
+ * Aim with your head, left-click or sneak to capture, right-click for settings, swap hands to put it away.
  *
  * <p>The input model is the point of this example. A cursor's vertical axis <i>is</i> the player's pitch, so a
  * screen that asks them to press a button also decides where they are looking - which is useless for a camera.
@@ -67,12 +67,19 @@ public final class CameraScreen extends Screen {
     /**
      * In the offhand, so the main hand stays the player's while they line a shot up.
      *
-     * <p>Swapping hands is the way in and out of it, since a viewfinder that ate every click would leave nobody
-     * able to mine with a camera up.
+     * <p>Up means up: an offhand map's default is for the swap key to toggle focus, which on a viewfinder shows
+     * nothing at all - there is no cursor to appear - so the shutter was simply dead until the key had been pressed
+     * once. A camera is a mode instead. It has the clicks from the moment it is raised, and the same key puts it away.
      */
     @Override
     public HandOptions hand() {
-        return HandOptions.offhand();
+        return HandOptions.offhand().focus(HandOptions.Focus.ALWAYS);
+    }
+
+    /** Swapping hands, which an offhand map has nothing else to spend on - and it costs none of the aim a button would. */
+    @Override
+    protected void onSwapHands() {
+        close();
     }
 
     /** Only the settings panel has anything to point at, so only it takes the player's aim. */
