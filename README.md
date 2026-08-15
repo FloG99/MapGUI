@@ -14,7 +14,7 @@ can join your server can use it.
 
 **Paper 26.2 · Java 25 · no runtime dependencies**
 
-<!--TODO: Video demonstration -->
+<img width="645" height="453" alt="382400600-716980a6-71e2-4a04-b79b-cdd2d637fde3" src="https://github.com/user-attachments/assets/1051ab81-83a8-4568-ae55-88d8a01e7fca" />
 
 <img width="605" height="499" alt="polish_cow" src="https://github.com/user-attachments/assets/7b3f0a15-e847-4208-8e49-9c5dbcccf4e1" />
 
