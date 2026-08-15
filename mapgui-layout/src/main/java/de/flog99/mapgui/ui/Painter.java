@@ -22,6 +22,8 @@ public final class Painter {
 
     /** Built on first use, since a screen with no gradients never needs it. */
     private Palette dithered;
+    /** One full row of an image being blitted, held so {@link #image} allocates nothing per call. */
+    private int[] pixelRow;
 
     public Painter(Surface surface, Palette palette, TextFont font) {
         this.surface = surface;
@@ -106,6 +108,21 @@ public final class Painter {
 
     public void pixel(int x, int y, Color color) {
         pixel(x, y, color, palette);
+    }
+
+    /** The packed image/glyph path, avoiding a Color object for each pixel. */
+    void pixel(int x, int y, int argb) {
+        int alpha = argb >>> 24;
+        if (alpha == 0) return;
+        if (clipped(x, y) || !surface.inBounds(x, y)) return;
+
+        if (alpha == 255) {
+            surface.set(x, y, palette.index(argb, x, y));
+            return;
+        }
+
+        int under = palette.color(surface.get(x, y)).getRGB();
+        surface.set(x, y, palette.index(blend(under, argb, alpha), x, y));
     }
 
     private void pixel(int x, int y, Color color, Palette with) {
@@ -546,10 +563,11 @@ public final class Painter {
     public void image(int x, int y, BufferedImage image) {
         if (image == null) return;
 
+        int w = image.getWidth();
+        if (pixelRow == null || pixelRow.length < w) pixelRow = new int[w];
         for (int j = 0; j < image.getHeight(); j++) {
-            for (int i = 0; i < image.getWidth(); i++) {
-                pixel(x + i, y + j, new Color(image.getRGB(i, j), true));
-            }
+            image.getRGB(0, j, w, 1, pixelRow, 0, w);
+            for (int i = 0; i < w; i++) pixel(x + i, y + j, pixelRow[i]);
         }
     }
 

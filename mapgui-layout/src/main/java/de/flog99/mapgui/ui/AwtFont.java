@@ -150,16 +150,16 @@ public final class AwtFont implements TextFont {
     @Override
     public void drawChar(Painter painter, int x, int y, char ch, Color color) {
         Glyph glyph = glyphOf(ch);
+        int packed = color.getRGB();
 
         for (int row = 0; row < glyph.height(); row++) {
             for (int column = 0; column < glyph.width(); column++) {
                 int coverage = glyph.coverage()[row * glyph.width() + column] & 0xFF;
                 if (coverage == 0) continue;
 
-                Color shade = coverage == 255
-                        ? color
-                        : new Color(color.getRed(), color.getGreen(), color.getBlue(), coverage);
-                painter.pixel(x + column, y + row, shade);
+                painter.pixel(x + column, y + row,
+                        coverage == 255 ? packed : packed & 0x00FFFFFF | coverage << 24
+                );
             }
         }
     }
