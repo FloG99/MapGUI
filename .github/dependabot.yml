@@ -8,6 +8,12 @@ updates:
     # One pull request for the routine bumps rather than one each. A major stays on its own, since that is the
     # kind worth reading.
     groups:
+      # JavaCV and FFmpeg are one dependency in two artifacts: the FFmpeg build is the one that JavaCV release
+      # ships, and VideoNatives names both so the loader can fetch them. Offered separately they arrive as two
+      # pull requests either of which breaks the pair on its own, so they are grouped whatever the update is.
+      # First, since a dependency joins the first group that matches it.
+      ffmpeg:
+        patterns: ["org.bytedeco:*"]
       gradle:
         patterns: ["*"]
         update-types: [minor, patch]

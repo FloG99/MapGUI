@@ -19,8 +19,8 @@ public final class VideoNatives {
      * against. FFmpeg's version is the one that JavaCV release ships - the two move together and cannot be
      * mixed.
      */
-    public static final String JAVACV_VERSION = "1.5.11";
-    public static final String FFMPEG_VERSION = "7.1-1.5.11";
+    public static final String JAVACV_VERSION = "1.5.14";
+    public static final String FFMPEG_VERSION = "8.1.2-1.5.14";
 
     private VideoNatives() {
     }
