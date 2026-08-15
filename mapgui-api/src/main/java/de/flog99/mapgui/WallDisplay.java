@@ -134,26 +134,22 @@ public final class WallDisplay {
 
         for (WallView view : allViews) view.paint(now, intervalMs);
 
-        if (!watching.isEmpty()) {
-            // Everyone watching a shared wall is sent the same bytes, so they are cut out of the surface
-            // once. Allocated only when there is somebody to send to; a wall with no audience never
-            // builds the extraction map.
-            TileRegions frame = new TileRegions();
+        // Everyone watching a shared wall is sent the same bytes, so they are cut out of the surface once.
+        TileRegions frame = new TileRegions();
 
-            for (Player player : watching) {
-                WallView view = viewOf(player);
-                // One frame is one packet per map that changed, and a wall that goes up in pieces tears.
-                services.transport().bundled(player, () -> {
-                    if (arrived.contains(player)) {
-                        tiles.sendAll(player, view.surface(), frame);
-                    } else if (view.surface().isDirty()) {
-                        tiles.sendChanged(player, view.surface(), frame);
-                    }
-                    if (interactive) {
-                        cursors.send(player, watching, markersOf(view));
-                    }
-                });
-            }
+        for (Player player : watching) {
+            WallView view = viewOf(player);
+            // One frame is one packet per map that changed, and a wall that goes up in pieces tears.
+            services.transport().bundled(player, () -> {
+                if (arrived.contains(player)) {
+                    tiles.sendAll(player, view.surface(), frame);
+                } else if (view.surface().isDirty()) {
+                    tiles.sendChanged(player, view.surface(), frame);
+                }
+                if (interactive) {
+                    cursors.send(player, watching, markersOf(view));
+                }
+            });
         }
 
         for (WallView view : allViews) view.surface().clearDirty();
