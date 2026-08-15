@@ -6,7 +6,7 @@ junit = "6.1.2"
 # FFmpeg playback. compileOnly here and downloaded at runtime by VideoLibraryLoader, so these two must
 # stay in step with the constants in VideoNatives. The FFmpeg version is the one that JavaCV release ships.
 javacv = "1.5.11"
-ffmpeg = "7.1-1.5.11"
+ffmpeg = "8.1.2-1.5.14"
 annotations = "26.1.0"
 # Matched to what Paper 26.2 puts on the runtime classpath, since that is what this actually runs against.
 gson = "2.14.0"
