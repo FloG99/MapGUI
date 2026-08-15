@@ -48,6 +48,8 @@ final class WallCursors {
      * one per player, spread across the whole wall.
      */
     private final Map<UUID, Set<Integer>> marked = new HashMap<>();
+    /** Exact marker lists last sent per viewer and tile; immutable snapshots make equality stable. */
+    private final Map<UUID, Map<Integer, List<Marker>>> sentMarkers = new HashMap<>();
 
     /** This tick's measurements, held between {@link #measure} and {@link #accept}. Main thread only. */
     private final Map<UUID, Crossing> candidates = new HashMap<>();
@@ -181,9 +183,13 @@ final class WallCursors {
             }
         }
 
-        Set<Integer> was = marked.getOrDefault(player.getUniqueId(), Set.of());
+        UUID id = player.getUniqueId();
+        Map<Integer, List<Marker>> before = sentMarkers.getOrDefault(id, Map.of());
+        Set<Integer> was = marked.getOrDefault(id, Set.of());
         for (Map.Entry<Integer, List<Marker>> entry : byTile.entrySet()) {
-            tiles.sendMarkers(player, entry.getKey(), entry.getValue());
+            if (!entry.getValue().equals(before.get(entry.getKey()))) {
+                tiles.sendMarkers(player, entry.getKey(), entry.getValue());
+            }
         }
         // Tiles that had something last tick and do not now have to be told, or the old icon stays put.
         for (int tile : was) {
@@ -193,21 +199,25 @@ final class WallCursors {
         }
 
         if (byTile.isEmpty()) {
-            marked.remove(player.getUniqueId());
+            marked.remove(id);
+            sentMarkers.remove(id);
         } else {
-            marked.put(player.getUniqueId(), Set.copyOf(byTile.keySet()));
+            marked.put(id, Set.copyOf(byTile.keySet()));
+            sentMarkers.put(id, immutableMarkers(byTile));
         }
     }
 
     void forget(UUID player) {
         aiming.remove(player);
         marked.remove(player);
+        sentMarkers.remove(player);
         candidates.remove(player);
     }
 
     void clear() {
         aiming.clear();
         marked.clear();
+        sentMarkers.clear();
         candidates.clear();
     }
 
@@ -230,5 +240,12 @@ final class WallCursors {
                 marker.y() - layout.tileOriginY(marker.y()),
                 marker.rotation(), marker.label())
         );
+    }
+    private static Map<Integer, List<Marker>> immutableMarkers(Map<Integer, List<Marker>> byTile) {
+        Map<Integer, List<Marker>> copy = new HashMap<>(byTile.size());
+        for (Map.Entry<Integer, List<Marker>> entry : byTile.entrySet()) {
+            copy.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        return Map.copyOf(copy);
     }
 }

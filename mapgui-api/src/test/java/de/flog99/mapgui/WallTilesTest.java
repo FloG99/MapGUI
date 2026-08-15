@@ -208,4 +208,29 @@ class WallTilesTest {
 
         assertFalse(tiles.canShowLayers(), "so the wall streams instead of prerendering");
     }
+
+    @Test
+    void stationaryMarkersAreSuppressedAfterTheFirstTransportSend() {
+        FakeTransport transport = new FakeTransport();
+        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallCursors cursors = new WallCursors(WALL, tiles, false, 0);
+
+        List<Marker> markers = List.of(new Marker(null, 1, 1, (byte) 8, null));
+        cursors.send(FakePlayer.named("stationary"), List.of(), markers);
+        cursors.send(FakePlayer.named("stationary"), List.of(), markers);
+
+        assertEquals(1, transport.markerSends(), "stationary markers should be sent once");
+    }
+    @Test
+    void markerClearIsSentWhenMarkersDisappear() {
+        FakeTransport transport = new FakeTransport();
+        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallCursors cursors = new WallCursors(WALL, tiles, false, 0);
+        var viewer = FakePlayer.named("clear");
+
+        cursors.send(viewer, List.of(), List.of(new Marker(null, 1, 1, (byte) 8, null)));
+        cursors.send(viewer, List.of(), List.of());
+
+        assertEquals(2, transport.markerSends(), "the empty update clears the stale marker");
+    }
 }
