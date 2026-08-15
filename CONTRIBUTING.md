@@ -82,6 +82,15 @@ unclear provenance. If a snippet came from somewhere, say where in the PR.
 
 ## Pull requests
 
+Fork the repository, branch off `main`, and open the pull request from your branch. Nobody outside needs push
+access here and there is no need to ask for any - a fork is the way in, and `main` takes changes through a pull
+request either way.
+
+The `Build` workflow runs on every pull request, forks included, and is the same `./gradlew build` you ran
+locally. A first pull request from a new contributor can sit waiting for a maintainer to start it, which is
+GitHub's own guard against strangers running code in someone else's CI - a check that has not begun is not a
+check that failed.
+
 - One concern per PR.
 - `./gradlew build` clean, warnings included. The build is warning-free and should stay that way.
 - Say what you tested in game, if it needed a server. Half of this cannot be unit tested.
