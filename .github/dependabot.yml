@@ -5,8 +5,23 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    # One pull request for the routine bumps rather than one each. A major stays on its own, since that is the
+    # kind worth reading.
+    groups:
+      gradle:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    # paperweight publishes a 2.0.0-SNAPSHOT that sorts above every beta, so this is offered as an upgrade every
+    # month. It is not one: a snapshot moves under a build that has not changed, which is the opposite of what
+    # pinning a version is for.
+    ignore:
+      - dependency-name: io.papermc.paperweight.userdev
+        versions: ["2.0.0-SNAPSHOT"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
