@@ -221,6 +221,7 @@ class WallTilesTest {
 
         assertEquals(1, transport.markerSends(), "stationary markers should be sent once");
     }
+
     @Test
     void markerClearIsSentWhenMarkersDisappear() {
         FakeTransport transport = new FakeTransport();

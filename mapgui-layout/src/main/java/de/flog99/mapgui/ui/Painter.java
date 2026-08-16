@@ -563,11 +563,13 @@ public final class Painter {
     public void image(int x, int y, BufferedImage image) {
         if (image == null) return;
 
-        int w = image.getWidth();
-        if (pixelRow == null || pixelRow.length < w) pixelRow = new int[w];
+        int width = image.getWidth();
+        if (pixelRow == null || pixelRow.length < width) {
+            pixelRow = new int[width];
+        }
         for (int j = 0; j < image.getHeight(); j++) {
-            image.getRGB(0, j, w, 1, pixelRow, 0, w);
-            for (int i = 0; i < w; i++) pixel(x + i, y + j, pixelRow[i], palette);
+            image.getRGB(0, j, width, 1, pixelRow, 0, width);
+            for (int i = 0; i < width; i++) pixel(x + i, y + j, pixelRow[i], palette);
         }
     }
 

@@ -61,6 +61,7 @@ class CursorMovedAbTest {
             return firstRoot;
         }
     }
+
     private static Menu drawn() {
         Menu screen = new Menu();
         screen.layout(MapTextFont.INSTANCE, new Rect(0, 0, 128, 128));

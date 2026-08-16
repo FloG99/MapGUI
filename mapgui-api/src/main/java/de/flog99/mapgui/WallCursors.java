@@ -232,6 +232,7 @@ final class WallCursors {
                 marker.rotation(), marker.label())
         );
     }
+
     private static Map<Integer, List<Marker>> immutableMarkers(Map<Integer, List<Marker>> byTile) {
         Map<Integer, List<Marker>> copy = new HashMap<>(byTile.size());
         for (Map.Entry<Integer, List<Marker>> entry : byTile.entrySet()) {

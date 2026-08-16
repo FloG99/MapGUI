@@ -59,5 +59,4 @@ public final class Nodes {
         }
         return type.isInstance(root) ? type.cast(root) : null;
     }
-
 }

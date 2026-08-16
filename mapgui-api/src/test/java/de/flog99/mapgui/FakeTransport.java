@@ -58,6 +58,7 @@ final class FakeTransport implements MapTransport {
         pointedAt.clear();
         markerSends = 0;
     }
+
     /** How many map updates carried pixels, which is the number that matters. */
     int updates() {
         return sent.size();
