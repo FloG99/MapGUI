@@ -371,6 +371,7 @@ public abstract class Screen {
 
     @ApiStatus.Internal
     public final void layout(TextFont font, Rect viewport) {
+        Node oldRoot = root;
         root = build();
         assignPaths(root, "0");
         Nodes.walk(root, node -> {
@@ -393,7 +394,7 @@ public abstract class Screen {
         LayoutContext context = new LayoutContext(font, animator);
         root.measure(context, viewport.width(), viewport.height());
         root.arrange(context, viewport);
-        hovered = null;
+        if (oldRoot != root) hovered = null;
         dirty = false;
     }
 
