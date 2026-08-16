@@ -81,15 +81,62 @@ public final class MapSurface implements Surface {
         if (pixels[index] == color) return;
 
         pixels[index] = color;
+        markChanged(y, x / TILE, x, x + 1);
+    }
 
-        int col = x / TILE;
+    /**
+     * Records that one row of one tile changed between {@code from} and {@code to}, right exclusive.
+     *
+     * <p>Of one tile, since that is the grain the spans are kept at and a map update never spans two of them.
+     */
+    private void markChanged(int y, int col, int from, int to) {
         int tile = y / TILE * tileCols + col;
         minRow[tile] = Math.min(minRow[tile], y);
         maxRow[tile] = Math.max(maxRow[tile], y);
 
         int span = y * tileCols + col;
-        spanLeft[span] = Math.min(spanLeft[span], x);
-        spanRight[span] = Math.max(spanRight[span], x + 1);
+        spanLeft[span] = Math.min(spanLeft[span], from);
+        spanRight[span] = Math.max(spanRight[span], to);
+    }
+
+    /**
+     * Takes another surface's pixels, marking only the ones that really changed.
+     *
+     * <p>What lets anything be drawn on a canvas and sent from here. A surface that is wiped and painted over
+     * every frame has changed everywhere by the time it is finished - the wipe saw to that - so a frame that
+     * ends up identical still goes out in full. Painting on a canvas and crossing over through here means only
+     * real differences are ever sent, and a settled screen sends nothing at all.
+     *
+     * <p>A row of a tile at a time rather than a pixel at a time: the outermost differences are found with a
+     * comparison the machine does sixteen bytes at once, the run between them is copied in one go, and the
+     * span is recorded once instead of once per pixel. What ends up marked is exactly what setting every pixel
+     * by hand would have marked, since a row of a tile only ever keeps the span around what changed - which is
+     * also why this stops at each tile rather than scanning the whole row: a wall would otherwise sweep two
+     * far-apart changes into one span per tile between them.
+     */
+    public void copyFrom(MapSurface other) {
+        if (other.width != width || other.height != height) {
+            throw new IllegalArgumentException("a surface can only be copied from one of the same size");
+        }
+
+        byte[] source = other.pixels;
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int col = 0; col < tileCols; col++) {
+                int start = row + col * TILE;
+                int end = row + Math.min(width, (col + 1) * TILE);
+
+                int from = Arrays.mismatch(source, start, end, pixels, start, end);
+                if (from < 0) continue;
+
+                // There is at least one difference, so this stops at it rather than running off the tile.
+                int to = end - start;
+                while (source[start + to - 1] == pixels[start + to - 1]) to--;
+
+                System.arraycopy(source, start + from, pixels, start + from, to - from);
+                markChanged(y, col, col * TILE + from, col * TILE + to);
+            }
+        }
     }
 
     @Override

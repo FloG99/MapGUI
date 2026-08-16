@@ -108,7 +108,8 @@ final class WallView {
         if (overlay != null) {
             overlay.paint(painter, canvas.bounds(), step - startedAt);
         }
-        blit();
+        // Only pixels that really changed reach the sent surface, so the dirty rectangle stays honest.
+        surface.copyFrom(canvas);
     }
 
     private void paintScreen(long now) {
@@ -147,16 +148,6 @@ final class WallView {
             TerrainRenderer.render(terrain, center, blocksPerPixel);
         }
 
-        System.arraycopy(terrain.pixels(), 0, canvas.pixels(), 0, terrain.pixels().length);
-        canvas.markAllDirty();
-    }
-
-    /** Only pixels that really changed reach the sent surface, so the dirty rectangle stays honest. */
-    private void blit() {
-        byte[] drawn = canvas.pixels();
-        for (int y = 0; y < surface.height(); y++) {
-            int row = y * surface.width();
-            for (int x = 0; x < surface.width(); x++) surface.set(x, y, drawn[row + x]);
-        }
+        canvas.copyFrom(terrain);
     }
 }
