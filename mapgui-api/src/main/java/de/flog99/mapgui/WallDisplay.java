@@ -125,13 +125,14 @@ public final class WallDisplay {
 
         List<Player> arrived = admitAndEvict(now);
         List<Player> watching = online(viewers);
-
+        if (watching.isEmpty()) return;
         if (loop != null) {
             playLoop(arrived, watching, now);
             return;
         }
+        List<WallView> allViews = views();
 
-        for (WallView view : views()) view.paint(now, intervalMs);
+        for (WallView view : allViews) view.paint(now, intervalMs);
 
         // Everyone watching a shared wall is sent the same bytes, so they are cut out of the surface once.
         TileRegions frame = new TileRegions();
@@ -151,7 +152,7 @@ public final class WallDisplay {
             });
         }
 
-        for (WallView view : views()) view.surface().clearDirty();
+        for (WallView view : allViews) view.surface().clearDirty();
     }
 
     /** A prerendered wall: everything on arrival, and a nudge per frame after that. */

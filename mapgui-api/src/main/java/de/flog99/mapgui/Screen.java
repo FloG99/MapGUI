@@ -371,6 +371,7 @@ public abstract class Screen {
 
     @ApiStatus.Internal
     public final void layout(TextFont font, Rect viewport) {
+        Node oldRoot = root;
         root = build();
         assignPaths(root, "0");
         Nodes.walk(root, node -> {
@@ -393,7 +394,7 @@ public abstract class Screen {
         LayoutContext context = new LayoutContext(font, animator);
         root.measure(context, viewport.width(), viewport.height());
         root.arrange(context, viewport);
-        hovered = null;
+        if (oldRoot != root) hovered = null;
         dirty = false;
     }
 
@@ -418,6 +419,12 @@ public abstract class Screen {
     public final boolean animating() {
         return animator.animating() || pressing() || keepDrawing();
     }
+
+    /**
+     * Which layout pass the hover state was built against, so a re-layout is always re-hit-tested
+     * even if the aim has not moved.
+     */
+    private long cursorPass;
 
     @ApiStatus.Internal
     public final void sneakChanged(boolean sneaking) {
@@ -474,10 +481,15 @@ public abstract class Screen {
     /** Returns true if the hovered node changed, i.e. a repaint is needed. */
     @ApiStatus.Internal
     public final boolean cursorMoved(int x, int y) {
+        // The common case on a static wall: nobody moved their head, and the screen did not re-layout,
+        // so skip the tree walk entirely rather than hit-testing an aim that did not move.
+        if (x == cursorX && y == cursorY && pass == cursorPass) return false;
+
         Node hit = root == null ? null : root.hitTest(x, y);
         boolean moved = x != cursorX || y != cursorY;
         cursorX = x;
         cursorY = y;
+        cursorPass = pass;
 
         // Still the same node, so nothing has changed unless it draws at the cursor itself.
         if (hit == hovered) return moved && hit != null && hit.tracksCursor();
