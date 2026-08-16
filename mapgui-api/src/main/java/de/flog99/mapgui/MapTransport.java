@@ -84,4 +84,16 @@ public interface MapTransport {
 
     /** Drops the pretence and lets the client see what is actually in the slot. */
     void hideMapItem(Player player);
+
+    /**
+     * Drops whatever is being remembered about a player who has left.
+     *
+     * <p>What a transport keeps per player is small - a byte count, a note that their slots are faked - but it
+     * is keyed by a UUID and nothing else ever removes it, so without this a server accumulates an entry for
+     * every player who has ever opened a map and holds them until it restarts.
+     *
+     * <p>Optional, since a transport with nothing per player has nothing to forget.
+     */
+    default void forget(Player player) {
+    }
 }

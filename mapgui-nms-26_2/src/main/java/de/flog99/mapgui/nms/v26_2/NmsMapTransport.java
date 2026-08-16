@@ -307,6 +307,18 @@ public final class NmsMapTransport implements MapTransport {
     }
 
     /**
+     * Both maps are keyed by a player who has gone, and the connection they were about with them.
+     *
+     * <p>The fake is dropped rather than lifted: putting the real synchronizer back would resend an inventory
+     * to a client that has disconnected, and the menu it wrapped went with the player anyway.
+     */
+    @Override
+    public void forget(Player player) {
+        faked.remove(player.getUniqueId());
+        perPlayer.remove(player.getUniqueId());
+    }
+
+    /**
      * Surface pixels to the map's own -128..127 icon space, twice as fine as the pixels and centered rather
      * than corner-based. Shifted by the icon's hotspot, so its point lands on the given position.
      */

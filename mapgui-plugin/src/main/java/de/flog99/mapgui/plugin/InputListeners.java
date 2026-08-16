@@ -256,5 +256,7 @@ final class InputListeners implements Listener {
         plugin.handItems().forget(event.getPlayer());
         plugin.heldTriggers().forget(event.getPlayer());
         plugin.router().releaseAll(event.getPlayer());
+        // Last, since closing the session is what still needs the transport to know about them.
+        plugin.transport().forget(event.getPlayer());
     }
 }
