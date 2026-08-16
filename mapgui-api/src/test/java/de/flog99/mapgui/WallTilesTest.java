@@ -233,4 +233,18 @@ class WallTilesTest {
 
         assertEquals(2, transport.markerSends(), "the empty update clears the stale marker");
     }
+
+    @Test
+    void aMovingMarkerInsideOneTileSendsEachTick() {
+        FakeTransport transport = new FakeTransport();
+        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallCursors cursors = new WallCursors(WALL, tiles, false, 0);
+        var viewer = FakePlayer.named("mover");
+
+        cursors.send(viewer, List.of(), List.of(new Marker(null, 1, 1, (byte) 8, null)));
+        cursors.send(viewer, List.of(), List.of(new Marker(null, 2, 1, (byte) 8, null)));
+        cursors.send(viewer, List.of(), List.of(new Marker(null, 3, 1, (byte) 8, null)));
+
+        assertEquals(3, transport.markerSends(), "a marker moving inside a tile must be sent each tick");
+    }
 }

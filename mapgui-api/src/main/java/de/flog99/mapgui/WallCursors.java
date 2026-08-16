@@ -12,7 +12,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,13 +40,6 @@ final class WallCursors {
      */
     private final Map<UUID, WallLayout.Aim> aiming = new ConcurrentHashMap<>();
 
-    /**
-     * Which tiles each viewer currently has markers on, so they can be taken off again.
-     *
-     * <p>A set rather than one tile, because a screen's own markers can be anywhere - a minimap may have
-     * one per player, spread across the whole wall.
-     */
-    private final Map<UUID, Set<Integer>> marked = new HashMap<>();
     /** Exact marker lists last sent per viewer and tile; immutable snapshots make equality stable. */
     private final Map<UUID, Map<Integer, List<Marker>>> sentMarkers = new HashMap<>();
 
@@ -185,38 +177,37 @@ final class WallCursors {
 
         UUID id = player.getUniqueId();
         Map<Integer, List<Marker>> before = sentMarkers.getOrDefault(id, Map.of());
-        Set<Integer> was = marked.getOrDefault(id, Set.of());
+        boolean changed = !byTile.keySet().equals(before.keySet());
         for (Map.Entry<Integer, List<Marker>> entry : byTile.entrySet()) {
             if (!entry.getValue().equals(before.get(entry.getKey()))) {
                 tiles.sendMarkers(player, entry.getKey(), entry.getValue());
+                changed = true;
             }
         }
+        if (!changed) return;
+
         // Tiles that had something last tick and do not now have to be told, or the old icon stays put.
-        for (int tile : was) {
+        for (int tile : before.keySet()) {
             if (!byTile.containsKey(tile)) {
                 tiles.sendMarkers(player, tile, List.of());
             }
         }
 
         if (byTile.isEmpty()) {
-            marked.remove(id);
             sentMarkers.remove(id);
         } else {
-            marked.put(id, Set.copyOf(byTile.keySet()));
             sentMarkers.put(id, immutableMarkers(byTile));
         }
     }
 
     void forget(UUID player) {
         aiming.remove(player);
-        marked.remove(player);
         sentMarkers.remove(player);
         candidates.remove(player);
     }
 
     void clear() {
         aiming.clear();
-        marked.clear();
         sentMarkers.clear();
         candidates.clear();
     }
