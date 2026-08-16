@@ -59,6 +59,16 @@ final class PlayerSession implements Session {
     private final Player player;
     private final HeldMapDisplay display;
     private final MapSurface surface;
+
+    /**
+     * What a frame is drawn on, from which only real changes cross to {@link #surface}.
+     *
+     * <p>Two surfaces because a screen is wiped to its background and painted over every frame, so the surface
+     * that gets <i>sent</i> would be dirty everywhere by the time the frame was finished - and a frame that
+     * ended up identical to the last would still go out as a full 16 KB. Only differences cross over, so
+     * moving a highlight costs the highlight. The same split, and for the same reason, as {@code WallView}.
+     */
+    private final MapSurface canvas;
     private final Painter painter;
     private final HandOptions hand;
 
@@ -139,7 +149,12 @@ final class PlayerSession implements Session {
         this.display = display;
         this.hand = hand;
         this.surface = new MapSurface(width(), height());
-        this.painter = new Painter(surface, MapColors.INSTANCE, MapTextFont.INSTANCE);
+        this.canvas = new MapSurface(width(), height());
+        this.painter = new Painter(canvas, MapColors.INSTANCE, MapTextFont.INSTANCE);
+        // The first frame goes whole, because an id is not always new: one a screen pinned, or one stamped into a
+        // carried item, still holds the last session's picture on the client, and only what changed since would
+        // leave the rest of that standing.
+        this.surface.markAllDirty();
 
         this.cursorX = width() / 2.0;
         this.cursorY = height() / 2.0;
@@ -871,10 +886,12 @@ final class PlayerSession implements Session {
         if (screen.terrain()) {
             drawTerrain(screen.blocksPerPixel());
         } else {
-            surface.fill(MapColors.INSTANCE.index(screen.background()));
+            canvas.fill(MapColors.INSTANCE.index(screen.background()));
         }
 
         screen.paint(painter);
+        // Only pixels that really changed reach the sent surface, so the dirty rectangle stays honest.
+        surface.copyFrom(canvas);
     }
 
     /** Hands the finished frame to the display, which is what actually reaches the client. */
@@ -904,11 +921,7 @@ final class PlayerSession implements Session {
             terrainValid = true;
         }
 
-        for (int y = 0; y < surface.height(); y++) {
-            for (int x = 0; x < surface.width(); x++) {
-                surface.set(x, y, terrain.get(x, y));
-            }
-        }
+        canvas.copyFrom(terrain);
     }
 
     /**
