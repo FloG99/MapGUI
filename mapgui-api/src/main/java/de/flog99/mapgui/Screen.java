@@ -20,8 +20,6 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Color;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
