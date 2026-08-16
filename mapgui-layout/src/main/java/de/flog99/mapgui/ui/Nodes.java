@@ -14,8 +14,8 @@ public final class Nodes {
     /**
      * Depth-first walk including the root.
      *
-     * <p>Iterative to keep server-tick layout and hit-testing off the call stack: the widget tree depth is
-     * bounded only by what a screen builds, and recursion puts that on the thread's stack.
+     * <p>Iterative for the allocation, not for the stack: a for-each allocates an iterator at every
+     * node, where one explicit stack serves the whole walk. The speed difference is negligible.
      */
     public static void walk(Node root, Consumer<Node> visitor) {
         if (root == null) return;
@@ -60,6 +60,4 @@ public final class Nodes {
         return type.isInstance(root) ? type.cast(root) : null;
     }
 
-    /** Marker on the stack: the node beneath it has had every child searched. */
-    private static final Object DONE = new Object();
 }

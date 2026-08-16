@@ -1,15 +1,10 @@
 package de.flog99.mapgui;
 
 import de.flog99.mapgui.ui.AbstractNode;
-import de.flog99.mapgui.ui.Animator;
-import de.flog99.mapgui.ui.LayoutContext;
 import de.flog99.mapgui.ui.Node;
 import de.flog99.mapgui.ui.Panel;
 import de.flog99.mapgui.ui.Rect;
-import de.flog99.mapgui.ui.TextFont;
 import org.junit.jupiter.api.Test;
-
-import java.awt.Color;
 
 import static de.flog99.mapgui.ui.Ui.Button;
 import static de.flog99.mapgui.ui.Ui.Column;
@@ -19,11 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * A/B equivalence for {@link Screen#assignPaths}: the path strings every node's {@code identity()} is
- * keyed by. The optimized (iterative) implementation must produce exactly the same strings as the
- * recursive one - a node's animations and scroll offsets survive a rebuild only if its name does not
- * change.
- *
- * <p>These pin the legacy behavior as the oracle; the rewrite keeps them green.
+ * keyed by. The recursive implementation must produce exactly the same strings across layouts - a node's
+ * animations and scroll offsets survive a rebuild only if its name does not change.
  */
 class ScreenAssignPathsAbTest {
 
@@ -44,15 +36,24 @@ class ScreenAssignPathsAbTest {
                 ),
                 Row(
                         Button("g")
-                    )
+                )
         );
+    }
+
+    private static Screen screenOf(Node root) {
+        return new Screen() {
+            @Override
+            protected Node build() {
+                return root;
+            }
+        };
     }
 
     @Test
     void assignPathsMatchesRecursiveNaming() {
-        Node root = tree();
-
-        Screen.assignPaths(root, "0");
+        Screen screen = screenOf(tree());
+        screen.layout(MapTextFont.INSTANCE, new Rect(0, 0, 128, 128));
+        Node root = screen.root();
 
         assertEquals("0", root.identity());
         assertEquals("0.0", root.children().get(0).identity());
@@ -70,8 +71,10 @@ class ScreenAssignPathsAbTest {
         Panel root = Column(Button("kid"));
         ((AbstractNode<?>) root.children().get(0)).key("mine");
 
-        Screen.assignPaths(root, "0");
-        assertEquals("0", root.identity());
-        assertEquals("mine", root.children().get(0).identity());
+        Screen screen = screenOf(root);
+        screen.layout(MapTextFont.INSTANCE, new Rect(0, 0, 128, 128));
+
+        assertEquals("0", screen.root().identity());
+        assertEquals("mine", screen.root().children().get(0).identity());
     }
 }

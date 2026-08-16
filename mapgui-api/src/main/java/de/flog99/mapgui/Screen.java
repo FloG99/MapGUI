@@ -403,37 +403,16 @@ public abstract class Screen {
      * Names each node by where it sits in the tree, so its animations can be found again after a
      * rebuild. A node with a {@code key} uses that instead, which is what keeps its animation
      * attached when the tree changes shape around it.
-     *
-     * <p>Iterative so layout stays off the call stack however deep a screen builds its tree, and each
-     * path string is built exactly as the recursive version did - {@code path + '.' + i} at every step.
-     *
-     * <p>Package-private so an A/B test can compare the name assigned by the iterative rewrite with the
-     * recursive one; not part of the public API.
      */
-    @ApiStatus.Internal
-    static void assignPaths(Node node, String path) {
-        Deque<PathFrame> stack = new ArrayDeque<>();
-        stack.push(new PathFrame(node, path));
-
-        while (!stack.isEmpty()) {
-            PathFrame frame = stack.pop();
-            Node current = frame.node;
-            String currentPath = frame.path;
-
-            if (current instanceof AbstractNode<?> concrete) {
-                concrete.path(currentPath);
-            }
-
-            // Pushed in reverse so assignment order matches the recursive walk exactly.
-            List<Node> children = current.children();
-            for (int i = children.size() - 1; i >= 0; i--) {
-                stack.push(new PathFrame(children.get(i), currentPath + '.' + i));
-            }
+    private static void assignPaths(Node node, String path) {
+        if (node instanceof AbstractNode<?> concrete) {
+            concrete.path(path);
         }
-    }
 
-    /** One node and the path assigned to it, for {@link #assignPaths}. */
-    private record PathFrame(Node node, String path) {
+        List<Node> children = node.children();
+        for (int i = 0; i < children.size(); i++) {
+            assignPaths(children.get(i), path + '.' + i);
+        }
     }
 
     /** True while something is still easing, which is the cue to keep drawing frames. */
