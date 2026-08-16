@@ -11,14 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * Unit test for the wall snapshot: the per-tick iteration list is rebuilt exactly when the live set
+ * Unit test for the set snapshot: the per-tick iteration list is rebuilt exactly when the live set
  * changes - never on a quiet tick - and always reflects the live set after an invalidation.
  *
  * <p>This is the mechanism {@link WallRegistry#tick} relies on to avoid a {@code List.copyOf} twenty
  * times a second per wall. The registry itself is not exercised here (that would need a server); the
  * invalidation contract between the two is: every mutation of the live set calls {@code invalidate()}.
  */
-class WallSnapshotTest {
+class SetSnapshotTest {
 
     /** Identity objects, so the snapshot's set semantics are tested, not any value equality. */
     private static final class Wall {
@@ -38,8 +38,8 @@ class WallSnapshotTest {
         return Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
     }
 
-    private static WallSnapshot<Wall> fresh(Set<Wall> live) {
-        return new WallSnapshot<>(live);
+    private static SetSnapshot<Wall> fresh(Set<Wall> live) {
+        return new SetSnapshot<>(live);
     }
 
     @Test
@@ -47,7 +47,7 @@ class WallSnapshotTest {
         Set<Wall> live = liveSet();
         Wall a = new Wall("a");
         live.add(a);
-        WallSnapshot<Wall> snapshot = fresh(live);
+        SetSnapshot<Wall> snapshot = fresh(live);
 
         assertEquals(List.of(a), snapshot.snapshot(), "a fresh snapshot is the live contents");
     }
@@ -56,7 +56,7 @@ class WallSnapshotTest {
     void aQuietTickReturnsTheSameList() {
         Set<Wall> live = liveSet();
         live.add(new Wall("a"));
-        WallSnapshot<Wall> snapshot = fresh(live);
+        SetSnapshot<Wall> snapshot = fresh(live);
 
         List<Wall> first = snapshot.snapshot();
         assertSame(first, snapshot.snapshot(), "no change, no rebuild - the per-tick allocation is zero");
@@ -68,7 +68,7 @@ class WallSnapshotTest {
         Set<Wall> live = liveSet();
         Wall a = new Wall("a");
         live.add(a);
-        WallSnapshot<Wall> snapshot = fresh(live);
+        SetSnapshot<Wall> snapshot = fresh(live);
         List<Wall> before = snapshot.snapshot();
 
         Wall b = new Wall("b");
@@ -88,7 +88,7 @@ class WallSnapshotTest {
         Wall b = new Wall("b");
         live.add(a);
         live.add(b);
-        WallSnapshot<Wall> snapshot = fresh(live);
+        SetSnapshot<Wall> snapshot = fresh(live);
         snapshot.snapshot();
 
         live.remove(a);
@@ -101,7 +101,7 @@ class WallSnapshotTest {
     void clearingInvalidatesToEmpty() {
         Set<Wall> live = liveSet();
         live.add(new Wall("a"));
-        WallSnapshot<Wall> snapshot = fresh(live);
+        SetSnapshot<Wall> snapshot = fresh(live);
         snapshot.snapshot();
 
         live.clear();
@@ -115,7 +115,7 @@ class WallSnapshotTest {
         Set<Wall> live = liveSet();
         Wall a = new Wall("a");
         live.add(a);
-        WallSnapshot<Wall> snapshot = fresh(live);
+        SetSnapshot<Wall> snapshot = fresh(live);
         List<Wall> first = snapshot.snapshot();
 
         snapshot.invalidate();

@@ -126,11 +126,11 @@ public final class WallDisplay {
         List<Player> arrived = admitAndEvict(now);
         List<Player> watching = online(viewers);
         if (watching.isEmpty()) return;
-        List<WallView> allViews = views();
         if (loop != null) {
             playLoop(arrived, watching, now);
             return;
         }
+        List<WallView> allViews = views();
 
         for (WallView view : allViews) view.paint(now, intervalMs);
 

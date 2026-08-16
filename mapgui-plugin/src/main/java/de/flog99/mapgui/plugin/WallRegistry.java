@@ -48,9 +48,9 @@ final class WallRegistry implements Listener, LiveWalls {
     private final Set<WallDisplay> open = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     /**
-     * The per-tick iteration list, rebuilt only when {@link #open} changes - see {@link WallSnapshot}.
+     * The per-tick iteration list, rebuilt only when {@link #open} changes - see {@link SetSnapshot}.
      */
-    private final WallSnapshot walls = new WallSnapshot(open);
+    private final SetSnapshot<WallDisplay> walls = new SetSnapshot<>(open);
 
     private final Map<UUID, PacketInput.Handler> claims = new HashMap<>();
 
