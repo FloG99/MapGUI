@@ -80,7 +80,14 @@ public interface Node {
 
     void hoverChanged(boolean hovered);
 
-    /** Topmost interactive node containing the point, or {@code null}. */
+    /**
+     * Topmost interactive node containing the point, or {@code null}.
+     *
+     * <p>Recursive, descending children back to front and reporting the deepest interactive node
+     * containing the point. Kept recursive for the same reason as {@link Nodes#findAt}: the tree is
+     * shallow, and a benchmark against an explicit-stack version showed recursion is faster and
+     * allocates nothing where the stack version allocated per call.
+     */
     default Node hitTest(int x, int y) {
         if (hidden() || !bounds().contains(x, y)) return null;
 
