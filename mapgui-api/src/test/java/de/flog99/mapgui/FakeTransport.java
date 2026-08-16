@@ -28,6 +28,7 @@ final class FakeTransport implements MapTransport {
 
     private final List<Sent> sent = new ArrayList<>();
     private final Bandwidth bandwidth = new Bandwidth();
+    private int markerSends;
 
     /** Which bundle the current sends belong to, or -1 when nothing is open. Counts up so they can be told apart. */
     private int bundle = -1;
@@ -55,8 +56,8 @@ final class FakeTransport implements MapTransport {
     void clear() {
         sent.clear();
         pointedAt.clear();
+        markerSends = 0;
     }
-
     /** How many map updates carried pixels, which is the number that matters. */
     int updates() {
         return sent.size();
@@ -105,6 +106,11 @@ final class FakeTransport implements MapTransport {
 
     @Override
     public void sendMarkers(Player player, int mapId, List<Marker> markers) {
+        markerSends++;
+    }
+
+    int markerSends() {
+        return markerSends;
     }
 
     @Override
