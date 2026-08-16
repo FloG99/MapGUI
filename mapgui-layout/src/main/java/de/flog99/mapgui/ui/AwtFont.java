@@ -158,7 +158,8 @@ public final class AwtFont implements TextFont {
                 if (coverage == 0) continue;
 
                 painter.pixel(x + column, y + row,
-                        coverage == 255 ? packed : packed & 0x00FFFFFF | coverage << 24
+                        coverage == 255 ? packed : packed & 0x00FFFFFF | coverage << 24,
+                        painter.palette()
                 );
             }
         }

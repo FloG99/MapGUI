@@ -112,6 +112,6 @@ class DitheredPaletteAbTest {
         DitheredPalette palette = new DitheredPalette(BASE);
         // alpha 0x80: the Color path goes to the base palette; the packed path must too.
         Color translucent = new Color(10, 20, 30, 128);
-        assertEquals(palette.index(translucent, 1, 1), palette.index(0x80140A1E, 1, 1));
+        assertEquals(palette.index(translucent, 1, 1), palette.index(translucent.getRGB(), 1, 1));
     }
 }

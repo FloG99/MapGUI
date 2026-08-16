@@ -111,18 +111,18 @@ public final class Painter {
     }
 
     /** The packed image/glyph path, avoiding a Color object for each pixel. */
-    void pixel(int x, int y, int argb) {
+    void pixel(int x, int y, int argb, Palette with) {
         int alpha = argb >>> 24;
         if (alpha == 0) return;
         if (clipped(x, y) || !surface.inBounds(x, y)) return;
 
         if (alpha == 255) {
-            surface.set(x, y, palette.index(argb, x, y));
+            surface.set(x, y, with.index(argb, x, y));
             return;
         }
 
         int under = palette.color(surface.get(x, y)).getRGB();
-        surface.set(x, y, palette.index(blend(under, argb, alpha), x, y));
+        surface.set(x, y, with.index(blend(under, argb, alpha), x, y));
     }
 
     private void pixel(int x, int y, Color color, Palette with) {
@@ -567,7 +567,7 @@ public final class Painter {
         if (pixelRow == null || pixelRow.length < w) pixelRow = new int[w];
         for (int j = 0; j < image.getHeight(); j++) {
             image.getRGB(0, j, w, 1, pixelRow, 0, w);
-            for (int i = 0; i < w; i++) pixel(x + i, y + j, pixelRow[i]);
+            for (int i = 0; i < w; i++) pixel(x + i, y + j, pixelRow[i], palette);
         }
     }
 

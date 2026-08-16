@@ -126,12 +126,21 @@ public final class DitheredPalette implements Palette {
         int[] oldKeys = blendKeys;
         Blend[] oldValues = blendValues;
         blendKeys = new int[oldKeys.length * 2];
-        blendValues = new Blend[oldKeys.length * 2];
+        blendValues = new Blend[oldValues.length * 2];
         blendCount = 0;
 
         for (int i = 0; i < oldKeys.length; i++) {
-            if (oldValues[i] != null) {
-                blendFor(oldKeys[i]);
+            Blend value = oldValues[i];
+            if (value != null) {
+                int key = oldKeys[i];
+                int mask = blendKeys.length - 1;
+                int slot = (key ^ key >>> 16) & mask;
+                while (blendValues[slot] != null) {
+                    slot = (slot + 1) & mask;
+                }
+                blendKeys[slot] = key;
+                blendValues[slot] = value;
+                blendCount++;
             }
         }
     }
