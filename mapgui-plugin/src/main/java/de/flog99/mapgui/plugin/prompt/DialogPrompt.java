@@ -71,7 +71,11 @@ public final class DialogPrompt implements PromptProvider {
                 ))
         ));
 
-        player.getScheduler().runDelayed(plugin, task -> complete(player, Optional.empty()), null, TIMEOUT_TICKS);
+        // Answered on retirement as well as on time, since this is the player's own scheduler and it drops a
+        // pending task when they log out - which is the one dismissal nothing else here would ever hear about.
+        player.getScheduler().runDelayed(plugin, task -> complete(player, Optional.empty()),
+                () -> complete(player, Optional.empty()), TIMEOUT_TICKS
+        );
         return future;
     }
 
