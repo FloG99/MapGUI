@@ -25,6 +25,22 @@ public final class Label extends AbstractNode<Label> {
     /** Set while painting, since whether the text was cut off is only known once it has a width. */
     private String cutOff;
 
+    /**
+     * The last set of wrapped lines, and what they were wrapped for.
+     *
+     * <p>One frame asks for them four times - the measure passes work out how tall the label is, then the paint
+     * that follows draws them - and wrapping is the most expensive thing a font is asked to do, since every
+     * candidate line is measured as it grows. Held on the node, so it lives exactly as long as the tree does and
+     * there is nothing shared between frames, screens or threads to invalidate.
+     *
+     * <p>Keyed by the font as well as the text and the width, because a painter is pointed at the screen's font
+     * per frame and a label measured with one must never be drawn from lines wrapped with another.
+     */
+    private List<String> wrappedLines;
+    private String wrappedText;
+    private TextFont wrappedFont;
+    private int wrappedWidth;
+
     public Label(Supplier<String> text) {
         this.text = text;
     }
@@ -134,8 +150,21 @@ public final class Label extends AbstractNode<Label> {
             return new Measured(Math.min(naturalWidth, availableWidth), font.lineHeight());
         }
 
-        int lines = Math.max(1, font.wrap(value, availableWidth).size());
+        int lines = Math.max(1, wrapped(font, value, availableWidth).size());
         return new Measured(Math.min(naturalWidth, availableWidth), lines * stride - 1);
+    }
+
+    /** {@code text} wrapped to {@code maxWidth}, from {@link #wrappedLines} when that is what it already holds. */
+    private List<String> wrapped(TextFont font, String value, int maxWidth) {
+        if (wrappedLines != null && font == wrappedFont && maxWidth == wrappedWidth && value.equals(wrappedText)) {
+            return wrappedLines;
+        }
+
+        wrappedLines = font.wrap(value, maxWidth);
+        wrappedText = value;
+        wrappedFont = font;
+        wrappedWidth = maxWidth;
+        return wrappedLines;
     }
 
     @Override
@@ -148,7 +177,7 @@ public final class Label extends AbstractNode<Label> {
 
         if (wrap) {
             cutOff = null;
-            painter.textBlock(box, painter.wrap(value, box.width()), painted, align, shadow);
+            painter.textBlock(box, wrapped(painter.font(), value, box.width()), painted, align, shadow);
             return;
         }
 

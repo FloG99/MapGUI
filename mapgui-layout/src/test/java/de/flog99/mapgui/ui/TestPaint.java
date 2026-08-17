@@ -9,6 +9,11 @@ final class TestPaint {
     }
 
     static Painter painter() {
+        return painter(TestFont.INSTANCE);
+    }
+
+    /** The same, drawn with a font of the caller's choosing - for tests about what a font is asked. */
+    static Painter painter(TextFont font) {
         Surface nowhere = new Surface() {
             @Override
             public int width() {
@@ -42,6 +47,6 @@ final class TestPaint {
             }
         };
 
-        return new Painter(nowhere, flat, TestFont.INSTANCE);
+        return new Painter(nowhere, flat, font);
     }
 }
