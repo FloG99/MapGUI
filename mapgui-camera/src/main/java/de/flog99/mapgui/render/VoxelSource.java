@@ -113,6 +113,25 @@ public interface VoxelSource {
     }
 
     /**
+     * The highest {@link #columnTop} over the aligned square of {@code 1 << shift} columns holding this one.
+     *
+     * <p>What lets a ray over open ground cross more than one column at a time. {@link #columnTop} says a ray is
+     * above the ground here, which saves the block read but still leaves it stepping a column at a time, and a
+     * frame looking at the horizon is nearly all such steps: measured, nine in ten of them. Knowing the tallest
+     * thing over a whole patch instead means the ray crosses the patch in one go, as long as it stays above that.
+     *
+     * <p>Wanted for shifts 1 to 3 - patches of 2, 4 and 8 columns. Eight is where it stops paying: sixteen barely
+     * moved the step count and asked about more columns to get there.
+     *
+     * <p><b>Must never answer low.</b> A ray jumps on the strength of this, so a patch whose answer is under the
+     * true height of something standing in it is a canopy the frame will not show. Answering {@link #maxY()} is
+     * always correct and simply never jumps, which is what the default does.
+     */
+    default int maxTopIn(int x, int z, int shift) {
+        return maxY();
+    }
+
+    /**
      * Where there is provably nothing to draw, so that a ray can cross it without asking about a single block.
      *
      * <p>The same argument as {@link #columnTop} taken a step further: that one saves the block read and still pays a

@@ -63,6 +63,19 @@ final class SnapshotWorld implements VoxelSource {
     private final int[][] columnTops;
 
     /**
+     * The same again for squares of columns rather than single ones, so a ray over open ground crosses a patch at
+     * a time. Indexed by shift, then by chunk, then by the patch's place in it.
+     *
+     * <p>Biased and raced exactly as {@link #columnTops} is, and for the same reasons. Patches of 2, 4 and 8
+     * columns, which all divide a chunk - so an aligned patch never spans two of them and this needs no
+     * neighbour lookups to build a level from the one below it.
+     */
+    private final int[][][] patchTops = new int[PATCH_SHIFTS + 1][][];
+
+    /** Widest patch kept, as a shift: 8 columns. Past that {@code maxTopIn} answers with the world's roof. */
+    private static final int PATCH_SHIFTS = 3;
+
+    /**
      * Baked states by the exact {@code BlockData} the snapshot handed over.
      *
      * <p>Keyed by the object rather than by {@code getAsString()}, which allocates - and this is read once per
@@ -96,6 +109,7 @@ final class SnapshotWorld implements VoxelSource {
         this.maxY = maxY;
         this.sky = sky;
         this.columnTops = new int[chunks.length][];
+        for (int shift = 1; shift <= PATCH_SHIFTS; shift++) patchTops[shift] = new int[chunks.length][];
 
         this.ceilings = new int[chunks.length];
         int highest = minY - 1;
@@ -310,6 +324,47 @@ final class SnapshotWorld implements VoxelSource {
 
         int top = measure(chunks[index], ceilings[index], x & 15, z & 15);
         tops[local] = top - minY + 2;
+        return top;
+    }
+
+    /**
+     * The tallest column in an aligned patch, from the four patches under it, each kept once it is worked out.
+     *
+     * <p>Only what a ray asks for. A frame reads a few tens of thousands of columns whichever way, so building
+     * every patch of the capture up front would be work for ground nobody looked at - and it would have to happen
+     * before any band started, where this happens on the same pool threads as the trace it is saving.
+     *
+     * <p>A patch of an uncaptured chunk is answered as holding nothing, which is what {@link #stateAt} says about
+     * every block in it: unloaded and culled chunks are ones a ray already draws sky through.
+     */
+    @Override
+    public int maxTopIn(int x, int z, int shift) {
+        if (shift <= 0) return columnTop(x, z);
+        if (shift > PATCH_SHIFTS) return maxY();
+
+        int index = chunkIndex(x, z);
+        if (index < 0 || chunks[index] == null) return minY - 1;
+
+        int[] level = patchTops[shift][index];
+        if (level == null) {
+            int across = 16 >> shift;
+            level = new int[across * across];
+            patchTops[shift][index] = level;
+        }
+
+        int at = ((z & 15) >> shift) * (16 >> shift) + ((x & 15) >> shift);
+        int stored = level[at];
+        if (stored != 0) return stored + minY - 2;
+
+        int size = 1 << shift;
+        int baseX = x & -size;
+        int baseZ = z & -size;
+        int half = size >> 1;
+        int top = Math.max(
+                Math.max(maxTopIn(baseX, baseZ, shift - 1), maxTopIn(baseX + half, baseZ, shift - 1)),
+                Math.max(maxTopIn(baseX, baseZ + half, shift - 1), maxTopIn(baseX + half, baseZ + half, shift - 1))
+        );
+        level[at] = top - minY + 2;
         return top;
     }
 

@@ -503,6 +503,52 @@ public final class RayCaster {
                     columnTop = world.columnTop(blockX, blockZ);
                 }
 
+                // Over open ground, across a whole patch of columns rather than one at a time. What is left after
+                // empty space has been skipped is nearly all of this: a frame at the horizon spends nine steps in
+                // ten above the terrain, in the band of air inside the sixteen block cell the ground surface sits
+                // in - too low for the cell to be called empty and too high to hold anything.
+                if (blockY > columnTop) {
+                    int patch = patchAbove(world, blockX, blockY, blockZ);
+                    if (patch > 0) {
+                        int size = 1 << patch;
+                        int leaveX = (blockX & -size) + (stepX > 0 ? size : -1);
+                        int leaveZ = (blockZ & -size) + (stepZ > 0 ? size : -1);
+
+                        double exitX = nextX + ((leaveX - blockX) * stepX - 1) * deltaX;
+                        double exitZ = nextZ + ((leaveZ - blockZ) * stepZ - 1) * deltaZ;
+                        // Downward the air ends at the tallest thing in the patch. Level or climbing it does not
+                        // end at all, and the loop's own ceiling test is what stops those.
+                        double exitY = stepY > 0
+                                ? Double.MAX_VALUE
+                                : nextY + (blockY - world.maxTopIn(blockX, blockZ, patch) - 1) * deltaY;
+
+                        double exit;
+                        if (exitX < exitY && exitX < exitZ) {
+                            exit = exitX;
+                            entered = stepX > 0 ? Direction.WEST : Direction.EAST;
+                        } else if (exitY < exitZ) {
+                            exit = exitY;
+                            entered = Direction.UP;
+                        } else {
+                            exit = exitZ;
+                            entered = stepZ > 0 ? Direction.NORTH : Direction.SOUTH;
+                        }
+
+                        int crossedX = crossings(exit, nextX, deltaX);
+                        int crossedY = crossings(exit, nextY, deltaY);
+                        int crossedZ = crossings(exit, nextZ, deltaZ);
+
+                        blockX += crossedX * stepX;
+                        blockY += crossedY * stepY;
+                        blockZ += crossedZ * stepZ;
+                        nextX += crossedX * deltaX;
+                        nextY += crossedY * deltaY;
+                        nextZ += crossedZ * deltaZ;
+                        travelled = exit;
+                        continue;
+                    }
+                }
+
                 // Above everything in this column there is nothing to ask about, and asking is a chunk lookup and
                 // a block read where stepping on is a few adds.
                 if (blockY <= columnTop && blockY >= floor && blockY <= roof) {
@@ -531,6 +577,27 @@ public final class RayCaster {
             }
         }
     }
+
+    /**
+     * How wide a patch of columns this position is clear of, as a shift, or 0 for none worth jumping.
+     *
+     * <p>Climbed rather than asked for outright, because the answer wanted is the largest patch the ray is still
+     * above and only the world can say where each one's tallest block is.
+     */
+    private static int patchAbove(VoxelSource world, int blockX, int blockY, int blockZ) {
+        int patch = 0;
+        while (patch < WIDEST_PATCH && world.maxTopIn(blockX, blockZ, patch + 1) < blockY) patch++;
+        return patch;
+    }
+
+    /**
+     * Widest patch of columns a ray will cross in one go, as a shift: eight columns.
+     *
+     * <p>Where it stops paying. Sixteen took the step count from 13.1 to 12.5 on a frame over hills and asked
+     * about a tenth more columns to do it, and a patch is only as tall as the tallest thing in it - so widening
+     * one mostly buys a lower ceiling to fly under.
+     */
+    private static final int WIDEST_PATCH = 3;
 
     /**
      * How many block boundaries on one axis the ray has crossed by {@code at}, so a jump across empty space can
