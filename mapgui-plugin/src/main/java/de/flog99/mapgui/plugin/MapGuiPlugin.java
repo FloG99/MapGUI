@@ -4,6 +4,7 @@ import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.MapGui;
 import de.flog99.mapgui.MapTransport;
 import de.flog99.mapgui.PacketInput;
+import de.flog99.mapgui.HandRaiser;
 import de.flog99.mapgui.RotationController;
 import de.flog99.mapgui.ServerBackend;
 import de.flog99.mapgui.plugin.camera.CameraAssetStore;
@@ -27,6 +28,7 @@ public final class MapGuiPlugin extends JavaPlugin {
     private SessionManager sessions;
     private PromptRegistryImpl prompts;
     private RotationController rotation;
+    private HandRaiser handRaiser;
     private MapTransport transport;
     private PacketInput input;
     private WallManager walls;
@@ -51,6 +53,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         // Everything that reaches into the server, for the version this server happens to be.
         backend = Backends.forThisServer();
         rotation = backend.rotation();
+        handRaiser = backend.handRaiser();
         transport = backend.transport();
         input = backend.input();
         router = new InputRouter(input);
@@ -209,6 +212,10 @@ public final class MapGuiPlugin extends JavaPlugin {
 
     RotationController rotation() {
         return rotation;
+    }
+
+    HandRaiser handRaiser() {
+        return handRaiser;
     }
 
     MapTransport transport() {

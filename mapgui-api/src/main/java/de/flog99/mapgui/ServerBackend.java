@@ -7,9 +7,9 @@ import org.jetbrains.annotations.ApiStatus;
 /**
  * Everything MapGUI needs from inside the server, for one Minecraft version.
  *
- * <p>Only four things touch {@code net.minecraft}: pixels and the map item on their way out, two gestures on their
- * way in, a pitch nudge, and the world's saved map pixels. Each is its own interface already, so a version is an
- * implementation of each and this to hand them over.
+ * <p>Only a handful of things touch {@code net.minecraft}: pixels and the map item on their way out, two gestures on
+ * their way in, a pitch nudge, a raised hand, and the world's saved map pixels. Each is its own interface already, so
+ * a version is an implementation of each and this to hand them over.
  *
  * <p><b>Adding a version.</b> Copy the newest {@code mapgui-nms-*} module, point its dev bundle at the new Paper,
  * fix what the compiler complains about, and add the module to {@code settings.gradle.kts}, to the plugin's
@@ -27,6 +27,8 @@ public interface ServerBackend {
     PacketInput input();
 
     RotationController rotation();
+
+    HandRaiser handRaiser();
 
     SavedMapPixels savedMapPixels();
 

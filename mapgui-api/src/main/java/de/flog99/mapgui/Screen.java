@@ -151,6 +151,34 @@ public abstract class Screen {
     }
 
     /**
+     * Whether a right-click is a press <b>and a hold</b>, reported to {@link #onHold} for as long as the button is
+     * down and ended by {@link #onHoldEnd()}.
+     *
+     * <p>The only honest way to know the button is still down. Left alone, a held button arrives as a click every
+     * four ticks and as nothing at all when it is let go - a guess dressed as an event, and one that a lagging
+     * player draws dotted lines with and a player who has stopped keeps drawing with until the guess times out.
+     *
+     * <p>What a client <i>does</i> report is letting go of an item it was using, so the press raises the player's
+     * hand for them - see {@link HandRaiser}. From then until they let go the client says nothing at all, and the
+     * moment they do it says so once. So <b>one press is one click</b>, and the end of it is an event rather than
+     * an expiring guess.
+     *
+     * <p>Raised from outside rather than by giving the map something edible to hold, which matters more than it
+     * sounds: a client that starts a use of its own accord drops the held item to the bottom of the screen and
+     * springs it back, and on a map that bob <i>is</i> the screen. Nothing is played this way, nothing is eaten,
+     * and the map keeps its own component-free stack. The one thing MapGUI does put on it is {@code use_effects},
+     * so that holding a button does not also slow the player to a fifth of their speed.
+     *
+     * <p><b>Nothing on a wall</b>, which is the one place this cannot work: a hand can only be raised over
+     * something it is holding, and at a wall that is the player's own item rather than the screen.
+     *
+     * <p>Right-click only. A held left-click is a swing and a dig, and neither says anything about a map.
+     */
+    public boolean holdable() {
+        return false;
+    }
+
+    /**
      * How this screen wants to be carried - a popup, an item, something worn in the offhand - or null to
      * follow the server's setting.
      *
@@ -587,6 +615,43 @@ public abstract class Screen {
      */
     protected boolean onScroll(int notches) {
         return false;
+    }
+
+    @ApiStatus.Internal
+    public final void held(int x, int y) {
+        onHold(x, y);
+    }
+
+    /**
+     * Every tick the button is down, with the cursor where it is now - starting with the tick it was pressed.
+     *
+     * <p>A hold is a state rather than an event, so something has to sample it, and this is MapGUI doing that on
+     * the tick it already runs. A screen that follows the cursor while the button is down - a pen, a brush, a
+     * lasso - can do it here and needs no plugin, no scheduler and no timing of its own.
+     *
+     * <p>A press is still an ordinary click as well, so buttons keep working on a holdable screen. Draw from here
+     * rather than from both.
+     *
+     * @param x -1 when the screen has no cursor, since then there is no position to report
+     */
+    protected void onHold(int x, int y) {
+    }
+
+    @ApiStatus.Internal
+    public final void holdEnded() {
+        onHoldEnd();
+    }
+
+    /**
+     * The right button being let go, after a press on a {@link #holdable()} screen.
+     *
+     * <p>Also called when the screen loses the mouse in the middle of a hold - scrolled away from, a prompt
+     * opening over it - because the client stops using the map there and tells nobody. A pen that lifts early is
+     * better than one that never lifts.
+     *
+     * <p>The press itself is an ordinary click, so a stroke starts wherever the click was handled.
+     */
+    protected void onHoldEnd() {
     }
 
     @ApiStatus.Internal

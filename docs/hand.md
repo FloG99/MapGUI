@@ -52,6 +52,62 @@ A popup is always focused. Everything else is focused **in the main hand**, and 
 `Session#focused()` reports it, and `Session#focus(boolean)` takes or gives back the mouse from your own code - a
 "done" button that hands control back. The player's own gesture always overrules that.
 
+## Holding the button down
+
+A click is all a screen normally gets. Hold the right button and the client repeats it every four ticks; let it go
+and the client says nothing at all - so "still holding" can only be guessed at from the gaps between clicks, which
+draws a dotted line for a lagging player and keeps drawing after a still one has stopped.
+
+`Screen#holdable()` replaces the guess with what actually happened - and the whole of it is three methods:
+
+```java
+@Override
+public boolean holdable() {
+    return true;                     // read the right button as a hold
+}
+
+@Override
+protected void onHold(int x, int y) {
+    pen.lineTo(x, y);                // once a tick while it is down, cursor included
+}
+
+@Override
+protected void onHoldEnd() {
+    pen.lift();                      // the client saying the button is up
+}
+```
+
+`onHold` starts on the tick of the press, so a tap too short to span a tick still draws its dab, and there is
+nothing to schedule: MapGUI already ticks the screen. The press is still an ordinary click as well, so buttons keep
+working on a holdable screen - draw from `onHold` rather than from both.
+
+What makes it work is the one thing a client *does* report: letting go of an item it was **using**. On the press
+MapGUI raises the player's hand for them - it sends that player the "using an item" flag the server syncs for every
+other entity, which their client never normally receives about itself. From then on the client says nothing until
+the button comes up, and then says so exactly once. It also **stops the four-tick repeat**, so a holdable screen
+gets one click per press rather than five a second.
+
+The hand is raised from outside rather than by giving the map something edible to hold, and that is the whole
+trick. A client that starts a use itself - because the item is food, a shield, anything - drops the held item to
+the bottom of the screen and springs it back, vanilla's "you used that" bob, and on a map that bob *is* the screen.
+`Minecraft.startUseItem` is the only thing that plays it, and this goes around it: `LocalPlayer` reads the flag,
+starts the use quietly, and nothing else runs.
+
+Two things to know before using it:
+
+- **The map keeps its own stack**, with one exception: MapGUI puts `use_effects` on it saying `can_sprint` and a
+  speed multiplier of 1. Without that a client using an item walks at a fifth speed and refuses to sprint, which is
+  right for eating and wrong for holding a button. Nothing is consumed, no cooldown starts, and the server is not
+  using anything - the whole state is that one client's opinion, and it ends when they let go or when MapGUI says.
+- **Carried maps only.** Every carry mode works. On a **wall** it does nothing: a hand can only be raised over
+  something it holds, and at a wall that is the player's own item rather than the screen.
+
+`onHoldEnd()` also fires when the map loses the mouse in the middle of a hold - scrolled away from, a prompt opening
+over it - because the client stops there and tells nobody. It is only ever the right button: a held left-click is a
+swing and a dig, and a client says nothing about either that a map can use.
+
+`/mapgui hand open sketch` is a drawing board built on it, in `examples/sketch`.
+
 ## A real item
 
 The item is a **key, not a screen**. Whoever holds it gets *their own* screen, built fresh for them, so a phone

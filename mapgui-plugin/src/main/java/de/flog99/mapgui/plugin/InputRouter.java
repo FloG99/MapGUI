@@ -87,6 +87,17 @@ public final class InputRouter {
             return offer(PacketInput.Handler::leftClick);
         }
 
+        /** Everyone hears this one, because nothing is being claimed: there is no gesture to win. */
+        @Override
+        public void useReleased() {
+            List<PacketInput.Handler> queue = claims.get(player);
+            if (queue == null) return;
+
+            for (PacketInput.Handler handler : queue) {
+                handler.useReleased();
+            }
+        }
+
         private boolean offer(Predicate<PacketInput.Handler> gesture) {
             List<PacketInput.Handler> queue = claims.get(player);
             if (queue == null) return false;

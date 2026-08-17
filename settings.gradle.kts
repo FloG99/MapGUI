@@ -21,4 +21,5 @@ include(
     "examples:camera",
     "examples:claims",
     "examples:walls",
+    "examples:sketch",
 )

@@ -6,6 +6,8 @@ import de.flog99.mapgui.MapSurface;
 import de.flog99.mapgui.MapTransport;
 import de.flog99.mapgui.Marker;
 import de.flog99.mapgui.Session;
+import io.papermc.paper.datacomponent.DataComponentTypes;
+import io.papermc.paper.datacomponent.item.UseEffects;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
@@ -87,6 +89,9 @@ final class HeldMapDisplay {
         if (minted) {
             hand(player, carried);
         }
+        if (real && session.screen().holdable()) {
+            stampHold(player, mine);
+        }
 
         held.put(player.getUniqueId(), new Held(options, selected, startingSlot(options, selected), hand, mapId, mine,
                 real ? null : mapItem(session), minted));
@@ -110,6 +115,25 @@ final class HeldMapDisplay {
     boolean carries(Player player) {
         Held entry = held.get(player.getUniqueId());
         return entry != null && (!entry.real() || alreadyCarrying(player, entry.mine()));
+    }
+
+    /**
+     * Says the speed on a real map item, which is the one carry mode with no faked stack to say it on.
+     *
+     * <p>Wherever in the inventory it is rather than in the hand alone, since the screen is open for as long as it
+     * is carried - and left on the item afterwards. It is MapGUI's own map, and a component that only means
+     * anything while a button is held is not worth finding a stack at close time to take off again.
+     */
+    private static void stampHold(Player player, Predicate<ItemStack> mine) {
+        ItemStack[] contents = player.getInventory().getContents();
+
+        for (int slot = 0; slot < contents.length; slot++) {
+            ItemStack stack = contents[slot];
+            if (!mine.test(stack) || stack.hasData(DataComponentTypes.USE_EFFECTS)) continue;
+
+            stack.setData(DataComponentTypes.USE_EFFECTS, HELD_DOWN);
+            player.getInventory().setItem(slot, stack);
+        }
     }
 
     private static boolean alreadyCarrying(Player player, Predicate<ItemStack> mine) {
@@ -185,7 +209,16 @@ final class HeldMapDisplay {
     void refresh(Session session) {
         Player player = session.player();
         Held entry = held.get(player.getUniqueId());
-        if (entry == null || entry.real()) return;
+        if (entry == null) return;
+
+        if (entry.real()) {
+            // Nothing to re-issue, but a screen pushed over a non-holdable one can be holdable, and the speed is
+            // said on the item rather than on a stack this rebuilds.
+            if (session.screen().holdable()) {
+                stampHold(player, entry.mine());
+            }
+            return;
+        }
 
         held.put(player.getUniqueId(), entry.showing(mapItem(session)));
         reassert(player);
@@ -279,6 +312,24 @@ final class HeldMapDisplay {
     private static ItemStack mapItem(Session session) {
         ItemStack item = new ItemStack(Material.FILLED_MAP);
         item.editMeta(meta -> meta.displayName(session.screen().title()));
+        if (session.screen().holdable()) {
+            item.setData(DataComponentTypes.USE_EFFECTS, HELD_DOWN);
+        }
         return item;
     }
+
+    /**
+     * What keeps a held button from also slowing the player to a crawl.
+     *
+     * <p>A client using an item scales its own movement by {@code speed_multiplier} and refuses to sprint, which
+     * is right for eating and wrong for a screen: holding a button is not doing something with both hands. The
+     * defaults are a fifth speed and no sprinting, so both are said otherwise here.
+     *
+     * <p>Nothing else about the hold needs the item - see {@link de.flog99.mapgui.HandRaiser}, which is what makes
+     * the client report the release, and does it without the item having any say in the matter.
+     */
+    private static final UseEffects HELD_DOWN = UseEffects.useEffects()
+            .canSprint(true)
+            .speedMultiplier(1)
+            .build();
 }

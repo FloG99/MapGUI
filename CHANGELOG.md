@@ -656,6 +656,29 @@ Also real map printing, more ways to carry a GUI, and a live view driven for you
   `openWhileHolding` appeared to be consumed, scoped or drawn, and stayed that way until something unrelated
   resent the slot. A knowledge book vanished from the hand on every click. Only sent when the main hand holds a
   real item, so a popup being clicked through costs nothing.
+- **`Screen#holdable()` reads a held right-click as a hold**, arriving at `Screen#onHold(x, y)` once a tick for as
+  long as it is down and ending at `Screen#onHoldEnd()`, where before there was nothing to read. A client repeats a held button as a click every four ticks and says nothing whatever when it is
+  let go, so a stroke could only be guessed at from the gaps between clicks - which is a dotted line for a lagging
+  player and a pen that stays down after they have stopped.
+  It works off the one thing a client does report: letting go of an item it was **using**. On the press MapGUI
+  raises that player's hand for them - `HandRaiser` sends them the "using an item" entity flag, which a client is
+  never otherwise told about itself, since it is told about the world rather than about itself. From then on the
+  client says nothing until the button comes up and then says so exactly once, and the **four-tick repeat stops**,
+  so one press is one click rather than five a second.
+  **Raised from outside rather than by giving the map something edible to hold**, which is the difference between
+  this working and this being unusable. A client that starts a use itself drops the held item to the bottom of the
+  screen and springs it back - vanilla's "you used that" bob, played for food, shields and everything else - and on
+  a map that bob *is* the screen, once per press. `Minecraft.startUseItem` is the only thing that plays it, and the
+  flag goes around it: `LocalPlayer` reads it, starts the use quietly, and no animation runs. Nothing is eaten, no
+  cooldown starts, the server is using nothing, and no other player is told.
+  The map keeps its own stack but for `use_effects`, which says `can_sprint` and full speed - without it a client
+  using an item walks at a fifth speed, which is right for eating and wrong for holding a button.
+  `onHoldEnd` is also called when the map loses the mouse mid-hold - scrolled away from, a prompt opening over it,
+  the screen closing under a stroke - since the client stops there and tells nobody, and a hand left raised would
+  swallow every press after it. Every carry mode works; not a wall, where the hand holding the button is holding
+  the player's own item. `onHold` arrives on the tick of the press, so a tap too short to span one still counts, and
+  it rides MapGUI's own tick - a screen following the cursor needs no scheduler and no plugin of its own.
+  `/mapgui hand open sketch` is the demo, and `/mapgui hand give sketch` the same one as an item.
 - **A map in the offhand no longer takes over the player's aim.** The pitch clamp is for a map held up in front of
   you, so it now applies only in the main hand - an offhand viewfinder or quest log leaves your head alone whatever
   `cursor.clamp-pitch` and `Screen#clampPitch` say. Unclamped, the vertical axis follows the head as a delta the way

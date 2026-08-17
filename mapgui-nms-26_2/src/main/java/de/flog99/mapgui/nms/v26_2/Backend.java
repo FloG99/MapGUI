@@ -1,5 +1,6 @@
 package de.flog99.mapgui.nms.v26_2;
 
+import de.flog99.mapgui.HandRaiser;
 import de.flog99.mapgui.MapTransport;
 import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.RotationController;
@@ -19,6 +20,7 @@ public final class Backend implements ServerBackend {
     private final NmsMapTransport transport = new NmsMapTransport();
     private final NmsPacketInput input = new NmsPacketInput();
     private final NmsRotationController rotation = new NmsRotationController();
+    private final NmsHandRaiser handRaiser = new NmsHandRaiser();
     private final NmsSavedMapPixels savedMapPixels = new NmsSavedMapPixels();
     private final NmsEntityDetails entityDetails = new NmsEntityDetails();
 
@@ -35,6 +37,11 @@ public final class Backend implements ServerBackend {
     @Override
     public RotationController rotation() {
         return rotation;
+    }
+
+    @Override
+    public HandRaiser handRaiser() {
+        return handRaiser;
     }
 
     @Override

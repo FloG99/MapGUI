@@ -79,8 +79,15 @@ public final class NmsPacketInput implements PacketInput {
          */
         private boolean taken(Object message) {
             try {
-                if (message instanceof ServerboundPlayerActionPacket packet && isDrop(packet)) {
-                    return handler.drop();
+                if (message instanceof ServerboundPlayerActionPacket packet) {
+                    if (isDrop(packet)) return handler.drop();
+
+                    if (packet.getAction() == ServerboundPlayerActionPacket.Action.RELEASE_USE_ITEM) {
+                        // Read and passed on, never taken: a menu has no business ending a use it did not start,
+                        // and on a server that is not using anything the packet does nothing to pass on.
+                        handler.useReleased();
+                        return false;
+                    }
                 }
                 if (message instanceof ServerboundUseItemPacket) {
                     // The only one of the three that means the click hit nothing, which one focus mode turns on.

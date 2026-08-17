@@ -22,7 +22,7 @@ public interface PacketInput {
     /**
      * All of these run on the network thread - hop before touching anything.
      *
-     * <p>Each returns whether it took the gesture. False passes the packet on untouched, which is what lets
+     * <p>Each gesture that can be claimed returns whether it took it. False passes the packet on untouched, which is what lets
      * a listener stay installed on a player pointing at nothing of ours: swallowing unconditionally would
      * mean they could never right-click a door again.
      *
@@ -55,6 +55,22 @@ public interface PacketInput {
          */
         default boolean leftClick() {
             return false;
+        }
+
+        /**
+         * The right button being let go, and the only thing a client ever says about one.
+         *
+         * <p>Told rather than offered, which is why this alone returns nothing: the packet is passed on whoever
+         * hears it, and every claim hears it. Swallowing would be taking something that was never a click - on a
+         * server that is not using an item it does nothing at all, and on one that is it belongs to whatever
+         * started that, not to a menu.
+         *
+         * <p>Only sent by a client that thinks it is using an item, which is what {@link HandRaiser} is for: a
+         * {@link Screen#holdable()} screen has the player's hand raised on the press, and this is the client
+         * answering. Nothing on the item decides it, and a player whose hand was never raised is held down in
+         * silence.
+         */
+        default void useReleased() {
         }
     }
 }

@@ -5,6 +5,7 @@ import de.flog99.mapgui.examples.camera.CameraDemo;
 import de.flog99.mapgui.examples.claims.ClaimDemo;
 import de.flog99.mapgui.examples.gallery.GalleryDemo;
 import de.flog99.mapgui.examples.minimap.MinimapDemo;
+import de.flog99.mapgui.examples.sketch.SketchDemo;
 import de.flog99.mapgui.examples.todo.TodoDemo;
 import de.flog99.mapgui.examples.walls.WallsDemo;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,6 +26,7 @@ public final class ExamplesPlugin extends JavaPlugin {
     private final CameraDemo camera = new CameraDemo();
     private final ClaimDemo claims = new ClaimDemo();
     private final WallsDemo walls = new WallsDemo();
+    private final SketchDemo sketch = new SketchDemo();
 
     @Override
     public void onEnable() {
@@ -36,6 +38,7 @@ public final class ExamplesPlugin extends JavaPlugin {
         camera.register(this);
         claims.register();
         walls.register();
+        sketch.register();
     }
 
     /**
@@ -52,5 +55,6 @@ public final class ExamplesPlugin extends JavaPlugin {
         camera.unregister();
         claims.unregister();
         walls.unregister();
+        sketch.unregister();
     }
 }

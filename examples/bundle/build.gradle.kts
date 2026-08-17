@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":examples:camera"))
     implementation(project(":examples:claims"))
     implementation(project(":examples:walls"))
+    implementation(project(":examples:sketch"))
 }
 
 tasks {

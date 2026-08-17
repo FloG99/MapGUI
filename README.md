@@ -100,13 +100,15 @@ plugins/
 | `/mapgui hand open minimap` | terrain rendering, and a screen with no cursor - worn in the offhand, swap hands to put it away |
 | `/mapgui hand open camera` | a screenshot of the world, and a screen that aims instead of pointing - offhand, raised as a mode, swap hands to put it away |
 | `/mapgui hand open claims` | a full-screen map, one `Draw` node standing in for a grid, cursor tracking |
+| `/mapgui hand open sketch` | a drawing board, and the button read as a **hold** rather than as clicks - one press, one line |
 | `/mapgui wall place draw` | a wall everyone draws on, with a palette only you can see |
 | `/mapgui wall place jukebox` | a wall the room shares - registered for a hand *and* a wall |
 | `/mapgui wall place polish-cow-transparent.gif` | a GIF on the wall. Shipped inside the examples jar, and no FFmpeg needed |
 
 Move the mouse to aim, **right-click to select**, and the wheel to scroll. **Q closes** the ones that fill the
 hotbar; the minimap and the camera are worn in the offhand, where **swapping hands** puts them away. Walking, jumping
-and sneaking all still work. Placing a wall is left-click for the bottom-left corner, look at the far corner to
+and sneaking all still work. The sketch board draws for as long as you **hold** the right button - left-click cycles
+the colour, sneak and left-click clears it, shift+scroll sizes the brush. Placing a wall is left-click for the bottom-left corner, look at the far corner to
 size it, then left-click again - or right-click to cancel.
 
 Delete the examples jar when you are done; that is the whole off switch, and MapGUI keeps working without it.

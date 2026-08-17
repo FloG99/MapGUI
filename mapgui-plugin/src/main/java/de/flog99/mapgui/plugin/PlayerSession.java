@@ -105,6 +105,17 @@ final class PlayerSession implements Session {
     /** Set by a toggling gesture, and only read by the focus modes that toggle. */
     private boolean focusToggled;
 
+    /**
+     * Whether the right button is down on a {@link Screen#holdable()} screen.
+     *
+     * <p>So the screen hears the end of a hold it was told the start of, and hears it once. A release arrives for
+     * every kind of screen, and one that never asked to be held has nothing to make of it.
+     */
+    private boolean holding;
+
+    /** The tick a hold was last reported on, so a press and a tick landing together are still one sample. */
+    private int heldTick = -1;
+
     /** Last seen sneak, so the screen hears about the change rather than the state. */
     private boolean sneaking;
 
@@ -208,6 +219,9 @@ final class PlayerSession implements Session {
 
     @Override
     public void push(Screen screen) {
+        // Before the new screen is on top, so the end of a hold reaches the screen that was being held rather
+        // than the one its click opened - which never heard the press and would never hear the end.
+        holdEnded();
         adopt(screen);
         display.refresh(this);
         needsPaint = true;
@@ -220,6 +234,8 @@ final class PlayerSession implements Session {
             return;
         }
 
+        // The same as push: the screen being taken away is the one that was being held.
+        holdEnded();
         screens.pop().detach();
         screen().invalidate();
         display.refresh(this);
@@ -250,6 +266,10 @@ final class PlayerSession implements Session {
     @Override
     public void suspend() {
         suspended = true;
+        // Losing the mouse this way skips refocus(), so the hold is ended here rather than there. Without it a
+        // prompt opened from a click would swallow the release - the gesture handler drops one while suspended -
+        // and the screen would come back with the button still down as far as it knew.
+        holdEnded();
         // Ticking stops here, so the pointer has to be sent away explicitly or it stays on screen
         // hovering over a menu nobody can reach.
         focused = false;
@@ -311,6 +331,9 @@ final class PlayerSession implements Session {
 
         focused = wanted;
         needsPaint = true;
+        if (!focused) {
+            holdEnded();
+        }
         // Under a toggling mode the line says something different either side of the key, and the key is the
         // player's own - so say it again rather than leaving the one from opening standing. Never before
         // start() has sent the first, or opening would send two.
@@ -554,6 +577,13 @@ final class PlayerSession implements Session {
             onMainThread(PlayerSession.this::leftClick);
             return true;
         }
+
+        @Override
+        public void useReleased() {
+            if (!focused) return;
+
+            onMainThread(PlayerSession.this::holdEnded);
+        }
     };
 
     /** Restoring is skipped for a player already gone or dead: there is no item to give back, only a slot they have lost anyway. */
@@ -561,6 +591,8 @@ final class PlayerSession implements Session {
         if (task != null) {
             task.cancel();
         }
+        // Before the screens go, so a screen closed mid-stroke hears the end of it and the player's hand comes down.
+        holdEnded();
         plugin.router().release(player, gestures);
         if (activePrompt != null) {
             activePrompt.cancel(player);
@@ -620,6 +652,10 @@ final class PlayerSession implements Session {
         if (aiming && screen().cursorMoved(cursorX(), cursorY())) {
             needsPaint = true;
         }
+        // After the cursor has moved, so a screen drawing under it gets where the player is looking now rather
+        // than where they were looking last tick. Before the paint, so what it draws is in this frame.
+        held();
+
         if (screen().isDirty()) {
             needsPaint = true;
         }
@@ -830,13 +866,69 @@ final class PlayerSession implements Session {
      * client and predicts nothing. So a popup being clicked through sends no inventories at all.
      */
     void rightClick() {
+        // A press while a hold is outstanding ends that one first. It means the raise had not reached the client
+        // when they pressed again, so the release that would have ended it is never coming.
+        holdEnded();
+
+        // Noted before the click is handled, since handling it is what a hold is started by. Whether the screen
+        // presses on this button or the other one does not come into it: a held button is a held button.
+        //
+        // Raising the hand is what turns one press into a hold. Until it lands the client is repeating the press
+        // every four ticks; from then on it says nothing until the button comes up, and then says so exactly once.
+        holding = !suspended && focused && screen().holdable();
+        if (holding) {
+            plugin.handRaiser().raise(player, raisedHand(), true);
+        }
+
         if (screen().activateOn().accepts(Click.RIGHT)) {
             activate(Click.RIGHT);
         }
+        // The first tick of the hold, here rather than left to the next tick so that a tap too short to span one
+        // still draws its dab. Nothing if the click opened a screen of its own, since pushing one ends the hold.
+        held();
 
         if (!mapInMainHand) {
             player.updateInventory();
         }
+    }
+
+    /**
+     * A tick of a hold, which is what a screen following the cursor needs and what it would otherwise time itself.
+     *
+     * <p>Once a tick and no more, since the press and the tick can both reach it on the tick the button went down -
+     * a screen stepping something per sample would step twice for one press.
+     */
+    private void held() {
+        if (!holding || suspended || !focused || !screen().holdable()) return;
+
+        int tick = plugin.getServer().getCurrentTick();
+        if (tick == heldTick) return;
+
+        heldTick = tick;
+        boolean pointed = screen().cursor();
+        screen().held(pointed ? cursorX() : -1, pointed ? cursorY() : -1);
+    }
+
+    /**
+     * The end of a hold, from the client saying so or from the map losing the mouse under one.
+     *
+     * <p>Both, because the client only tells a server what it lets go of - scrolling off the map, or a prompt
+     * suspending it, stops the use on the client with nothing said about it. Ignored unless a hold was started,
+     * so a screen hears one end per press.
+     */
+    private void holdEnded() {
+        if (!holding) return;
+
+        holding = false;
+        // Put down whether the client said so or we did: a hand left raised swallows every press after it, so a
+        // screen that closes under a held button would leave the player unable to right-click anything.
+        plugin.handRaiser().raise(player, raisedHand(), false);
+        screen().holdEnded();
+    }
+
+    /** Which hand the client is told to raise, which is the one the map is in - the other holds their own item. */
+    private EquipmentSlot raisedHand() {
+        return mapInMainHand ? EquipmentSlot.HAND : EquipmentSlot.OFF_HAND;
     }
 
     private void activate(Click with) {
@@ -865,6 +957,7 @@ final class PlayerSession implements Session {
             screen().scroll(cursorX(), cursorY(), direction);
         }
     }
+
 
     // ---- rendering ----
 
