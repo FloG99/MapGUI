@@ -169,11 +169,6 @@ final class WallSession implements Session {
                 : acting != null && prompting.contains(acting.getUniqueId());
     }
 
-    /** Whether this particular player is mid-prompt, which is the question input routing actually has. */
-    boolean busy(Player player) {
-        return prompting.contains(player.getUniqueId());
-    }
-
     /**
      * Always. A wall is operated by walking up to it and clicking, so there is no holding it and nothing to take
      * the mouse away from - the cursor a viewer gets is the one they are pointing at the wall, not one on loan.
