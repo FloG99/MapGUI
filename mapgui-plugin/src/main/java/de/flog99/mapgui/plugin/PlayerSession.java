@@ -116,6 +116,18 @@ final class PlayerSession implements Session {
     /** The tick a hold was last reported on, so a press and a tick landing together are still one sample. */
     private int heldTick = -1;
 
+    /**
+     * Presses that started a hold, against releases the client has reported: the button is down while a press is
+     * unanswered.
+     *
+     * <p>Counted on the network thread, where {@link #holding} cannot be touched, because reaching the main
+     * thread costs a tick and the stroke would draw for it. Numbers rather than a flag since a release can be
+     * read <i>while</i> its own press is being handled, and a flag cleared then would be armed again a line later.
+     */
+    private int presses;
+
+    private volatile int releases;
+
     /** When the wheel was last heard from, for deciding whether the selection has been put back since. */
     private long lastWheelAt;
 
@@ -584,10 +596,16 @@ final class PlayerSession implements Session {
             return true;
         }
 
+        /**
+         * The button comes up here and the hold ends on the main thread, which is a tick later - see
+         * {@link PlayerSession#presses}. Ending it here too would put it ahead of a press still in the queue, and
+         * a tap with both in flight would end before it began.
+         */
         @Override
         public void useReleased() {
             if (!focused) return;
 
+            releases++;
             onMainThread(PlayerSession.this::holdEnded);
         }
     };
@@ -883,6 +901,9 @@ final class PlayerSession implements Session {
         // every four ticks; from then on it says nothing until the button comes up, and then says so exactly once.
         holding = !suspended && focused && screen().holdable();
         if (holding) {
+            // Levelled rather than counted up: a release read while this was running belongs to this press, and
+            // levelling leaves the button up, which is what it is.
+            presses = releases + 1;
             plugin.handRaiser().raise(player, raisedHand(), true);
         }
 
@@ -891,20 +912,27 @@ final class PlayerSession implements Session {
         }
         // The first tick of the hold, here rather than left to the next tick so that a tap too short to span one
         // still draws its dab. Nothing if the click opened a screen of its own, since pushing one ends the hold.
-        held();
+        sample();
 
         if (!mapInMainHand) {
             player.updateInventory();
         }
     }
 
-    /**
-     * A tick of a hold, which is what a screen following the cursor needs and what it would otherwise time itself.
-     *
-     * <p>Once a tick and no more, since the press and the tick can both reach it on the tick the button went down -
-     * a screen stepping something per sample would step twice for one press.
-     */
+    /** A tick of a hold, stopping on the release rather than on the end of it a tick later - see {@link #presses}. */
     private void held() {
+        if (releases >= presses) return;
+
+        sample();
+    }
+
+    /**
+     * One sample, for the press as well as for the ticks after it.
+     *
+     * <p>Once a tick at most, since both can reach it on the tick the button went down. The press does not ask
+     * whether the button is still down - it was - or a release landing in between would swallow a tap's only sample.
+     */
+    private void sample() {
         if (!holding || suspended || !focused || !screen().holdable()) return;
 
         int tick = plugin.getServer().getCurrentTick();
@@ -926,6 +954,7 @@ final class PlayerSession implements Session {
         if (!holding) return;
 
         holding = false;
+        presses = releases;
         // Put down whether the client said so or we did: a hand left raised swallows every press after it, so a
         // screen that closes under a held button would leave the player unable to right-click anything.
         plugin.handRaiser().raise(player, raisedHand(), false);
