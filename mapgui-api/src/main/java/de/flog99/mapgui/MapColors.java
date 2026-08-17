@@ -5,6 +5,8 @@ import de.flog99.mapgui.ui.PaletteLut;
 import org.bukkit.map.MapPalette;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Bukkit's map palette, answered from a lookup table.
@@ -112,7 +114,7 @@ public final class MapColors implements Palette {
     public synchronized byte[] entries() {
         if (entries != null) return entries;
 
-        java.util.List<Byte> usable = new java.util.ArrayList<>();
+        List<Byte> usable = new ArrayList<>();
         for (int i = 4; i < 256; i++) {
             try {
                 Color color = MapPalette.getColor((byte) i);
