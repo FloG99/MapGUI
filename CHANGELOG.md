@@ -679,6 +679,14 @@ Also real map printing, more ways to carry a GUI, and a live view driven for you
   the player's own item. `onHold` arrives on the tick of the press, so a tap too short to span one still counts, and
   it rides MapGUI's own tick - a screen following the cursor needs no scheduler and no plugin of its own.
   `/mapgui hand open sketch` is the demo, and `/mapgui hand give sketch` the same one as an item.
+- **Shift+scroll counts every notch now**, where it counted one per report. The wheel reaches a server as "this
+  client has slot N selected", once a client tick however many notches went by inside it - so a flick arrived as a
+  single report several slots away and was read as one notch, capping a scroll at twenty rows a second whatever the
+  player did with the wheel. A map pinned to one slot also has its selection put straight back, so what arrives is
+  how far the selection has *drifted* rather than how far the wheel turned, and the two only agree once that answer
+  has landed. `Wheel` tells those apart - further out in the same direction is one turn carrying on, anything else
+  is a fresh turn from a selection that has been put back - which counts a flick exactly, up to the four notches a
+  tick beyond which nine slots in a ring cannot say which way round it went.
 - **A map in the offhand no longer takes over the player's aim.** The pitch clamp is for a map held up in front of
   you, so it now applies only in the main hand - an offhand viewfinder or quest log leaves your head alone whatever
   `cursor.clamp-pitch` and `Screen#clampPitch` say. Unclamped, the vertical axis follows the head as a delta the way

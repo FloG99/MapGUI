@@ -116,6 +116,9 @@ final class PlayerSession implements Session {
     /** The tick a hold was last reported on, so a press and a tick landing together are still one sample. */
     private int heldTick = -1;
 
+    /** When the wheel was last heard from, for deciding whether the selection has been put back since. */
+    private long lastWheelAt;
+
     /** Last seen sneak, so the screen hears about the change rather than the state. */
     private boolean sneaking;
 
@@ -147,6 +150,9 @@ final class PlayerSession implements Session {
     private final UUID own = UUID.randomUUID();
 
     private final Map<String, MapCursor.Type> cursorTypes = new HashMap<>();
+
+    /** Only meaningful for a map that keeps its slot, since that is the only one whose selection is put back. */
+    private final Wheel wheel = new Wheel();
 
     /** Terrain is expensive to scan, so it is kept in its own buffer and only redrawn on demand. */
     private MapSurface terrain;
@@ -958,6 +964,25 @@ final class PlayerSession implements Session {
         }
     }
 
+    /**
+     * The wheel on a map that keeps its slot, where what arrives is how far the selection has drifted from that
+     * slot rather than how far the wheel turned. {@link Wheel} is the difference between the two.
+     */
+    void scrolled(int offset) {
+        long now = System.currentTimeMillis();
+        // A gap longer than the round trip means the selection has certainly been put back by now, so the drift
+        // the last report was measured against is stale - and reading a fresh flick against it would lose the
+        // notches they have in common.
+        if (now - lastWheelAt > player.getPing() + SETTLED_SLACK_MS) {
+            wheel.settled();
+        }
+
+        lastWheelAt = now;
+        scroll(wheel.turned(offset));
+    }
+
+    /** On top of the round trip, since a tick of scheduling sits either side of it. */
+    private static final int SETTLED_SLACK_MS = 100;
 
     // ---- rendering ----
 

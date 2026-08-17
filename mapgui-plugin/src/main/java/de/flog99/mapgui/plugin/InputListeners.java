@@ -63,8 +63,9 @@ final class InputListeners implements Listener {
      * player's hand in the same motion. Canceling puts the selection back, since CraftBukkit answers a refused
      * change by resending the slot the server still thinks is selected.
      *
-     * <p>Which is also why that path counts direction rather than distance. The base never moves, so a fast flick
-     * arrives as +1, +2, +3 against the same slot - three notches read as six. The sign of each is one notch each.
+     * <p>Which is also why that path cannot take the distance at face value. The base never moves, so a fast flick
+     * arrives as +1, +2, +3 against the same slot - three notches read as six. {@link Wheel} turns those back into
+     * notches, and counts the ones that arrive several to a tick, which taking one per report threw away.
      */
     @EventHandler
     public void onHotbarChange(PlayerItemHeldEvent event) {
@@ -79,7 +80,7 @@ final class InputListeners implements Listener {
         if (!event.getPlayer().isSneaking() || !session.focused()) return;
 
         event.setCancelled(true);
-        session.scroll(Integer.signum(Hotbar.notches(event.getPreviousSlot(), event.getNewSlot())));
+        session.scrolled(Hotbar.notches(event.getPreviousSlot(), event.getNewSlot()));
     }
 
     /**
