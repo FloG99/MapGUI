@@ -225,10 +225,13 @@ final class WallCursors {
 
     /** Markers live inside one map, so a surface pixel loses its tile's offset on the way in. */
     private void place(Map<Integer, List<Marker>> byTile, Marker marker) {
-        int tile = layout.tileOf(marker.x(), marker.y());
+        // Which tile is a whole-pixel question; how far into it is not, so the offset comes off the fractional position.
+        int px = marker.pixelX();
+        int py = marker.pixelY();
+        int tile = layout.tileOf(px, py);
         byTile.computeIfAbsent(tile, id -> new ArrayList<>(2)).add(new Marker(marker.type(),
-                marker.x() - layout.tileOriginX(marker.x()),
-                marker.y() - layout.tileOriginY(marker.y()),
+                marker.x() - layout.tileOriginX(px),
+                marker.y() - layout.tileOriginY(py),
                 marker.rotation(), marker.label())
         );
     }

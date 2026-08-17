@@ -1048,11 +1048,17 @@ final class PlayerSession implements Session {
         sentMarkers = markers;
     }
 
-    /** The screen's own markers, plus the pointer - which is just another marker, and only while we have the mouse. */
+    /**
+     * The screen's own markers, plus the pointer - which is just another marker, and only while we have the mouse.
+     *
+     * <p>The pointer is placed from the unrounded position rather than {@link #cursorX()}, since icons are drawn
+     * twice as finely as pixels and rounding to one first threw half of that away. Hit testing still asks whole
+     * pixels, which is the right question for it - a button covers pixels, not halves of them.
+     */
     private List<Marker> markers() {
         List<Marker> markers = new ArrayList<>(screen().markers());
         if (focused && !suspended && screen().cursor()) {
-            markers.add(new Marker(cursorType(), cursorX(), cursorY(), (byte) 8, screen().cursorCaption()));
+            markers.add(new Marker(cursorType(), cursorX, cursorY, (byte) 8, screen().cursorCaption()));
         }
         return markers;
     }

@@ -135,6 +135,12 @@ Also real map printing, more ways to carry a GUI, and a live view driven for you
   player's next move ends that, so a screen never holds a head against them. Off, it starts nearer an edge for a
   player already looking far up or down, who has no head movement left to bring it back the other way.
 
+- Fixed: **the pointer could only sit on every other position the client can draw.** A map icon's coordinate is a byte the client halves, so icons live in a space twice as fine as the map's pixels - and the pointer's position was rounded to a whole pixel before it got there, so every coordinate MapGUI ever sent was an even one and half the places a cursor can sit were unreachable.
+  It follows the head at half a pixel now, which is as fine as a map goes.
+  Hit testing still asks whole pixels, since a button covers pixels rather than halves of them: what changed is where the icon is drawn, not what it points at.
+  **Breaking:** `Marker#x` and `Marker#y` are `double` rather than `int`, snapped to those halves on the way in - so a marker still only counts as moved once it lands somewhere the client would draw differently, and a pointer drifting a hundredth of a pixel costs no packet.
+  `Marker.at` takes whole pixels as happily as fractional ones, and `pixelX()` and `pixelY()` answer which whole pixel a marker is in.
+
 - Fixed: **a trident or a shield in a hand was drawn a block and a half to one side.** The shapes the client draws in
   code arrive in the frame a mesh is built in, which is a half circle from the one a block model is built in, and the
   turn between them was never applied. It went unseen on the other eleven because their definitions centre them in the

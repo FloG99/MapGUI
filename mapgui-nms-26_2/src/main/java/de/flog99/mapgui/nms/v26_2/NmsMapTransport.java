@@ -329,11 +329,16 @@ public final class NmsMapTransport implements MapTransport {
 
         return new MapDecoration(
                 CraftMapCursor.CraftType.bukkitToMinecraftHolder(marker.type()),
-                (byte) clamp(marker.x() * 2 - width),
-                (byte) clamp(marker.y() * 2 - height + CursorHotspot.above(marker.type())),
+                (byte) clamp(icon(marker.x()) - width),
+                (byte) clamp(icon(marker.y()) - height + CursorHotspot.above(marker.type())),
                 marker.rotation(),
                 name
         );
+    }
+
+    /** Surface pixels to icon units, which are half a pixel each. Exact, since a marker is already snapped to those. */
+    private static int icon(double pixels) {
+        return (int) Math.round(pixels * 2);
     }
 
     private static int clamp(int value) {
