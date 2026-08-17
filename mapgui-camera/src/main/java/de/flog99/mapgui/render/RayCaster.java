@@ -430,14 +430,7 @@ public final class RayCaster {
         int columnZ = Integer.MIN_VALUE;
         int columnTop = 0;
 
-        // The empty cell the ray is crossing, held as the first block past it on each axis. Blocks are still stepped
-        // one at a time, so leaving is an exact integer match on whichever axis leaves first - and the arithmetic the
-        // walk carries is untouched, which is what makes the skip cost nothing in quality.
         EmptySpace empty = frameEmpty;
-        boolean crossingEmpty = false;
-        int leaveX = 0;
-        int leaveY = 0;
-        int leaveZ = 0;
 
         // Last cell asked about, so a ray inside an occupied cell asks once for it rather than once per block.
         int askedX = Integer.MIN_VALUE;
@@ -449,42 +442,73 @@ public final class RayCaster {
                 if (blockY > ceiling && dy >= 0) break;
                 if (blockY < floor && dy <= 0) break;
 
-                if (!crossingEmpty || blockX == leaveX || blockY == leaveY || blockZ == leaveZ) {
-                    crossingEmpty = false;
+                int cellX = blockX >> EmptySpace.CELL;
+                int cellY = blockY >> EmptySpace.CELL;
+                int cellZ = blockZ >> EmptySpace.CELL;
+                if (cellX != askedX || cellY != askedY || cellZ != askedZ) {
+                    askedX = cellX;
+                    askedY = cellY;
+                    askedZ = cellZ;
 
-                    int cellX = blockX >> EmptySpace.CELL;
-                    int cellY = blockY >> EmptySpace.CELL;
-                    int cellZ = blockZ >> EmptySpace.CELL;
-                    if (cellX != askedX || cellY != askedY || cellZ != askedZ) {
-                        askedX = cellX;
-                        askedY = cellY;
-                        askedZ = cellZ;
+                    // Empty space is crossed in one go rather than a block at a time. Walking it was most of what a
+                    // frame did - pointed at the sky, six steps in seven were inside a cube already known to hold
+                    // nothing - and the cube's far side can be solved for outright from the boundary distances the
+                    // walk is already carrying. Nothing is sampled in between either way, so the only thing lost is
+                    // the stepping.
+                    int shift = empty.shiftAt(blockX, blockY, blockZ);
+                    if (shift != 0) {
+                        int size = 1 << shift;
+                        int leaveX = (blockX & -size) + (stepX > 0 ? size : -1);
+                        int leaveY = (blockY & -size) + (stepY > 0 ? size : -1);
+                        int leaveZ = (blockZ & -size) + (stepZ > 0 ? size : -1);
 
-                        int shift = empty.shiftAt(blockX, blockY, blockZ);
-                        if (shift != 0) {
-                            int size = 1 << shift;
-                            leaveX = (blockX & -size) + (stepX > 0 ? size : -1);
-                            leaveY = (blockY & -size) + (stepY > 0 ? size : -1);
-                            leaveZ = (blockZ & -size) + (stepZ > 0 ? size : -1);
-                            crossingEmpty = true;
+                        // Where the ray meets the far side on each axis: nextAxis is where it enters the neighbouring
+                        // block, and every block after that is one delta further along.
+                        double exitX = nextX + ((leaveX - blockX) * stepX - 1) * deltaX;
+                        double exitY = nextY + ((leaveY - blockY) * stepY - 1) * deltaY;
+                        double exitZ = nextZ + ((leaveZ - blockZ) * stepZ - 1) * deltaZ;
+
+                        // Whichever comes first, preferred on a tie exactly as the step below prefers them, so a ray
+                        // through a corner leaves by the same face either way.
+                        double exit;
+                        if (exitX < exitY && exitX < exitZ) {
+                            exit = exitX;
+                            entered = stepX > 0 ? Direction.WEST : Direction.EAST;
+                        } else if (exitY < exitZ) {
+                            exit = exitY;
+                            entered = stepY > 0 ? Direction.DOWN : Direction.UP;
+                        } else {
+                            exit = exitZ;
+                            entered = stepZ > 0 ? Direction.NORTH : Direction.SOUTH;
                         }
+
+                        int crossedX = crossings(exit, nextX, deltaX);
+                        int crossedY = crossings(exit, nextY, deltaY);
+                        int crossedZ = crossings(exit, nextZ, deltaZ);
+
+                        blockX += crossedX * stepX;
+                        blockY += crossedY * stepY;
+                        blockZ += crossedZ * stepZ;
+                        nextX += crossedX * deltaX;
+                        nextY += crossedY * deltaY;
+                        nextZ += crossedZ * deltaZ;
+                        travelled = exit;
+                        continue;
                     }
                 }
 
-                if (!crossingEmpty) {
-                    if (blockX != columnX || blockZ != columnZ) {
-                        columnX = blockX;
-                        columnZ = blockZ;
-                        columnTop = world.columnTop(blockX, blockZ);
-                    }
+                if (blockX != columnX || blockZ != columnZ) {
+                    columnX = blockX;
+                    columnZ = blockZ;
+                    columnTop = world.columnTop(blockX, blockZ);
+                }
 
-                    // Above everything in this column there is nothing to ask about, and asking is a chunk lookup and
-                    // a block read where stepping on is a few adds.
-                    if (blockY <= columnTop && blockY >= floor && blockY <= roof) {
-                        BakedState state = world.stateAt(blockX, blockY, blockZ);
-                        if (!state.isEmpty() && !sample(world, state, entered, blockX, blockY, blockZ, originX, originY, originZ, dx, dy, dz, travelled)) {
-                            break;
-                        }
+                // Above everything in this column there is nothing to ask about, and asking is a chunk lookup and
+                // a block read where stepping on is a few adds.
+                if (blockY <= columnTop && blockY >= floor && blockY <= roof) {
+                    BakedState state = world.stateAt(blockX, blockY, blockZ);
+                    if (!state.isEmpty() && !sample(world, state, entered, blockX, blockY, blockZ, originX, originY, originZ, dx, dy, dz, travelled)) {
+                        break;
                     }
                 }
             }
@@ -506,6 +530,23 @@ public final class RayCaster {
                 entered = stepZ > 0 ? Direction.NORTH : Direction.SOUTH;
             }
         }
+    }
+
+    /**
+     * How many block boundaries on one axis the ray has crossed by {@code at}, so a jump across empty space can
+     * leave that axis where stepping through it would have.
+     *
+     * <p>{@code next} is the first boundary ahead and they are {@code delta} apart, so the count is a division -
+     * but a division of doubles is a guess at an integer, and one out either way would leave the axis a block from
+     * where it belongs. The two loops put it right instead of trusting it, and neither runs more than once.
+     */
+    private static int crossings(double at, double next, double delta) {
+        if (at < next) return 0;
+
+        int crossed = (int) ((at - next) / delta) + 1;
+        while (next + crossed * delta <= at) crossed++;
+        while (crossed > 0 && next + (crossed - 1) * delta > at) crossed--;
+        return crossed;
     }
 
     /** Distance along the ray to the first block boundary on one axis. */
