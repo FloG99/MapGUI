@@ -92,11 +92,27 @@ public interface TextFont {
         return lines;
     }
 
-    /** Number of leading characters that fit in {@code maxWidth}. */
+    /**
+     * Number of leading characters that fit in {@code maxWidth}.
+     *
+     * <p>Halved into rather than stepped through: growing the prefix a character at a time measures the whole of
+     * it at every step, so finding it costs a measurement and a string per character rather than per halving.
+     *
+     * <p>Which relies on a longer prefix never being narrower than a shorter one - true of any font whose
+     * characters have a width, and pinned against the obvious form by {@code EllipsizeTest}.
+     */
     default int longestPrefix(String text, int maxWidth) {
+        int low = 1;
+        int high = text.length();
         int fits = 0;
-        while (fits < text.length() && widthOf(text.substring(0, fits + 1)) <= maxWidth) {
-            fits++;
+        while (low <= high) {
+            int length = (low + high) >>> 1;
+            if (widthOf(text.substring(0, length)) <= maxWidth) {
+                fits = length;
+                low = length + 1;
+            } else {
+                high = length - 1;
+            }
         }
         return fits;
     }

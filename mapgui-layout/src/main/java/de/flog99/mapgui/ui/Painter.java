@@ -588,16 +588,32 @@ public final class Painter {
      * Truncates with a trailing ".." instead of wrapping.
      *
      * <p>A single glyph is returned whole even when it does not fit, since ".." is the same width and says less.
+     *
+     * <p>Halved into rather than stepped through, because this runs every frame for every label too long for the
+     * space it got - which on a map 128 pixels wide is most of them. Cutting a line of text down a character at a
+     * time measures the whole candidate at every step and builds a string to measure, so a label that loses
+     * eighty characters costs eighty measurements and eighty strings; this costs seven of each.
+     *
+     * <p>Which relies on a longer prefix never being narrower than a shorter one. True of any font whose
+     * characters have a width, and {@code EllipsizeTest} pins it against the obvious form either way.
      */
     public String ellipsize(String text, int maxWidth) {
         String clean = font.sanitize(text);
         if (font.widthOf(clean) <= maxWidth || clean.length() == 1) return clean;
 
-        for (int length = clean.length() - 1; length > 0; length--) {
-            String candidate = clean.substring(0, length) + "..";
-            if (font.widthOf(candidate) <= maxWidth) return candidate;
+        int low = 1;
+        int high = clean.length() - 1;
+        int longest = 0;
+        while (low <= high) {
+            int length = (low + high) >>> 1;
+            if (font.widthOf(clean.substring(0, length) + "..") <= maxWidth) {
+                longest = length;
+                low = length + 1;
+            } else {
+                high = length - 1;
+            }
         }
-        return "..";
+        return longest == 0 ? ".." : clean.substring(0, longest) + "..";
     }
 
     public void textLine(int x, int y, String text, Color color, boolean shadow) {
