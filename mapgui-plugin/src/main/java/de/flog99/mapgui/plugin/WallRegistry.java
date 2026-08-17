@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
@@ -146,6 +147,22 @@ final class WallRegistry implements Listener, LiveWalls {
                 router.release(player, claims.remove(player.getUniqueId()));
             }
         }
+    }
+
+    /**
+     * Forgets that this player was claimed, because {@link #updateClaims} only ever walks players who are
+     * online and so would never see them again to do it.
+     *
+     * <p>The note is what it reads to decide a claim is already in place, and the router drops its own on the
+     * way out - so a player left in here came back still wanted and still apparently held, took neither
+     * branch, and had nothing claimed on their new connection until they walked away from every menu.
+     *
+     * <p>Only the note: the router is cleared by the quit handling that owns it, and a closing connection is
+     * nothing to reach into.
+     */
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        claims.remove(event.getPlayer().getUniqueId());
     }
 
     private boolean watchingAnyMenu(Player player) {
