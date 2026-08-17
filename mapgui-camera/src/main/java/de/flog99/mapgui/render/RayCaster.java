@@ -11,9 +11,10 @@ import java.util.List;
  * without sorting anything.
  *
  * <p>There is a hierarchy over the <i>emptiness</i>, which costs the ordering nothing. Where {@link EmptySpace} says
- * a cell holds nothing, the walk crosses it without asking the world about a single block - still one step at a time
- * and in the same order, so a ray arrives at a surface with the same numbers to the bit. {@code EmptySkipTest}
- * renders every awkward shape both ways and compares the frames.
+ * a cell holds nothing the walk crosses it in one go, and the same again for the air over open ground, which
+ * {@link VoxelSource#maxTopIn} bounds. Nothing is sampled in between either way, so a ray comes out of a jump at the
+ * block stepping there would have reached and having seen the same nothing on the way. {@code EmptySkipTest} and
+ * {@code HeightJumpTest} render every awkward shape both ways and compare the frames.
  *
  * <p>Not thread safe: one instance per rendering thread, with the scratch arrays and the fragment list reused across
  * every pixel rather than 16384 rays each allocating a vector.
@@ -469,29 +470,32 @@ public final class RayCaster {
                         double exitZ = nextZ + ((leaveZ - blockZ) * stepZ - 1) * deltaZ;
 
                         // Whichever comes first, preferred on a tie exactly as the step below prefers them, so a ray
-                        // through a corner leaves by the same face either way.
+                        // through a corner leaves by the same face either way. The axis that won lands on the block
+                        // its own far side was worked out from, and the other two wherever the ray has got to.
                         double exit;
                         if (exitX < exitY && exitX < exitZ) {
                             exit = exitX;
                             entered = stepX > 0 ? Direction.WEST : Direction.EAST;
+                            blockX = leaveX;
+                            blockY = blockAt(originY, dy, stepY, exit);
+                            blockZ = blockAt(originZ, dz, stepZ, exit);
                         } else if (exitY < exitZ) {
                             exit = exitY;
                             entered = stepY > 0 ? Direction.DOWN : Direction.UP;
+                            blockX = blockAt(originX, dx, stepX, exit);
+                            blockY = leaveY;
+                            blockZ = blockAt(originZ, dz, stepZ, exit);
                         } else {
                             exit = exitZ;
                             entered = stepZ > 0 ? Direction.NORTH : Direction.SOUTH;
+                            blockX = blockAt(originX, dx, stepX, exit);
+                            blockY = blockAt(originY, dy, stepY, exit);
+                            blockZ = leaveZ;
                         }
 
-                        int crossedX = crossings(exit, nextX, deltaX);
-                        int crossedY = crossings(exit, nextY, deltaY);
-                        int crossedZ = crossings(exit, nextZ, deltaZ);
-
-                        blockX += crossedX * stepX;
-                        blockY += crossedY * stepY;
-                        blockZ += crossedZ * stepZ;
-                        nextX += crossedX * deltaX;
-                        nextY += crossedY * deltaY;
-                        nextZ += crossedZ * deltaZ;
+                        nextX = boundary(originX, blockX, dx, deltaX);
+                        nextY = boundary(originY, blockY, dy, deltaY);
+                        nextZ = boundary(originZ, blockZ, dz, deltaZ);
                         travelled = exit;
                         continue;
                     }
@@ -518,32 +522,35 @@ public final class RayCaster {
                         double exitZ = nextZ + ((leaveZ - blockZ) * stepZ - 1) * deltaZ;
                         // Downward the air ends at the tallest thing in the patch. Level or climbing it does not
                         // end at all, and the loop's own ceiling test is what stops those.
+                        int patchTop = world.maxTopIn(blockX, blockZ, patch);
                         double exitY = stepY > 0
                                 ? Double.MAX_VALUE
-                                : nextY + (blockY - world.maxTopIn(blockX, blockZ, patch) - 1) * deltaY;
+                                : nextY + (blockY - patchTop - 1) * deltaY;
 
                         double exit;
                         if (exitX < exitY && exitX < exitZ) {
                             exit = exitX;
                             entered = stepX > 0 ? Direction.WEST : Direction.EAST;
+                            blockX = leaveX;
+                            blockY = blockAt(originY, dy, stepY, exit);
+                            blockZ = blockAt(originZ, dz, stepZ, exit);
                         } else if (exitY < exitZ) {
                             exit = exitY;
                             entered = Direction.UP;
+                            blockX = blockAt(originX, dx, stepX, exit);
+                            blockY = patchTop;
+                            blockZ = blockAt(originZ, dz, stepZ, exit);
                         } else {
                             exit = exitZ;
                             entered = stepZ > 0 ? Direction.NORTH : Direction.SOUTH;
+                            blockX = blockAt(originX, dx, stepX, exit);
+                            blockY = blockAt(originY, dy, stepY, exit);
+                            blockZ = leaveZ;
                         }
 
-                        int crossedX = crossings(exit, nextX, deltaX);
-                        int crossedY = crossings(exit, nextY, deltaY);
-                        int crossedZ = crossings(exit, nextZ, deltaZ);
-
-                        blockX += crossedX * stepX;
-                        blockY += crossedY * stepY;
-                        blockZ += crossedZ * stepZ;
-                        nextX += crossedX * deltaX;
-                        nextY += crossedY * deltaY;
-                        nextZ += crossedZ * deltaZ;
+                        nextX = boundary(originX, blockX, dx, deltaX);
+                        nextY = boundary(originY, blockY, dy, deltaY);
+                        nextZ = boundary(originZ, blockZ, dz, deltaZ);
                         travelled = exit;
                         continue;
                     }
@@ -600,20 +607,27 @@ public final class RayCaster {
     private static final int WIDEST_PATCH = 3;
 
     /**
-     * How many block boundaries on one axis the ray has crossed by {@code at}, so a jump across empty space can
-     * leave that axis where stepping through it would have.
+     * Which block one axis is in at a distance along the ray, for the two axes a jump did not leave by.
      *
-     * <p>{@code next} is the first boundary ahead and they are {@code delta} apart, so the count is a division -
-     * but a division of doubles is a guess at an integer, and one out either way would leave the axis a block from
-     * where it belongs. The two loops put it right instead of trusting it, and neither runs more than once.
+     * <p>Read off the position rather than counted in boundaries. Counting meant dividing the distance by the
+     * spacing and then correcting the answer, because a division of doubles is a guess at an integer - three
+     * divisions and their correction loops per jump, which measured at a fifth of a frame and gave most of the
+     * jumping's saving straight back. A position is a multiply.
+     *
+     * <p>The axis a jump <i>did</i> leave by is not read off here at all: its block is the one its own far side was
+     * worked out from, and a position that should land exactly on that boundary can come out a hair under it.
      */
-    private static int crossings(double at, double next, double delta) {
-        if (at < next) return 0;
+    private static int blockAt(double origin, double direction, int step, double at) {
+        // An axis the ray does not move along is where it started, and asking is what would go wrong: the boundary
+        // case below reads an eye at a whole number of blocks as having just crossed one.
+        if (direction == 0) return (int) Math.floor(origin);
 
-        int crossed = (int) ((at - next) / delta) + 1;
-        while (next + crossed * delta <= at) crossed++;
-        while (crossed > 0 && next + (crossed - 1) * delta > at) crossed--;
-        return crossed;
+        double position = origin + direction * at;
+        int block = (int) Math.floor(position);
+        // Exactly on a boundary heading down, the ray is entering the block under it, which a floor cannot see. Not
+        // a rounding nicety: left on the block above, that axis' next boundary comes out as the distance already
+        // travelled, the jump is taken again from the same place, and the ray stops going anywhere at all.
+        return step < 0 && position == block ? block - 1 : block;
     }
 
     /** Distance along the ray to the first block boundary on one axis. */
