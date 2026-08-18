@@ -236,22 +236,31 @@ a midnight capture as bright as a noon one. Block light is left alone, because a
 is by day.
 
 The curve from level to multiplier is the client's own, reproduced rather than approximated, with the brightness
-slider at 90%. It is not linear and no guess at its shape is close: light 7 is a fifth of full and not a half, and
-then the slider blends that toward a gentler curve, and then the whole table is pulled four percent toward grey,
-which is why full daylight comes out at 0.99 rather than 1.
+slider **all the way up** - which is where most people leave it. It is not linear and no guess at its shape is close:
+light 7 is a fifth of full and not a half, and then the slider blends that toward a gentler curve, and then the whole
+table is pulled four percent toward grey, which is why full daylight comes out at 0.99 rather than 1.
 
-**Then the dark end is lifted, which is the one place this parts company with the client on purpose.** A screen draws
-a night in thousands of near-blacks and your eye adapts to them. A map has 143 colors and a viewer whose eye is
-adapted to whatever else is on their screen, so faithfully dark reads as a hole in the picture rather than as a cave.
-The lift is weighted as `(1 - light)²`, and the shape is the point: a plain floor under everything is affine, so
-raising it enough to make a cave wall visible lifts a shaded wall at noon by the same proportion and flattens the
-whole picture to pay for the cave. Weighted, it lands 0.5 at light 0 and 0.01 at light 10 - measured on stone, an unlit
-cave wall goes from 41 out of 255 to 56, which on this palette is the difference between its near-black and its darkest
-stone, while a torchlit surface gains one unit and a daylit one none.
+**And then a lift under the bottom of that curve, which is `camera.shadow-lift` and is the one lighting number that is
+a taste.** The argument for it is real: a screen draws a night in thousands of near-blacks and your eye adapts to them,
+while a map has 143 colours and a viewer whose eye is adapted to whatever else is on their monitor - so a *faithful* dark
+can read as a hole in the picture rather than as a cave.
 
-Night is lifted the same way and for the same reason, but by the other lever: the client takes 11 off sky light at
-midnight, leaving open ground at level 4, and this takes **7**, leaving it at 8. Open ground at midnight comes out
-around 120 of 255 rather than 84, which is dusk-ish to look at and leaves the shape of the land legible.
+Both ends of it were shipped and both were wrong, which is why it is a setting now rather than a constant.
+
+At **0.6**, where it started, a wholly unlit block drew at 154 of 255 on stone where the client draws it at 8 - an unlit
+room came out very nearly as bright as a lit one, which is not a legible cave, it is no cave at all. At **0**, exactly what
+the client does, that block is 4 of 255 and a dark room is a black rectangle.
+
+The default is **0.2**: that block lands at 28 of 255, dark but legibly a room. The lift is weighted onto the dark end,
+so the bright half barely moves - light 11 of 15 goes from 0.872 to 0.881, and full daylight is 253 whatever it is set to.
+Turn it up for a legible cave, down for a faithful one; past about 0.3 dark stops reading as dark.
+
+Night is the same decision by the other lever: the client takes 11 off sky light at midnight, leaving open ground at
+level 4, and so does this. It used to take 7, which left midnight looking like dusk.
+
+Whatever it is set to, the table must stay non-decreasing - an unlit block drawing brighter than a torchlit one is worse
+than either being dark - and the client's own curve is nearly flat across the bottom, so there is a ceiling on how far it
+can go. `LightTableTest` holds that across the whole range the setting is clamped to.
 
 **The night sky stops at a very dark blue rather than at black**, and that is a palette decision rather than an
 astronomical one. Dimming the dome's blue to nothing is what the client's own curve does, and it came out *reddish*:
@@ -422,6 +431,129 @@ A still taken by a plugin that never asks is not paced at all, which is the inte
 photograph. `camera.reuse.chunks.stills-for-ms` is worth turning on alongside a live view - see
 [reuse and caps](#reuse-and-caps).
 
+## An eye somewhere other than a head
+
+Everything above shoots out of a player's eyes, which is what a viewfinder wants and what nearly every capture is. A
+camera bolted to a wall is not, and neither is a **mirror**:
+
+```java
+MapGui.get().camera().capture(viewer, CameraEye.at(somewhere), options, shot -> ...);
+```
+
+The player is still handed over, because a capture is always *for* somebody: they decide how far it may see, which walls
+are showing them what, and whose share of the live budget it spends. What changes is that **the viewer is in frame**.
+The reason they are normally left out is that a capture from inside somebody's skull would be filled with the back of
+their own head, and an eye you placed yourself has no such problem - a mirror that left out the person standing in front
+of it would be showing an empty room. `selfie` is ignored here for the same reason: it exists to move a player's own
+capture off their face and put them in shot, and this has already done both.
+
+### Clipping it to a plane
+
+A reflection is the reason this exists, and it needs one more thing. The camera for a mirror goes at the viewer's eye
+**reflected through the glass**, which is as far behind the wall as they are in front of it - so the first thing every
+single ray meets is the inside of that wall, and the reflection is solid stone. There is nothing to tune your way out
+of: the camera is inside a block on purpose.
+
+```java
+CameraEye eye = CameraEye.at(behindTheGlass).clippedTo(middleOfTheGlass, out);
+```
+
+Rays begin where they cross that plane, and nothing behind it is drawn - entities are dropped before a mesh is built for
+them, and a mirror does not photograph its own glass. A ray that never crosses draws the backdrop.
+
+Distances are measured from the crossing rather than from the eye, so haze and `maxDistance` start at the plane. For a
+mirror that is the better of the two readings: what fades with distance in a reflection is how far away it *looks*, and
+a reflection looks as far from you as it is from the glass.
+
+It is written for an eye **behind** the plane, which is the only place a clip is worth asking for. An eye in front of
+its own plane is already inside the half-space and is not clipped at all - there is no far bound.
+
+### Framing it on a window rather than an angle
+
+A field of view can only describe a frame centred on where the camera points. A reflection has to look **straight out of
+the glass** rather than at the mirror it belongs to - that is what lets two mirrors on one wall agree about the room - so
+a mirror the viewer is not squarely in front of sits off to one side of the frame, and an angle can only reach it by
+widening until it does. Everything the widening adds is room the mirror does not show and resolution it does not get.
+
+```java
+CameraEye eye = CameraEye.at(behindTheGlass)
+        .clippedTo(middleOfTheGlass, out)
+        .through(new CameraEye.Window(left, right, bottom, top));
+```
+
+Four tangents at one block along the forward axis, because that is the form a ray is already built in: a pixel looks
+along `forward + right * sx + up * sy`, for `sx` from `left` to `right` and `sy` from `bottom` to `top`. A symmetric frame
+of half-angle `a` is `-tan a` to `tan a` on both, and shifting all four by the same amount pans the picture without
+changing how much of it there is. `CameraOptions#fov` is ignored when a window is given.
+
+Measured on a 1x1 mirror at a normal mounting height with somebody standing at it, the glass was getting 36% of the frame
+and being blown up nearly threefold to fill its maps. Framed on its own corners it gets 99%. It also removes both ends of
+the fov clamp, and a reflection meets each: a small mirror across the room wants a frame narrower than ten degrees, and
+standing against a tall one wants wider than a hundred and seventy.
+
+### A capture that is not square
+
+```java
+CameraOptions options = CameraOptions.defaults().size(1664, 128);
+```
+
+Pixels rather than a side, because pixels are what a capture costs. `MIN_SIZE` applies to each side and `MAX_PIXELS`
+(262144, which is 512 square) to the two multiplied - so a frame that is **long and thin** may be far wider than a square
+one is allowed to be and still be cheaper than one. Pixels stay square either way: a window states both angles already,
+and a frame described by `fov` alone has its horizontal edges widened by the aspect, so a wide capture shows more room
+rather than a stretched picture.
+
+What it is for is a surface whose shape somebody else decided. A wall of maps is a rectangle of whatever proportions it
+was built in. And a **row of mirrors** down a wall is one frame: they share a camera exactly, since a reflection looks out
+along the plane's own normal, so each mirror is a window onto one picture rather than a reason for another. Thirteen
+blocks of wall at a map per block is 1664x128 - inside the ceiling, with the mask below keeping the wall between the
+mirrors untraced - where a square frame covering the same row would be twenty times over it.
+
+What makes it worth having is that a slice of a wide frame is exactly the frame that slice would have been on its own,
+which `WideFrameTest` pins: cut a wide capture in half and each half is pixel for pixel what it would have traced alone.
+Otherwise "shared" would only mean "resampled".
+
+### Drawing only the pixels you will look at
+
+```java
+eye = eye.onlyWhere(new CameraEye.Mask(size, wanted));            // a square capture
+eye = eye.onlyWhere(new CameraEye.Mask(width, height, wanted));   // or one that is not
+```
+
+Every ray is independent, so a pixel nobody reads is work that can simply not be done. A **round** mirror is the case this
+was written for: its glass is a circle inside a square and the metal frame around it is painted rather than photographed,
+so about a third of the capture is never read. A square mirror saves 15%, a large joined-up one little - the shape only
+bites at an outside edge.
+
+Unwanted pixels come back **transparent**, so a masked capture composites straight over something else.
+
+Worth being plain about what this does not buy: it is off the main thread, so it gives back none of the tick and will not
+let more live views run. That budget is spent copying the world, per chunk column, which a mask does not touch. What it
+saves is CPU.
+
+A mask is usually a **constant**, which is what makes it free. For a mirror the window is fitted to the glass and tangents
+map linearly onto the plane, so a capture pixel always lands on the same pixel of glass however far away the viewer
+stands - and the size follows from the mirror's own extent, so that does not move either. The mask is a property of the
+shape rather than of anybody looking at it, and is built once.
+
+### What a mirror does with it
+
+Worth stating, because two of them are the difference between a reflection and a video of a room, and neither is
+something the API can do for you.
+
+**Look straight out of the glass, not at the middle of the mirror.** Aiming at a centre makes the projection a property
+of that particular mirror, so two mirrors side by side photograph the room slightly differently and the join shows.
+Along the plane's own normal, the projection depends only on the plane and the viewer - which every mirror on that wall
+shares, so any number of them crop out of one consistent picture and line up exactly.
+
+**Do not flip the frame.** The reversal is already there: a wall's own right, as the viewer sees it, runs opposite to
+the reflected camera's right, so projecting honestly reverses left and right on its own. Flipping as well undoes it,
+and the tell is that text in the reflection reads the right way round.
+
+**One capture per viewer, not per mirror.** What a mirror shows is a function of where the person looking at it stands,
+so it is `screenPerPlayer` rather than a shared screen - two people at either end of a bathroom genuinely see different
+rooms in the same glass.
+
 ## What it costs
 
 Measured on a wooded, hilly scene with water in it, against the real 26.2 assets, at 128x128. Median of nine runs
@@ -436,10 +568,36 @@ A frame is traced as bands of rows across a small pool, which is worth having be
 interact at all: the world was already copied out of the server, the textures are immutable, and each ray writes one
 pixel. The test for it asserts the frame comes out **byte-identical** however many threads drew it.
 
+Two things about that pool are worth knowing if you are reading a profile of it. The threads must not share a lock, and
+the one they did share was invisible: `ConcurrentHashMap.computeIfAbsent` takes a bin's monitor on every read unless the
+key is first in its chain, and the block-state cache is read once per step of every ray. Half the CPU of a trace went
+into that method under its lock, with three of six threads blocked on one node. Plain `get` first, always, on anything
+this path touches.
+
+Several bands to a thread rather than one each, because the pool is waited on and a frame therefore costs the *slowest*
+band. Rows are nowhere near equally expensive - sky is a handful of steps a ray, the horizon walks the whole distance cap
+- and with one band a thread that showed up on a live server as cumulative CPU of 85.3 s against 16.0 s across six
+threads: the busiest band holding 36% of the work where an even split is 17%. The table above was measured before that
+change and so still carries some of it; the six-thread figures should now sit closer to a sixth of the one-thread ones.
+
+**Water is the expensive terrain, and deep water especially.** It is translucent, so a ray carries on past the surface
+and walks every block down to the seabed. Eighteen blocks of it - a vanilla ocean - measured at 157 ms where the same
+scene in stone was 16, because stone stops the ray at the first block. The interior of it draws nothing at all, since
+every face is culled against the identical water beside it, so the walk now crosses a run of one material without
+examining it: 113 ms for the same shot. What is left is one block read per block crossed, which is the floor without a
+structure that says how far the water goes.
+
 Mobs are the one thing that got dearer rather than cheaper, because they are now vanilla's real geometry rather than
 a box each: the full cap of 48 in frame costs **29 ms** on one thread, and an ender dragon filling the frame **52
 ms**. Entity cost tracks the screen area they cover and the parts they are made of, not how many there are, so a
 crowd in the distance is nearly free and one warden up close is not. It goes through the same pool as the blocks.
+
+That "screen area, not how many" holds while the frame is a field of view, and a **mirror** is where it stops holding: its
+frame is fitted to the glass, so a 2x2 mirror seen from twenty blocks is a window five degrees across, and in a telephoto
+frame like that anything near the axis covers a large share of the picture however far off it is - a chest thirty blocks
+down the tube covers a third of it. Twenty players in such a frame once cost eight times the whole rest of it. A ray is
+now held against an entity's bounding sphere before any mesh is walked, and the entities of a frame are handed over
+nearest first so that anything behind something opaque is turned away by that test rather than walked.
 
 Quantizing the finished frame to map colors is **0.02 ms** and never worth thinking about. The palette table costs
 about **80 ms to build, once**, on the first capture a server ever takes.

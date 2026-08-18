@@ -236,4 +236,76 @@ class CaptureBudgetTest {
         }
         assertEquals(5, taken);
     }
+
+    /**
+     * One player with two views open: the budget hands out one yes per interval, so <b>who asks first decides</b>.
+     *
+     * <p>Which is correct in itself - a player's frames are divided per player rather than per view, or opening a second
+     * view would cost the server twice - but it makes the asking order load-bearing in a way nothing about the method
+     * says out loud. Asked in a fixed order the first view takes every frame and the second gets <b>none at all,
+     * forever</b>. Not a slow second view: a blank one. A mirror made of two panels drew half of itself and left the
+     * other half grey, and so did any mirror seen by somebody holding a camera.
+     *
+     * <p>{@link CameraFeeds#tick} therefore starts from a different feed each tick. Both halves are pinned here - the
+     * trap and the fix - because the trap is invisible from the budget's side and the fix reads as a pointless shuffle
+     * without it.
+     */
+    @Test
+    void twoViewsForOnePlayerNeedAskingInTurnOrOneOfThemStarves() {
+        UUID player = UUID.randomUUID();
+
+        int[] fixedOrder = shareOverASecond(budget(1.0, 10), player, Order.ALWAYS_THE_SAME);
+        assertTrue(fixedOrder[0] > 0, "the view that asks first should be drawing");
+        assertEquals(0, fixedOrder[1], "and asked in a fixed order the second view never draws at all");
+
+        // The obvious fix, and it does not work: a frame is granted once per interval - every second tick at ten fps -
+        // so a pointer that moves once a tick keeps step with it and the same view is first every time it matters.
+        int[] byTick = shareOverASecond(budget(1.0, 10), player, Order.ROTATED_BY_TICK);
+        assertEquals(0, byTick[1], "rotating by tick keeps step with the interval and starves it just the same");
+
+        int[] inTurn = shareOverASecond(budget(1.0, 10), player, Order.LONGEST_WAITING_FIRST);
+        assertTrue(inTurn[0] > 0 && inTurn[1] > 0, "ordered by what was served, both views draw");
+        assertEquals(inTurn[0], inTurn[1], 1, "and get the same share of the player's frames");
+
+        // The player's own total is untouched, which is the half that must not change: sharing a player's frames round
+        // their views is not the same as giving each view a share.
+        assertEquals(fixedOrder[0], inTurn[0] + inTurn[1], 1,
+                "two views should split one player's frames rather than doubling them");
+    }
+
+    /** How two views for one player decide which of them asks the budget first. */
+    private enum Order {
+        ALWAYS_THE_SAME, ROTATED_BY_TICK, LONGEST_WAITING_FIRST
+    }
+
+    /**
+     * A second of ticks with two views for one player, both asking every tick.
+     *
+     * @return how many frames each view got
+     */
+    private int[] shareOverASecond(CaptureBudget budget, UUID player, Order order) {
+        int[] taken = new int[2];
+        long[] servedAt = new long[2];
+        long served = 0;
+
+        for (int tick = 0; tick < 20; tick++) {
+            // Both views belong to the same player, so both ask about the same id - which is exactly why order matters.
+            int first = switch (order) {
+                case ALWAYS_THE_SAME -> 0;
+                case ROTATED_BY_TICK -> tick % 2;
+                case LONGEST_WAITING_FIRST -> servedAt[0] <= servedAt[1] ? 0 : 1;
+            };
+
+            for (int step = 0; step < 2; step++) {
+                int view = (first + step) % 2;
+                if (budget.readyForFrame(player)) {
+                    taken[view]++;
+                    servedAt[view] = ++served;
+                    budget.spent(player, FRAME_COST);
+                }
+            }
+            now += TICK;
+        }
+        return taken;
+    }
 }

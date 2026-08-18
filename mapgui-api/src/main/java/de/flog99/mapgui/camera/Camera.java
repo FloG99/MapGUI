@@ -71,6 +71,21 @@ public interface Camera {
     void capture(Player player, CameraOptions options, Consumer<CameraShot> onShot);
 
     /**
+     * A capture from a point of your choosing rather than out of {@code viewer}'s head.
+     *
+     * <p>For a camera that is not held: one bolted to a wall, a periscope, a scrying pool, a <b>mirror</b>. The
+     * player is still handed over because a capture is always for somebody - they decide how far it may see, which
+     * walls are showing them what, and whose share of the live budget it spends - but the frame is taken from
+     * {@link CameraEye#from} and, unlike every other capture, <b>the viewer is in it</b>. See {@link CameraEye}.
+     *
+     * <p>{@link CameraOptions#selfie()} is ignored here: it exists to move a player's own capture off their face and
+     * put them in frame, and an eye you placed yourself has already done both.
+     *
+     * @param eye where the frame is taken from, and the plane it is clipped to if it has one
+     */
+    void capture(Player viewer, CameraEye eye, CameraOptions options, Consumer<CameraShot> onShot);
+
+    /**
      * A live view of this player, driven for you: the way to put moving pictures on a screen.
      *
      * <p>Every tick a frame could be taken it asks {@code options} what to capture, and hands the result to
@@ -101,6 +116,27 @@ public interface Camera {
      * @param onFrame given each finished frame, on the main thread
      */
     CameraFeed feed(Player player, Supplier<CameraOptions> options, Consumer<CameraShot> onFrame);
+
+    /**
+     * The same live view, from an eye you place rather than from the viewer's head.
+     *
+     * <p>{@code eye} is asked afresh every frame, which is what a reflection needs: where a mirror looks out from
+     * depends on where the person looking at it is standing, so the answer moves as they do. Returning null pauses
+     * the feed exactly as a null {@code options} does - for a viewer who has walked round the back of the glass,
+     * say, where there is no reflection to take.
+     *
+     * <p>Paced against {@code viewer}, so somebody in a hall of mirrors divides one person's worth of frames between
+     * them rather than taking one share per mirror.
+     *
+     * <p><b>{@code eye} is asked before {@code options}</b>, every frame, because that is the direction the dependency
+     * runs: what to capture usually follows from where from. A mirror solves its reflection when asked for the eye and
+     * reads the size and field of view off it, so it has an answer ready by the time the options are wanted.
+     *
+     * @param eye     asked whenever a frame could be taken, before {@code options}. Null means not now
+     * @param options as {@link #feed(Player, Supplier, Consumer)}, and asked second. Null means not now
+     */
+    CameraFeed feed(Player viewer, Supplier<CameraEye> eye, Supplier<CameraOptions> options,
+                    Consumer<CameraShot> onFrame);
 
     /**
      * Whether a <b>live view</b> of this player should take a frame now.

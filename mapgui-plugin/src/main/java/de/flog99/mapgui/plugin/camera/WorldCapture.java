@@ -134,8 +134,37 @@ final class WorldCapture {
 
     /** Where the camera is and what it is pointed at, as the tracer wants it. */
     static CameraView viewOf(Location eye, CameraOptions options, int maxDistance) {
+        return viewOf(eye, options, maxDistance, null, null, null);
+    }
+
+    /**
+     * The same, confined to the front of a plane and framed on a window of the caller's own - which between them are
+     * what make a reflection possible and sharp.
+     */
+    static CameraView viewOf(Location eye, CameraOptions options, int maxDistance, CameraView.ClipPlane clip,
+                             CameraView.Lens lens, boolean[] wanted) {
         return new CameraView(eye.getX(), eye.getY(), eye.getZ(), eye.getYaw(), eye.getPitch(),
-                options.fov(), maxDistance, options.fog());
+                options.fov(), maxDistance, options.fog(), clip, widened(lens, options), wanted);
+    }
+
+    /**
+     * The frame, with a field of view spread across a capture that is wider than it is tall.
+     *
+     * <p>A field of view is one angle and a frame has two, which only agree while the pixels are square. Left alone, a
+     * 4:1 capture would draw the same seventy degrees across as down and give it four times the pixels - the picture
+     * stretched sideways rather than showing four times as much of the room.
+     *
+     * <p>Nothing at all for a square capture, which is every one taken through a viewfinder: the same null goes through
+     * and {@link CameraView} builds the symmetric lens it always built, to the last bit. And nothing for a caller that
+     * stated its own {@link CameraView.Lens} either, since a window already carries both angles - that is what makes it
+     * a window rather than an angle.
+     */
+    private static CameraView.Lens widened(CameraView.Lens lens, CameraOptions options) {
+        if (lens != null || options.width() == options.height()) return lens;
+
+        double tanHalf = Math.tan(Math.toRadians(options.fov()) / 2);
+        double across = tanHalf * options.aspect();
+        return CameraView.Lens.of(-across, across, -tanHalf, tanHalf);
     }
 
     /** Vanilla cycles the moon through eight phases, one per day. */

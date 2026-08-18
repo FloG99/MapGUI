@@ -89,6 +89,8 @@ final class EntityTracer {
     boolean first(EntitySnapshot entity, double originX, double originY, double originZ,
                   double dx, double dy, double dz, double limit) {
 
+        if (!nearEnough(entity, originX, originY, originZ, dx, dy, dz, limit)) return false;
+
         this.entity = entity;
         texture = textures.get(entity.texture());
         tint = entity.tint();
@@ -123,6 +125,51 @@ final class EntityTracer {
 
         from = 0;
         return walk(limit);
+    }
+
+    /**
+     * Whether this ray comes close enough to the entity to be worth walking its mesh at all: inside the same bounding
+     * sphere {@link EntityScreen} picks its candidates with, and near enough to be drawn.
+     *
+     * <p>A dozen multiplies against the whole mesh, and the mesh is the entire cost of an entity: a player is around
+     * thirty boxes over eight parts, each one turned into its part's own space, and {@link #walk} tests every one of
+     * them however far the ray passes. That is affordable while the candidates are chosen well, and
+     * {@link EntityScreen} chooses them by projected rect - which is the sphere's <b>screen bounding box at the
+     * sphere's own depth</b>, and so is only as selective as the frame is wide.
+     *
+     * <p>Which a <b>mirror</b> is not. Its frame is the glass rather than a field of view, so a 2x2 mirror seen from
+     * twenty blocks is a window five degrees across - a telephoto shot - and there anything within a block or so of
+     * the axis fills the frame however far away it is. A chest thirty blocks down that tube covers a third of the
+     * picture, so every pixel of the reflection was walking every entity in it: measured at 256x256, twenty players
+     * in a five degree frame cost eight times the whole rest of the frame, where the same twenty in a ninety degree
+     * frame cost nothing measurable. The premise the rect relies on had quietly stopped holding.
+     *
+     * <p>Cannot hide anything the rect did not already hide: the mesh is inside the sphere, and the rect is that same
+     * sphere's projection. What it changes is that the test is now against the ray rather than against a box around
+     * the ray's whole neighbourhood.
+     *
+     * <p>And the sphere is a <b>generous</b> bound rather than a tight one - {@link EntitySnapshot#reach} takes the
+     * model's height as a radius where that is the larger, so a player's is two blocks where their mesh needs about one.
+     * Which is why this is safe, and also what is left on the table: a radius fitted to the parts would turn away four
+     * times the rays. Not done here, because that number is the one {@link EntityScreen} picks its candidates with, and
+     * a bound that came out a shade too small there is an arm missing from a photograph.
+     */
+    private boolean nearEnough(EntitySnapshot entity, double originX, double originY, double originZ,
+                               double dx, double dy, double dz, double limit) {
+
+        double reach = entity.reach();
+        // The middle of the model rather than its feet, which is where the sphere the reach measures is centred.
+        double toX = entity.x() - originX;
+        double toY = entity.y() + entity.model().height() / 32.0 * entity.scale() - originY;
+        double toZ = entity.z() - originZ;
+
+        double along = toX * dx + toY * dy + toZ * dz;
+        // Nothing behind the ray, and nothing so far along it that the blocks have already closed the ray off.
+        if (along + reach < 0 || along - reach > limit) return false;
+
+        // How far the ray passes from the centre, squared, which needs no root to compare against the radius.
+        double across = toX * toX + toY * toY + toZ * toZ - along * along;
+        return across <= reach * reach;
     }
 
     /**

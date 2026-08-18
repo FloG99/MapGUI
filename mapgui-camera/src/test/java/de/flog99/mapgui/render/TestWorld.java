@@ -95,38 +95,65 @@ final class TestWorld implements VoxelSource, Textures {
     }
 
     TestWorld cube(int x, int y, int z, String texture, BakedState.Alpha alpha, int tint) {
-        BakedFace[] faces = new BakedFace[6];
-        for (Direction side : Direction.values()) {
-            faces[side.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0, tint, null);
-        }
-        return place(x, y, z, new BakedState(List.of(new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0)), true, alpha));
+        return place(x, y, z, shared("cube " + texture + " " + alpha + " " + tint, () -> {
+            BakedFace[] faces = new BakedFace[6];
+            for (Direction side : Direction.values()) {
+                faces[side.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0, tint, null);
+            }
+            return new BakedState(List.of(new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0)), true, alpha);
+        }));
+    }
+
+    /**
+     * A full cube whose faces are dropped against a solid neighbour, which is what a real block model states.
+     *
+     * <p>{@code cube} above leaves the cullface out, so most tests here never exercise it. This one is for the cases where
+     * <b>what hides a face</b> is the question - a clipped frame, where the neighbour that would hide it is not in the
+     * picture at all.
+     */
+    TestWorld culledCube(int x, int y, int z, String texture) {
+        return place(x, y, z, shared("culled cube " + texture, () -> {
+            BakedFace[] faces = new BakedFace[6];
+            for (Direction side : Direction.values()) {
+                faces[side.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0, BakedFace.NO_TINT, side);
+            }
+            return new BakedState(List.of(new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0)),
+                    true, BakedState.Alpha.OPAQUE);
+        }));
     }
 
     /** A cutout cube flagged as leaves, so the gaps in it close up with distance the way a canopy does. */
     TestWorld leafCube(int x, int y, int z, String texture) {
-        BakedFace[] faces = new BakedFace[6];
-        for (Direction side : Direction.values()) {
-            faces[side.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0, BakedFace.NO_TINT, null);
-        }
-        BakedElement cube = new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0);
-        return place(x, y, z, new BakedState(List.of(cube), true, BakedState.Alpha.CUTOUT, false, true, 0));
+        return place(x, y, z, shared("leaf " + texture, () -> {
+            BakedFace[] faces = new BakedFace[6];
+            for (Direction side : Direction.values()) {
+                faces[side.ordinal()] = new BakedFace(texture, 0, 0, 16, 16, 0, BakedFace.NO_TINT, null);
+            }
+            BakedElement cube = new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0);
+            return new BakedState(List.of(cube), true, BakedState.Alpha.CUTOUT, false, true, 0);
+        }));
     }
 
     /** An arbitrary box, for the cases where a ray has to be able to miss the geometry inside a block. */
     TestWorld box(int x, int y, int z, float fromX, float fromY, float fromZ, float toX, float toY, float toZ, String texture) {
-        BakedFace[] faces = new BakedFace[6];
-        for (Direction side : Direction.values()) {
-            faces[side.ordinal()] = BakedFace.whole(texture);
-        }
-        return place(x, y, z, new BakedState(List.of(new BakedElement(fromX, fromY, fromZ, toX, toY, toZ, faces, true, 0, 0)), false, BakedState.Alpha.OPAQUE));
+        String key = "box " + texture + " " + fromX + " " + fromY + " " + fromZ + " " + toX + " " + toY + " " + toZ;
+        return place(x, y, z, shared(key, () -> {
+            BakedFace[] faces = new BakedFace[6];
+            for (Direction side : Direction.values()) {
+                faces[side.ordinal()] = BakedFace.whole(texture);
+            }
+            return new BakedState(List.of(new BakedElement(fromX, fromY, fromZ, toX, toY, toZ, faces, true, 0, 0)), false, BakedState.Alpha.OPAQUE);
+        }));
     }
 
     /** A zero-thickness vertical plane with no face shading - what a cross model like grass is made of. */
     TestWorld plane(int x, int y, int z, String texture) {
-        BakedFace[] faces = new BakedFace[6];
-        faces[Direction.NORTH.ordinal()] = BakedFace.whole(texture);
-        faces[Direction.SOUTH.ordinal()] = BakedFace.whole(texture);
-        return place(x, y, z, new BakedState(List.of(new BakedElement(1, 0, 8, 15, 16, 8, faces, false, 0, 0)), false, BakedState.Alpha.CUTOUT));
+        return place(x, y, z, shared("plane " + texture, () -> {
+            BakedFace[] faces = new BakedFace[6];
+            faces[Direction.NORTH.ordinal()] = BakedFace.whole(texture);
+            faces[Direction.SOUTH.ordinal()] = BakedFace.whole(texture);
+            return new BakedState(List.of(new BakedElement(1, 0, 8, 15, 16, 8, faces, false, 0, 0)), false, BakedState.Alpha.CUTOUT);
+        }));
     }
 
     /**
@@ -161,10 +188,10 @@ final class TestWorld implements VoxelSource, Textures {
             fluid[side.ordinal()] = new BakedFace(water, 0, 0, 16, 16, 0, BakedFace.NO_TINT, side, true);
         }
 
-        return place(x, y, z, new BakedState(List.of(
+        return place(x, y, z, shared("waterlogged " + solid + " " + water, () -> new BakedState(List.of(
                 new BakedElement(0, 0, 0, 16, 8, 16, slab, true, 0, 0),
                 new BakedElement(0, 0, 0, 16, 16, 16, fluid, true, 0, 0)
-        ), false, BakedState.Alpha.TRANSLUCENT, true));
+        ), false, BakedState.Alpha.TRANSLUCENT, true)));
     }
 
     /**
@@ -222,11 +249,25 @@ final class TestWorld implements VoxelSource, Textures {
 
     /** One instance per texture, since culling between the same kind compares baked states by identity. */
     private BakedState fluidState(BakedFace[] faces) {
-        return fluidStates.computeIfAbsent(faces[0].texture(),
-                ignored -> new BakedState(List.of(new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0)), true, BakedState.Alpha.TRANSLUCENT));
+        return shared("fluid " + faces[0].texture(),
+                () -> new BakedState(List.of(new BakedElement(0, 0, 0, 16, 16, 16, faces, true, 0, 0)), true, BakedState.Alpha.TRANSLUCENT));
     }
 
-    private final Map<String, BakedState> fluidStates = new HashMap<>();
+    /**
+     * One instance per distinct state, which is what the real bake produces and what the renderer relies on.
+     *
+     * <p>{@code BlockModels} caches baked states by the state's own name, so every stone block in a world is the
+     * <b>same object</b>. Two things here depend on that and would quietly stop being tested if this handed out a fresh
+     * instance per block: {@code culled} drops the face between two blocks of the same kind by comparing them with
+     * {@code ==}, so that a wall of glass is one pane rather than stacked layers of blue; and {@code RayCaster} crosses
+     * the inside of one material without examining it on the same comparison - see {@code SameKindSkipTest}, which was
+     * vacuous until this was fixed, because no two of its blocks were ever the same object.
+     */
+    private BakedState shared(String key, java.util.function.Supplier<BakedState> build) {
+        return states.computeIfAbsent(key, ignored -> build.get());
+    }
+
+    private final Map<String, BakedState> states = new HashMap<>();
 
     TestWorld tint(int index, int argb) {
         tints.put(index, argb);
@@ -252,8 +293,22 @@ final class TestWorld implements VoxelSource, Textures {
 
     @Override
     public int lightAt(int x, int y, int z) {
+        lit++;
         return lights.getOrDefault(key(x, y, z), defaultLight);
     }
+
+    /**
+     * How many times a trace has asked how bright somewhere is, which is once or twice per texel it shades.
+     *
+     * <p>The counter to use for "was this pixel drawn at all". {@link #reads} counts <b>positions</b> now that a frame
+     * remembers the blocks it has already looked at - see {@code SeenBlocks} - so it no longer tracks how many rays were
+     * cast, while this is not remembered and still does.
+     */
+    int lit() {
+        return lit;
+    }
+
+    private int lit;
 
     /**
      * Built over the blocks that were placed, widened so that a ray leaving the scene is skipped too.
@@ -280,7 +335,13 @@ final class TestWorld implements VoxelSource, Textures {
         return built;
     }
 
-    /** How many blocks a trace has had to look at, which is the count a skip is meant to bring down. */
+    /**
+     * How many blocks a trace has had to look at, which is the count a skip is meant to bring down.
+     *
+     * <p><b>Positions</b>, not questions: a frame remembers the blocks it has already looked at - see
+     * {@code SeenBlocks} - so asking about one twice reaches here once. Still the right counter for whether a skip
+     * crossed ground without examining it, and the wrong one for how many rays were cast. Use {@link #lit} for that.
+     */
     int reads() {
         return reads;
     }

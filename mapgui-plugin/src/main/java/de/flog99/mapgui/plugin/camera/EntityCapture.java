@@ -1,6 +1,7 @@
 package de.flog99.mapgui.plugin.camera;
 
 import de.flog99.mapgui.camera.EntityDetails;
+import de.flog99.mapgui.render.CameraView;
 import de.flog99.mapgui.render.ChunkFrustum;
 import de.flog99.mapgui.render.EntitySnapshot;
 import de.flog99.mapgui.render.ItemPoses;
@@ -81,10 +82,14 @@ final class EntityCapture {
      * @param live    whether this is a viewfinder frame, which is what earns the reuse
      * @param most    models one capture may build, so a mob farm in frame cannot turn it into thousands. Nearest
      *                first, so what is dropped is what was furthest away
+     * @param clip    the half-space the frame is confined to, or null for a view of everything around the eye.
+     *                Dropped here rather than left to the tracer, because a mesh for something behind a mirror is a
+     *                mesh built to be thrown away
      */
     static List<EntitySnapshot> take(Player viewer, Location eye, SkinCache skins, MobAssets assets, FramedMaps maps,
                                      EntityDetails details, TrackingRanges ranges, ChunkFrustum frustum,
-                                     MobCache shapes, boolean live, int most, boolean includeSelf) {
+                                     MobCache shapes, boolean live, int most, boolean includeSelf,
+                                     CameraView.ClipPlane clip) {
         double search = ranges.widest();
 
         // Culled first and sorted second. A box query in a village comes back with everything, and sorting it all
@@ -106,6 +111,9 @@ final class EntityCapture {
             double range = ranges.forEntity(entity);
             if (away > range * range) continue;
             if (frustum != null && !frustum.mightSee(at.getX(), at.getY() + REACH, at.getZ(), REACH)) continue;
+            // Behind the glass, so no part of it is in the reflection. Tested at head height rather than at the feet:
+            // somebody standing on the far side of a wall has their feet nearer the plane than the rest of them.
+            if (clip != null && !clip.keeps(at.getX(), at.getY() + REACH, at.getZ())) continue;
 
             near.add(new Near(entity, at, away));
         }

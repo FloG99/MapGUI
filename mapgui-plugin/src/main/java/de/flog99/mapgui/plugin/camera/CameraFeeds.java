@@ -3,6 +3,7 @@ package de.flog99.mapgui.plugin.camera;
 import de.flog99.mapgui.MapGui;
 import de.flog99.mapgui.Session;
 import de.flog99.mapgui.camera.Camera;
+import de.flog99.mapgui.camera.CameraEye;
 import de.flog99.mapgui.camera.CameraFeed;
 import de.flog99.mapgui.camera.CameraOptions;
 import de.flog99.mapgui.camera.CameraShot;
@@ -11,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -46,22 +48,56 @@ public final class CameraFeeds {
     }
 
     public CameraFeed open(Player player, Supplier<CameraOptions> options, Consumer<CameraShot> onFrame) {
-        Feed feed = new Feed(player.getUniqueId(), options, onFrame);
+        Feed feed = new Feed(player.getUniqueId(), null, options, onFrame);
         open.add(feed);
         return feed;
     }
 
-    /** Main thread, once a tick. A feed that says it is finished is forgotten here rather than left to be swept. */
+    /** A view from an eye the caller places rather than out of the viewer's head - a mirror, a camera on a wall. */
+    public CameraFeed open(Player viewer, Supplier<CameraEye> eye, Supplier<CameraOptions> options,
+                           Consumer<CameraShot> onFrame) {
+        Feed feed = new Feed(viewer.getUniqueId(), eye, options, onFrame);
+        open.add(feed);
+        return feed;
+    }
+
+    /**
+     * Main thread, once a tick. A feed that says it is finished is forgotten here rather than left to be swept.
+     *
+     * <p><b>Whoever went longest ago asks first</b>, and that is not a nicety - without it a player with two views open
+     * sees only one of them, forever. The budget is divided per player rather than per view, so the first feed to ask
+     * inside an interval takes that player's whole allowance and the rest are refused. Asked in a fixed order the same
+     * one wins every time and the others never draw a single frame: a mirror made of two panels drew half of itself and
+     * left the other half grey, and so did any mirror seen by somebody holding a camera.
+     *
+     * <p>Ordering by when each feed was last served rather than <b>rotating by tick</b>, which was the obvious fix and
+     * does not work. A frame is granted once per interval - every second tick at ten fps - so a pointer that moves once
+     * a tick keeps step with it and the same feed is first on every tick that had a frame to give. Serving order has to
+     * be driven by what was actually served, not by the clock it was served on. {@code CaptureBudgetTest} holds both
+     * halves of that.
+     *
+     * <p>What this deliberately does not do is give each view a share of its own - see
+     * {@link CaptureBudget#readyForFrame}, where being divided per player is the point. Two views get half the rate
+     * each, not twice the cost.
+     */
     public void tick() {
-        // Over a copy, since a consumer asked what to capture is free to open or close a feed while being asked -
-        // and this runs inside the server's tick, where a ConcurrentModificationException would take the other
-        // per-tick jobs down with it.
-        for (Feed feed : List.copyOf(open)) {
+        // Over a copy, since a consumer asked what to capture is free to open or close a feed while being asked - and
+        // this runs inside the server's tick, where a ConcurrentModificationException would take the other per-tick
+        // jobs down with it.
+        List<Feed> pumping = new ArrayList<>(open);
+        // A feed that has never been served sorts first, so a mirror somebody has just walked up to draws at once
+        // rather than waiting its turn behind one that is already running.
+        pumping.sort(Comparator.comparingLong(feed -> feed.servedAt));
+
+        for (Feed feed : pumping) {
             if (!feed.pump()) {
                 open.remove(feed);
             }
         }
     }
+
+    /** Counts frames handed out, only so that feeds can be ordered by which of them went longest ago. */
+    private long served;
 
     /** Closes every feed, for a plugin shutting down. */
     public void closeAll() {
@@ -90,14 +126,28 @@ public final class CameraFeeds {
     private final class Feed implements CameraFeed {
 
         private final UUID player;
+
+        /** Null for a view out of this player's own head, which is what most of them are. */
+        private final Supplier<CameraEye> eye;
+
         private final Supplier<CameraOptions> options;
         private final Consumer<CameraShot> onFrame;
 
         private boolean closed;
         private boolean inFlight;
 
-        private Feed(UUID player, Supplier<CameraOptions> options, Consumer<CameraShot> onFrame) {
+        /**
+         * When this feed last took a frame, on {@link #served}'s own count, and 0 for one that never has.
+         *
+         * <p>Only ever compared with another feed's, which is why it counts frames rather than time: what it has to
+         * order is who went least recently, and a clock would tie every feed served in the same tick.
+         */
+        private long servedAt;
+
+        private Feed(UUID player, Supplier<CameraEye> eye, Supplier<CameraOptions> options,
+                     Consumer<CameraShot> onFrame) {
             this.player = player;
+            this.eye = eye;
             this.options = options;
             this.onFrame = onFrame;
         }
@@ -133,15 +183,26 @@ public final class CameraFeeds {
             if (holder == null) return false;
             if (inFlight || paused(holder)) return true;
 
+            // The eye first, and that order is load-bearing rather than arbitrary: what to capture usually depends on
+            // where from. A mirror solves its reflection here and reads the size and field of view off it, so asking
+            // for the options first hands it a question it cannot answer yet - and a consumer that says "not now"
+            // because it has not been asked the other one is a feed that pauses on its first tick and never resumes.
+            CameraEye from = eye == null ? null : eye.get();
+            if (eye != null && from == null) return true;
+
             // Null is the consumer saying "not this tick" - mid-animation, still loading, nothing worth drawing.
-            // Read before the budget is asked, so a paused view stops counting as a viewer rather than holding a
-            // share it is not spending.
+            // Both are read before the budget is asked, so a paused view stops counting as a viewer rather than
+            // holding a share it is not spending.
             CameraOptions wanted = options.get();
             if (wanted == null) return true;
+
             if (!camera.get().readyForFrame(holder)) return true;
 
             inFlight = true;
-            camera.get().capture(holder, wanted, shot -> {
+            // Stamped where the frame is actually granted, so the ordering above follows what was served rather than
+            // the tick it happened on - see tick().
+            servedAt = ++served;
+            Consumer<CameraShot> arrived = shot -> {
                 inFlight = false;
                 // A failed capture is dropped rather than handed on: every consumer of a live view would have to
                 // write the same null check, and none of them can do anything about it.
@@ -155,7 +216,13 @@ public final class CameraFeeds {
                     plugin.getLogger().log(Level.WARNING, "A camera feed's frame handler threw and has been closed", e);
                     closed = true;
                 }
-            });
+            };
+
+            if (from == null) {
+                camera.get().capture(holder, wanted, arrived);
+            } else {
+                camera.get().capture(holder, from, wanted, arrived);
+            }
             return true;
         }
     }

@@ -120,6 +120,20 @@ camera:
   # that the chunks are not loaded, so there is nothing to trace and the ray draws sky.
   max-distance: 96
 
+  # How far off black an unlit block is drawn, from 0 to 0.5.
+  #
+  # 0 is exactly what your client does with its brightness slider all the way up, and it is darker than people
+  # expect: a wholly unlit block comes out at 4 of 255 on stone, so a dark room is a black rectangle. That is
+  # faithful and often not what you want, because a map is not a screen - it has 143 colours to say "dark" with,
+  # and a viewer whose eye is adapted to the rest of their monitor rather than to a cave.
+  #
+  # 0.2 lands that same block at 28 of 255 - dark, but you can see it is a room. The lift is weighted onto the
+  # dark end, so a lit room barely moves: light 11 of 15 goes from 0.872 to 0.881.
+  #
+  # Turn it up for a legible cave, down for a faithful one. Past about 0.3 a dark room stops reading as dark at
+  # all, and the far end is a flat grey picture.
+  shadow-lift: 0.2
+
   # How far entities are drawn in a capture, in blocks. Every one in range is a model to assemble, so this is
   # what the entity half of a capture costs - and past about this far a mob is a couple of pixels on a map.
   #

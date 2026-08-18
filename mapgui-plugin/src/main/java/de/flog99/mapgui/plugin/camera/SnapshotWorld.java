@@ -163,14 +163,43 @@ final class SnapshotWorld implements VoxelSource {
 
         BlockData data = chunk.getBlockData(x & 15, y, z & 15);
         if (!holdsFluid(data)) {
-            return states.computeIfAbsent(data, key -> models.bake(key.getAsString()));
+            return baked(states, data, false);
         }
 
         // Only the surface of a body of fluid is short, so this needs the block above and cannot be answered from
         // the state alone. Two caches rather than a compound key, since the answer is one bit and states repeat.
         boolean covered = holdsFluid(above(x, y, z));
-        Map<BlockData, BakedState> cache = covered ? flooded : states;
-        return cache.computeIfAbsent(data, key -> models.bake(key.getAsString(), covered));
+        return baked(covered ? flooded : states, data, covered);
+    }
+
+    /**
+     * The baked state for a block state, from the cache or freshly baked into it.
+     *
+     * <p><b>A plain {@code get} first, and never {@code computeIfAbsent}, which is the whole point of this method.</b>
+     * {@code ConcurrentHashMap.computeIfAbsent} only answers without locking when the key it wants is the <i>first</i>
+     * node in its bin; anything further down a chain takes that bin's monitor <b>on every read</b>, hit or miss. This is
+     * the most-called method in the renderer - once per step of every ray, so millions of times a frame across six
+     * threads - so the states that happened to land second in a bin serialised the entire trace onto one monitor.
+     *
+     * <p>Found by dumping the threads of a live server while it drew a reflection with water in it: three of the six
+     * tracing threads {@code BLOCKED (on object monitor)} on the same {@code ConcurrentHashMap$Node}, and half of all
+     * the CPU the trace burned was inside {@code computeIfAbsent} - not baking anything, just walking the bin under its
+     * lock. The frame took 350 ms where the same rays cost about a twentieth of that.
+     *
+     * <p>{@code get} has no such condition: it is lock-free wherever the key sits. Racing threads cost nothing but a
+     * repeated lookup, because {@link BlockModels#bake} is itself a cache keyed by the state's own name - so both get the
+     * same instance back and neither has anything to throw away. That is also what keeps <b>one</b> instance per state,
+     * which the renderer depends on: {@code culled} compares neighbouring states by identity, so that two panes of the
+     * same glass read as one pane rather than as stacked layers of blue. {@code putIfAbsent} rather than {@code put} for
+     * the same reason - whoever gets there first decides.
+     */
+    private BakedState baked(Map<BlockData, BakedState> cache, BlockData data, boolean covered) {
+        BakedState known = cache.get(data);
+        if (known != null) return known;
+
+        BakedState made = models.bake(data.getAsString(), covered);
+        BakedState raced = cache.putIfAbsent(data, made);
+        return raced != null ? raced : made;
     }
 
     /**

@@ -263,6 +263,39 @@ public record WallLayout(BlockFace facing, int anchorX, int anchorY, int anchorZ
     }
 
     /**
+     * The four corners of the picture, in world coordinates on the plane, as {@code {x, y, z}} triples.
+     *
+     * <p>What it takes to reject a wall against a view: if all four of these are off the same side of a screen
+     * then so is the rectangle between them. Sampling the middle instead answers a different question - whether
+     * the wall is under the crosshair - and asking whether any corner is on screen answers none, since a wall
+     * standing close enough has all four outside a view it fills.
+     *
+     * <p>Not public, unlike the rest of this record: it hands back a bare mutable array, and the only thing
+     * that wants one is {@link WallSight}.
+     */
+    double[][] corners() {
+        return new double[][]{
+                pointAt(0, 0), pointAt(1, 0), pointAt(0, 1), pointAt(1, 1),
+        };
+    }
+
+    /**
+     * A point on the picture as {@code {x, y, z}}, given how far across and up it is as fractions of the whole.
+     *
+     * <p>Fractions rather than pixels or maps so that whatever is sampling the wall - corners for a view test,
+     * a grid of them for occlusion - does not have to know how big it is.
+     */
+    double[] pointAt(double across, double above) {
+        double alongRight = across * cols;
+        double alongUp = above * rows;
+        return new double[]{
+                planeOriginX() + right.getModX() * alongRight + up.getModX() * alongUp,
+                planeOriginY() + right.getModY() * alongRight + up.getModY() * alongUp,
+                planeOriginZ() + right.getModZ() * alongRight + up.getModZ() * alongUp,
+        };
+    }
+
+    /**
      * Which of the wall's maps a point on the surface belongs to.
      *
      * <p>Numbered the way the maps are, along the bottom row first - so the flip between surface rows

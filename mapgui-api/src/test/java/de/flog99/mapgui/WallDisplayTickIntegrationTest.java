@@ -1,12 +1,8 @@
 package de.flog99.mapgui;
 
-import org.bukkit.World;
 import org.bukkit.block.BlockFace;
-import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Proxy;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,28 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * have. The unwatched skip sits in front of it, and that is what these guard.
  */
 class WallDisplayTickIntegrationTest {
-
-    /** A world whose player list can be swapped between tests. One instance, so wall and players agree. */
-    private static final class FakeWorld {
-        List<Player> players = List.of();
-        private final World world = (World) Proxy.newProxyInstance(
-                World.class.getClassLoader(),
-                new Class<?>[]{World.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                    case "getPlayers" -> players;
-                    case "key" -> net.kyori.adventure.key.Key.key("fake", "world");
-                    case "isLoaded" -> true;
-                    case "equals" -> args.length == 1 && args[0] == proxy;
-                    case "hashCode" -> System.identityHashCode(proxy);
-                    case "toString" -> "FakeWorld";
-                    default -> null;
-                }
-        );
-
-        World world() {
-            return world;
-        }
-    }
 
     /** A wall showing one opaque pixel, so a watched tick would move exactly one pixel of data. */
     private static WallDisplay wall(FakeWorld fakeWorld, FakeTransport transport, AtomicInteger paints) {

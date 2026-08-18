@@ -119,6 +119,11 @@ public final class MapGuiPlugin extends JavaPlugin {
         // The two hand sweeps ride along for the same reason: an item can reach a hand a dozen ways, and asking who
         // is holding one is cheaper than a listener per route.
         getServer().getScheduler().runTaskTimer(this, () -> {
+            // Finished captures first, before anything paints. A trace that lands mid-tick already has its pixels, and a
+            // wall that has painted for this tick would sit on them until the next one - fifty milliseconds of a
+            // reflection trailing behind whoever is looking at it, bought back by doing these in the right order.
+            camera.deliverFinished();
+
             walls.tick();
             wallRegistry.tick(System.currentTimeMillis());
             handItems.sweep();

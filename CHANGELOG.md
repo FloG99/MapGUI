@@ -3,6 +3,395 @@
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
 surface is `mapgui-api`, which carries the layout engine inside it.
 
+## 1.2.0
+
+A camera you can put somewhere other than a player's head, which is what a **mirror** needs.
+Also walls that stop paying for viewers who are not looking at them.
+
+### Running a server
+
+- **The inside of a body of water is crossed without being examined.** Water is translucent, so a ray does not stop at
+  the surface - it walks down through every block of the ocean to the seabed - and **every one of those blocks draws
+  nothing**, because the face it would draw is culled against the identical water behind it. The renderer was asking,
+  block after block, a question it had already answered.
+
+  Measured at 256x256 over a flat sea, against the same scene built of stone:
+
+  | water depth | stone | water |
+  |---|---|---|
+  | 1 block | 17 ms | 29 ms |
+  | 6 blocks | 21 ms | 77 ms |
+  | 18 blocks - a vanilla ocean | 16 ms | **157 ms** |
+
+  Stone is flat whatever the depth, because the ray stops at the surface. So when the block a ray steps into is the same
+  state object it just came out of, and that state is a single full cube, not opaque, with a `cullface` on the side it
+  came in through, there is provably nothing to add and nothing to stop the ray - and `sample` is skipped entirely. That
+  is **-28%** on the eighteen-block ocean above, 157 down to 113 ms, with stone untouched as it must be.
+
+  Only the entered face is consulted, because a full cube is reported by the grid walk itself. Remembered per state and
+  side, keyed on identity, since states are canonicalised - which the renderer already relied on for `culled`.
+
+  `SameKindSkipTest` renders water, glass, a canopy, waterlogged blocks and a field of planes **both ways** and holds the
+  frames byte-identical, the way `EmptySkipTest` does for empty space. The cases that matter are the ones where it must
+  not fire: leaves carry no `cullface` so a canopy is drawn layer by layer, a waterlogged block is two elements, and a
+  plane is not a full cube. Each of those three has a test that fails if its guard is removed.
+
+  `TestWorld` had to start canonicalising its states for any of this to be testable - it handed out a fresh `BakedState`
+  per block, so no two blocks in a test scene were ever the same object, and the first version of this test passed
+  against a deliberately broken skip. The identity culling in `culled` was going untested for the same reason.
+
+- **A frame remembers the blocks it has already looked at**, per tracing thread, in front of the world it is reading.
+
+  Reading a block state out of a `ChunkSnapshot` hands back a **fresh copy every call** - that is Bukkit's contract, you
+  get an object you may keep. With the lock above gone, `CraftBlockData.clone()` became the single largest cost in the
+  renderer: **36.6%** of a live trace, with `SnapshotWorld.stateAt` at 53.5% of it including the cache lookup behind it.
+
+  And a ray asks far more often than it steps. A fluid surface averages four blocks per corner, so one water block asks
+  about nine positions sixteen times, and again for which way it flows; `above` asks for the block over a fluid, which is
+  the one the ray steps into next; `culled` asks about the neighbour behind every face it draws; and the pixel next door
+  walks the same blocks again. Measured on a frame of open water, block reads reaching the world went from **18.0 a ray
+  to 6.35**, and on solid ground from 10.3 to 5.07.
+
+  Sound because a frame's world cannot change under it - a capture is copied out of the server in one tick and then only
+  read, which is already why a fluid's corners and a block's tint may be remembered. Direct-mapped over sixteen thousand
+  slots, so a collision costs the re-read it would have cost anyway, and nothing is allocated or shared between threads.
+  `SeenBlocksTest` holds the answers identical and the count down; the frames themselves are held by every render test in
+  the module, since all of them now trace through it.
+
+- **The trace no longer serialises itself on a hash map.** `SnapshotWorld.stateAt` and `TextureAtlas.get` read with a
+  plain `get` and only fall back to `putIfAbsent`, where both used `computeIfAbsent` before.
+
+  `ConcurrentHashMap.computeIfAbsent` answers without locking only when the key it wants is the **first** node in its
+  bin. Anything further down a chain takes that bin's monitor on **every read**, hit or miss - and `stateAt` is the
+  most-called method in the renderer, once per step of every ray. So the block states that happened to land second in a
+  bin put the whole trace on one monitor.
+
+  Found by dumping the threads of a live server drawing a reflection with water in it: three of six tracing threads
+  `BLOCKED (on object monitor)` on the same `ConcurrentHashMap$Node`, and **50% of all the CPU the trace burned was
+  inside `computeIfAbsent`** - not baking anything, walking a bin under its lock. 67% of the samples were under the fluid
+  surface, which is simply where `stateAt` is called most: a fluid's corner heights average four blocks per corner, so a
+  water surface asks about its neighbours 1.75 times as often as solid ground does. That frame took **350 ms**.
+
+  Nothing about the result changes: `bake` is itself a cache keyed by the state's name, so racing threads get the same
+  instance and one instance per state is still guaranteed - which the renderer needs, since `culled` compares
+  neighbouring states by identity. `TextureAtlas.layered` already used exactly this pattern, and says why: a nested
+  `computeIfAbsent` is something a `ConcurrentHashMap` refuses outright, intermittently, when the inner key lands in the
+  bin the outer one locked.
+
+- **A frame is cut into several bands per thread instead of one each**, so that the threads finish together. `render`
+  waits for every band, which makes a frame cost the *slowest* one rather than the average - and the rows of a frame are
+  nothing like equally expensive: a band of sky is a handful of steps a ray, a band across the horizon walks the whole
+  distance cap through terrain, foliage and water.
+
+  Measured on a live server tracing a mirror, six threads and one band each, cumulative CPU per thread: **85.3 s, 20.3,
+  16.0, 26.8, 16.1, 73.5**. The busiest band held 36% of the work where an even split is 17%, so the frame took **2.1
+  times** as long as the same work shared out. Four bands a thread averages that away, since the pool hands the next band
+  to whichever thread came free - the worst a thread can end up with is its share plus one band.
+
+  `EntityScreen` moved out of the band and is now built once per frame and shared. It covers every row of the frame rather
+  than the band's own, so it was being rebuilt six times over already, and twenty-four bands would have made that worse
+  than the imbalance it was fixing. Every capture gets both, a photograph as much as a reflection, and
+  `FrameTracerTest.everyThreadCountDrawsTheSameFrame` still holds a banded frame byte-identical to a single-threaded one.
+
+- **Entities in a narrow frame no longer cost the earth.** A ray is now held against an entity's bounding sphere before
+  any of its mesh is walked, and the entities of a frame are handed over nearest first so that once a ray has met
+  something opaque the rest are turned away by that test rather than walked.
+
+  `EntityScreen` keeps entities affordable by testing each pixel only against the ones whose projected rect covers it,
+  and that works because a rect is small when the frame is wide. A **mirror's** frame is not wide: it is fitted to the
+  glass rather than described by a field of view, so a 2x2 mirror seen from twenty blocks is a window five degrees
+  across, and in one of those anything within a block of the axis covers a large share of the picture however far off it
+  is - a chest thirty blocks down that tube covers a third of the frame. So the rect stopped selecting, and every pixel
+  was walking every entity in the tube: a player is around thirty boxes over eight parts, all of them tested however far
+  the ray passes.
+
+  Measured at 256x256: twenty players down the axis of a five degree frame cost **eight times the whole rest of the
+  frame**, where the same twenty in a ninety degree frame cost nothing measurable. Both halves are needed - with the
+  bounding test alone, candidates arriving furthest first still cost 2.4 us a ray against 0.8 nearest first. Nothing
+  about the picture changes: the sphere is the one the rect was already derived from, and `Fragments` orders what it is
+  given by depth however it arrives. `NarrowFrameEntitiesTest` holds both.
+
+- **Dark is drawn dark, and how dark is now a setting** - `camera.shadow-lift`, defaulting to 0.15. A capture is lit the
+  way the client lights it, with the brightness slider all the way up, and then the bottom of that curve is lifted by
+  this much.
+
+  There was a lift under the bottom of the light curve, and the argument for it was real: a screen draws a night in
+  thousands of near-blacks and your eye adapts, while a map has 143 colours and a viewer adapted to whatever else is on
+  their screen, so a faithful dark can read as a hole rather than as a cave. What settled it was the size of what that
+  cost. Measured on stone, a wholly unlit block drew at **154 of 255** where the client draws it at **8** - an unlit room
+  came out very nearly as bright as a lit one, which is not a legible cave, it is no cave at all.
+
+  The bright end barely moves: full daylight is 253 either way and light 12 goes from 232 to 237. Everything below about
+  light 8 gets much darker. Night is the same decision by the other lever - the client takes 11 off sky light at midnight
+  and so does this, where it used to take 7 and leave midnight looking like dusk.
+
+  Then it shipped at zero, and 4 of 255 on stone turns out to be a black rectangle rather than a room - so the honest
+  answer is that this was never a constant to get right. It is a setting, defaulting to **0.2**: that block lands at 28 of
+  255, dark but legibly a room, while light 11 moves by nine thousandths. Turn it up for a legible cave, down for a
+  faithful one. `LightTableTest` holds the shape - more light is never darker, full light stays where the client put it -
+  across the whole range the setting is clamped to, rather than only at the default.
+
+- **Dark colours are no longer tinted red.** Two things were doing it, both at the bottom of the palette, where the darkest
+  entries are TERRACOTTA_BLACK rgb(19,11,8) - warm - and COLOR_BLACK rgb(13,13,13), and the neutral ramp above them is only
+  four apart.
+
+  The **lookup table** rounded each channel down to an eight-wide cell before matching, which is wider than those gaps, so
+  every dark colour was dragged toward the darkest entries there are. Measured: dark leaves at rgb(10,16,5) landed on the
+  terracotta where an exact match gives the neutral black, and cobble in a dim room came out rgb(40,28,24) instead of
+  rgb(40,40,40). There is now a second table over the dark corner of the cube at two to a cell, taken from the middle of
+  each cell rather than its floor - another 32 KB, and the bright range is untouched.
+
+  And **vanilla's matcher itself** leans warm down there: it counts green four times and lets blue error off lightly, which
+  is a fair way to compare two colours and the wrong way to compare two greys. For rgb(33,33,33) it prefers a brown to
+  rgb(40,40,40) by half a percent of its own metric. So the dark table measures its own way: for a colour with a hue, plain
+  distance; for one grey enough that any hue would be invented, brightness and colour split apart with colour weighed
+  twice. Nothing about fidelity required the old formula - the client draws whichever entry we hand it.
+
+  `DarkPaletteTest` pins the outcomes rather than the arithmetic: a grey stays grey down to rgb(4,4,4), nothing
+  near-neutral comes out warm, nothing dark comes out much brighter than it is, and the hue is far closer than the rounding
+  it replaced.
+
+- **A live view is a tick fresher, and often two.** A finished capture used to be handed back with its own `runTask`,
+  which puts it on the main thread on the next tick but at **no particular point** in it - and a task submitted a moment
+  ago sorts after a long-running repeating one, so in practice it landed *after* MapGUI's tick had already painted and
+  sent every wall. The pixels then sat there until the next paint. On a wall at 10 fps, which paints every second tick,
+  that was up to 100 ms of a live view trailing behind for nothing but ordering.
+
+  Finished captures are queued and drained at the **head** of MapGUI's own tick now, before anything paints, so a trace
+  landing at any point in a tick is drawn at the start of the next one. Nothing about the capture got faster; it stopped
+  waiting.
+
+  What is left is structural, and worth knowing before chasing it: one tick for the hop off the trace thread, and however
+  long the pacing interval is - `camera.live.max-fps` at 10 offers a frame every 100 ms, so a view is on average half that
+  behind before any of the above, and a player with several views divides that rate between them.
+
+- **A wall with no cursor now hears its clicks.** `WallDisplay#click` turned away any screen whose `cursor()` is off,
+  which made a cursorless wall the one surface in MapGUI whose clicks went nowhere: input is claimed off the connection
+  for anyone aiming at a wall that carries a screen, and the click was then dropped. `Screen#clickedAnywhere` exists for
+  exactly this and the held-map path has always used it.
+
+  It is told **where** as well, which a held screen cannot be: the position is a raytrace against the wall rather than the
+  player's own pointing, so there is a real pixel to report and nothing has to be asked of the player to get it. A screen
+  that wants a punch rather than a press says so with `activateOn()`.
+
+  Found by a mirror, which is a wall you have to be able to punch off and a screen that must not take your aim - it had no
+  way to be removed at all.
+
+- **A clipped frame draws what is against its plane**, which a mirror is the only user of and which two separate things
+  were cutting away. Both were right for a camera in somebody's head and wrong for a frame that starts at a plane:
+
+  The walk **skips the block it starts in**, because a camera standing inside a block should not have that block's inside
+  painted over the frame. A clipped frame does not start where the camera is - it starts where the ray crosses the plane -
+  so the block it skipped was the ordinary block directly in front of the glass. That hid a whole layer of the room, and
+  the layer nearest the viewer: a chest pushed against a mirror, a flower on the shelf under it, the snow on the floor
+  beneath one. It is walked like any other now, entered through the face the plane lies on.
+
+  And a face is **dropped when a neighbour would hide it**, which is what `cullface` in a model is for. The face of that
+  chest that touches the glass is hidden by the wall the mirror hangs on - so it was dropped, and the reflection showed
+  straight through the chest. A neighbour behind the plane is not in the picture and hides nothing in it.
+
+  `ClipPlaneTest` holds both, and an ordinary capture is untouched by either: both are guarded on there being a plane at
+  all.
+
+- **A wall's picture is drawn at its own brightness inside a capture**, rather than being lit like the surface it hangs
+  on. Its pixels are a finished image - a camera capture, a video frame, a menu - so the light is already in them, and
+  dimming them again by the light where the wall stands counts it twice.
+
+  Invisible on one wall and ruinous in a loop, which is where it was found: a **mirror facing a mirror** photographs the
+  other's map every frame, and every pass multiplied it by the face shade of the wall it hangs on - 0.6 on an east or west
+  wall. So an infinity tunnel went 0.6, 0.36, 0.22 and was black by the fourth level. It turned **red** on the way down as
+  well, which is the palette rather than the arithmetic: the darkest colours a map has are TERRACOTTA_BLACK at rgb(19,11,8)
+  and COLOR_BLACK at rgb(13,13,13), so anything marching toward black lands on the warm one, and dark green leaves land
+  there first.
+
+  A map in a real item frame is untouched: that is paper on a wall and vanilla dims it too. The distinction is
+  `EntitySnapshot#emissive`, and `WideFrameTest` holds both sides of it.
+
+- **A wall's map is keyed by its face as well as its block** inside a capture. Two walls on different faces of one block -
+  mirrors either side of a partition, say - published their pictures under the same name, so the second overwrote the
+  first and both were drawn with whichever won: each showing the other's picture, from a face it is not on.
+
+- **A capture can be oblong.** `CameraOptions.size(width, height)`, held to `MIN_SIZE` on each side and `MAX_PIXELS` on
+  the two multiplied - so a frame that is long and thin may be far wider than the old per-side limit and still cost less
+  than a square one at it. Pixels stay square: a window states both angles already, and a plain `fov` gets its horizontal
+  edges widened by the aspect.
+
+  For a surface whose shape something else decided. A wall of maps is a rectangle of whatever proportions it was built in,
+  and a **row of mirrors** down a wall is one frame rather than one each - they share a camera exactly, since a reflection
+  looks out along the plane's normal, so every mirror on the wall is a window onto one picture. Thirteen blocks of wall at
+  a map per block is 1664x128, inside the ceiling and with the wall between the mirrors left untraced by the mask.
+
+  A slice of a wide frame is bit for bit the frame that slice would have been alone, which `WideFrameTest` holds it to -
+  otherwise sharing one would quietly mean resampling it. The renderer needed nothing for this: it has taken a width and a
+  height all along, and only the options and the mask were square.
+
+  For plugin authors: nothing to do. `CameraOptions` gained a component, which moves the canonical constructor's arity -
+  so **the old seven-argument form is still there**, meaning a square capture exactly as it used to. `size(int)` still
+  means a square, `size()` still answers with the side, and `defaults()` is unchanged. `CameraEye.Mask` likewise keeps its
+  square constructor beside the new `(width, height, wanted)` one. That leaves this release additive across the whole of
+  `mapgui-api`.
+
+- **`/mapgui camera performance` now says how long a frame takes to trace**, rather than only when a capture happened to
+  be queued at the instant somebody typed the command - which is almost never. For a live view that figure is not a cost,
+  it is the latency, and it was the one number missing from a report whose every other line said the camera was free.
+
+  How it read before: a mirror visibly trailing a fifth of a second behind the person looking at it, beside a report of
+  `0.34ms/t  0.7% of every tick`. Both true - the tick share is the world copy and the entity gather, and the tracing is
+  off-thread - and between them no answer to the question being asked. The line now reads `Tracing  184.0ms a frame, off
+  the main thread`, in yellow past a tick and red past three.
+
+  It also says when more than one view is open, because that is the shape the question usually arrives in: *two mirrors got
+  slower than one and nothing on the tick moved*. One capture is traced at a time - it is already spread across every
+  core, so a second would contend with the first rather than draw sooner - so two views add their traces together instead
+  of sharing the machine. `one at a time, so 2 views wait for each other`.
+
+- **`performance follow` states both sides of a capture and its ray count**, where it printed the width twice - which
+  described the 1664x128 frame over a row of mirrors as though it were two hundred times the picture it is. The rays are
+  what the trace time is a function of, and now they are on the line next to it.
+
+- **A player with two live views open now sees both of them.** The frame budget is divided per player rather than per
+  view, so the first view to ask inside an interval took that player's whole allowance and the rest were refused - and
+  asked in a fixed order, the same one won every time and the others never drew a single frame. Not a slow second view: a
+  blank one. Anyone holding the camera with a mirror in front of them hit this, and so did any mirror made of more than
+  one panel.
+
+  Feeds are pumped longest-waiting-first now, so a player's frames go round their own views. Two views get half the rate
+  each rather than all and nothing, and a player's total cost is unchanged - sharing their frames is not the same as
+  giving each view a share.
+
+  Rotating by tick was the obvious fix and does not work: a frame is granted once per interval, every second tick at ten
+  fps, so a pointer that moves once a tick keeps step with it and the same view is first on every tick that mattered.
+  `CaptureBudgetTest` pins the trap, that failed fix, and the working one.
+
+- **A wall sends no pixels to somebody who cannot see it** - one standing behind it, one turned far enough away that it
+  cannot be on their screen, or one with something solid in the way. Previously anyone within `range` was streamed to
+  in full whichever way they were facing, so a video wall in a corridor paid for everybody who walked past the back of
+  it. On a 6x6 at 10 frames a second that is 5.8 MB/s per person, for a picture with a block in front of it.
+
+  This is a **pause and not an eviction**: they stay a viewer, keep their maps and their frames, and a per-player
+  screen keeps running with its state intact. Turning back costs one frame - 576 KB on a 6x6 - and costs *nothing at
+  all* if the wall did not change while they were away. That last part is what makes it safe on a menu or a still
+  picture, which would otherwise have traded a stream that costs nothing for a keyframe every time a head turned.
+
+  Two deliberate concessions. The view assumed is **wider than anyone's** - 130 degrees tall, 160 across - because the
+  server is never told the client's field-of-view slider or aspect ratio, and Minecraft widens the real one again while
+  you sprint. So this saves on somebody facing away rather than trimming the edges of what they can see. And it keeps
+  sending for **half a second** after they look away, since heads turn several times a second and a frame costs more
+  than the glance saves.
+
+  Whether something is in the way is **traced to nine points** across the picture rather than one, so a wall showing
+  round the side of a pillar keeps being sent - a single ray down the line of sight would have called the whole thing
+  hidden, and the corners are the worst places to ask, since a wall seen through a doorway has all four of them behind
+  the frame. It is a sample and not a proof: one visible only through a slit narrower than a third of the wall can
+  still be missed, and shows as a frozen sliver until you step into the open.
+
+  **Glass is not what hides a wall**, nor are panes, bars, ice or barriers. All of them have full collision, so the ray
+  traced to decide whether a *click* reaches a wall stops dead at them - but a film behind a window is being watched,
+  and freezing it is the error all of this is meant to lean away from. So the two questions are asked separately now: a
+  click asks about collision, a view asks whether what it met stops vision, block state by block state.
+
+  A view that meets something it can see through **carries on looking** rather than giving up and calling the wall
+  visible. Stopping at the first thing hit would have meant one pane of glass in front of a display switched this off
+  for that display entirely - streamed to everyone in range, through any amount of stone, wherever they stood. So the
+  trace steps past the far side of whatever it saw through and keeps going, by the sliver it actually crossed rather
+  than by a whole block, so nothing behind a clipped corner is skipped. Up to a dozen layers, which foliage reaches long
+  before any window does, and giving up there is right: a wall behind leaves is half visible anyway.
+
+  The trace is the one expensive part of this, and neither outcome costs much. A wall in plain sight is settled by the
+  first of the nine, which is a single ray; a hidden one takes all nine, but each stops at whatever is in the way
+  rather than crossing the room, and it is buying back megabytes a second. Verdicts are remembered per viewer and taken
+  again when somebody moves, but no more often than every three ticks - walking covers a fifth of a block a tick, so
+  without that floor a crowd crossing a plaza of screens would re-trace every screen every tick for an answer that had
+  barely changed. A verdict nobody has moved away from is retaken twice a second regardless, which is also how long it
+  takes to notice somebody walling a screen off; stacked with the grace period, that is a second at worst. Every one of
+  those delays errs towards sending.
+
+  What none of it saves is drawing. A wall with anybody in range is painted every frame whether or not any of them is
+  looking, so video decode and terrain scans are unchanged.
+
+### Writing a plugin
+
+- **`WallDisplay.Builder#cullOffScreen(boolean)`** turns the above off, for a wall that should stream to everyone in
+  range however they are facing and whatever is in front of them. On by default. Ignored by `prerender`, which has no
+  stream to pause and would have to re-send every layer it had already placed in the client.
+
+
+- **`Camera#capture(Player, CameraEye, CameraOptions, Consumer)`** takes the frame from a point you choose rather than
+  out of the viewer's eyes, and **`Camera#feed(Player, Supplier<CameraEye>, Supplier<CameraOptions>, Consumer)`** is the
+  live version, asking where to look afresh every frame. For a camera that is not held: one bolted to a wall, a
+  periscope, a scrying pool, a mirror.
+
+  The player is still handed over, because a capture is always *for* somebody - they decide how far it may see, which
+  walls are showing them what, and whose share of the live budget it spends - but two things change once the eye is not
+  a head. **The viewer is in frame**, since the reason they are normally left out is that a capture from inside
+  somebody's skull would be filled with the back of their own head. And the frame **can be clipped**.
+
+  `CameraOptions#selfie` is ignored here. It exists to move a player's own capture off their face and put them in
+  frame, and an eye you placed yourself has already done both.
+
+- **`CameraEye#clippedTo(Location, Vector)`** confines a capture to the front of a plane: rays begin where they cross
+  it and nothing behind it is drawn, entities included. Without it a reflection is not merely wrong but impossible,
+  since the reflected eye is on the far side of the wall the mirror hangs on and every single ray would begin inside a
+  block - a reflection of solid stone.
+
+  Distances are measured from the crossing rather than from the eye, so haze and the distance cap start at the plane.
+  For a mirror that is the better of the two readings anyway: what fades with distance in a reflection is how far away
+  it looks, and a reflection looks as far from you as it is from the glass.
+
+  Written for an eye behind the plane, which is the only place a clip is worth asking for. From there a ray either
+  turns toward the kept side and crosses once, or it never enters and draws the backdrop. An eye placed in *front* of
+  its own plane is already inside the half-space and is not clipped at all; there is no far bound.
+
+- A mirror never photographs **its own glass**. A wall is the one thing in front of a camera that is not in the world,
+  so MapGUI hands walls to captures itself - and the nearest wall to a mirror's own camera is the mirror, sitting on the
+  very plane the frame is clipped at. It is dropped with everything else behind that plane.
+
+- **`CameraEye#through(Window)`** states the four edges of the picture instead of a field of view, which is what makes an
+  off-axis capture sharp. An angle can only describe a frame centred on where the camera points, and a reflection has to
+  look straight out of the glass rather than at the mirror - that is what lets two mirrors on one wall agree about the
+  room. So a mirror the viewer is not squarely in front of sits off to one side of the frame, and an angle could only
+  reach it by widening until it did.
+
+  Everything that widening added was room the mirror does not show and resolution it does not get. Measured on a 1x1
+  mirror at a normal mounting height with somebody standing at it, the glass was getting **36% of the frame** and being
+  blown up nearly threefold to fill its maps; framed on its own corners it gets **99%**.
+
+  It also removes both ends of the fov clamp, and a reflection ran into each: a small mirror across the room needs a frame
+  narrower than ten degrees - clamped, it drew a wider view than it should and the geometry quietly stopped being right at
+  a distance - and standing against a tall one needs wider than a hundred and seventy.
+
+  A window is four tangents rather than four angles, because that is the form a ray is already built in. `ChunkFrustum`
+  and `EntityScreen` take their bounds from the same four numbers, so culling and entity rects follow the real frame
+  rather than a symmetric guess - which for an off-axis capture also means **fewer chunks copied on the tick**, the one
+  half of a capture that can cost TPS.
+
+- **`CameraEye#onlyWhere(Mask)`** draws only the pixels the caller will actually look at. Every ray is independent, so a
+  pixel nobody reads is work that can simply not be done: a round mirror's glass is a circle inside a square with a
+  painted frame around it, and about **a third** of its capture is never read - 15% for a square one, and little for a
+  large mirror, since the shape only bites at an outside edge.
+
+  Unwanted pixels come back **transparent** rather than as whatever was in the buffer, so a masked capture composites
+  straight over something else. The palette matches on colour and ignores alpha, so this is done to the indices after
+  quantising rather than left to fall out of the trace.
+
+  Off the main thread, so it buys back none of the tick and will not let more live views run - that budget is spent
+  copying the world, per chunk column, which a mask does not touch. What it saves is real CPU on a busy machine.
+
+### Under the bonnet
+
+- The tracer walks each ray from a **clipped origin** rather than from the eye, which is the whole of the change in
+  `RayCaster` - a per-ray origin instead of reading `view.x()` three times. An unclipped view computes nothing extra
+  and comes out byte-identical, which `ClipPlaneTest` asserts against the shorter constructor.
+
+  A ray that never enters the half-space is skipped rather than walked. That is not only cheaper: a walk started from
+  infinity reads blocks at coordinates that are not numbers.
+
+- **The symmetric path is kept literally, not derived.** A window reduces to a field of view algebraically, but not to
+  the last bit - and several tests here hold frames to being *byte-identical* across thread counts and across the empty
+  space skip. So `CameraView.Frame#direction` and `EntityScreen` branch on it and keep the expressions they always used,
+  rather than being rewritten in the general form and hoping the arithmetic lands the same way. `ChunkFrustum` needed no
+  branch: negating an already negated tangent is exact, so its four planes come out the same numbers either way.
+
 ## 1.1.0
 
 The camera: the world photographed onto a map, with real block textures, the people in view wearing their own skins,

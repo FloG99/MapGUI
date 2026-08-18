@@ -6,6 +6,7 @@ import de.flog99.mapgui.plugin.camera.ReuseWindow;
 import de.flog99.mapgui.plugin.camera.TrackingRanges;
 import de.flog99.mapgui.render.CameraView;
 import de.flog99.mapgui.render.Canopy;
+import de.flog99.mapgui.render.RayCaster;
 import de.flog99.mapgui.ui.Animator;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
@@ -81,6 +82,8 @@ public record MapGuiConfig(
                 Math.max(0, config.getDouble("camera.live.max-ms-per-tick", 3.0)),
                 Math.max(0, config.getInt("camera.live.max-fps", 10)),
                 canopy(config),
+                // Clamped rather than refused: it is a look, and the far end of it is only ever a flat grey picture.
+                (float) Math.clamp(config.getDouble("camera.shadow-lift", RayCaster.SHADOW_LIFT), 0, 0.5),
                 reuse(config),
                 limits(config)
         );

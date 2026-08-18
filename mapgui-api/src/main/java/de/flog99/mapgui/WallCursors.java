@@ -1,6 +1,5 @@
 package de.flog99.mapgui;
 
-import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.map.MapCursor;
@@ -25,9 +24,6 @@ final class WallCursors {
 
     /** How far a viewer can be and still point at the wall. They are already in range to see it. */
     private static final int REACH = 64;
-
-    /** Stop looking for something in the way just short of the map, since blocks sit on whole numbers. */
-    private static final double SKIN = 0.05;
 
     private final WallLayout layout;
     private final WallTiles tiles;
@@ -138,23 +134,15 @@ final class WallCursors {
      */
     @Nullable
     private Crossing visible(Location eye, WallLayout.Aim aim) {
-        Vector toPixel = new Vector(layout.pixelX(aim) - eye.getX(), layout.pixelY(aim) - eye.getY(), layout.pixelZ(aim) - eye.getZ());
+        double x = layout.pixelX(aim);
+        double y = layout.pixelY(aim);
+        double z = layout.pixelZ(aim);
 
-        double distance = toPixel.length();
+        double distance = new Vector(x - eye.getX(), y - eye.getY(), z - eye.getZ()).length();
         if (distance > REACH) return null;
-        if (distance > SKIN && blocked(eye, toPixel.normalize(), distance - SKIN)) return null;
+        if (Sightlines.solid(eye, x, y, z)) return null;
 
         return new Crossing(distance, aim);
-    }
-
-    /**
-     * Whether something solid stands between the eye and that point.
-     *
-     * <p>Passable blocks are ignored, which the shorter {@code rayTraceBlocks} overload does not do: it counts
-     * grass, signs, carpets and torches as hits, so a flower in front of a wall would swallow the cursor.
-     */
-    private static boolean blocked(Location eye, Vector direction, double distance) {
-        return eye.getWorld().rayTraceBlocks(eye, direction, distance, FluidCollisionMode.NEVER, true) != null;
     }
 
     /**

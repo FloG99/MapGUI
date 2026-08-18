@@ -32,7 +32,7 @@ class RayCasterTest {
      * arithmetic, and the copy in this file went stale the first time the weighting was retuned.
      */
     private static int shaded(double faceFactor) {
-        return (int) (255 * faceFactor * RayCaster.lightTable(0)[15]);
+        return (int) (255 * faceFactor * RayCaster.lightTable(0, RayCaster.SHADOW_LIFT)[15]);
     }
 
     /**

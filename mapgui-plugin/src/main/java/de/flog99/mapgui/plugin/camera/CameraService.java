@@ -4,6 +4,7 @@ import com.destroystokyo.paper.ClientOption;
 import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.camera.CameraAssets;
+import de.flog99.mapgui.camera.CameraEye;
 import de.flog99.mapgui.camera.CameraFeed;
 import de.flog99.mapgui.camera.CameraOptions;
 import de.flog99.mapgui.camera.CameraShot;
@@ -37,7 +38,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -240,6 +243,13 @@ public final class CameraService implements Camera {
     }
 
     @Override
+    public CameraFeed feed(Player viewer, Supplier<CameraEye> eye, Supplier<CameraOptions> options,
+                           Consumer<CameraShot> onFrame) {
+        used = true;
+        return feeds.open(viewer, eye, options, onFrame);
+    }
+
+    @Override
     public boolean prepare() {
         used = true;
         assets.ensure();
@@ -253,6 +263,44 @@ public final class CameraService implements Camera {
 
     @Override
     public void capture(Player player, CameraOptions options, Consumer<CameraShot> onShot) {
+        // A selfie is the one capture out of a player's own head that they belong in, which is the same flag that
+        // moves the eye off their face - so the two travel together here.
+        capture(player, options.selfie() ? selfieFrom(player) : player.getEyeLocation(),
+                options.selfie(), null, null, null, options, onShot);
+    }
+
+    /**
+     * An eye somewhere other than a head, which is what a mirror and every other unheld camera needs.
+     *
+     * <p>The viewer is always in frame here. A capture taken from inside somebody's skull leaves them out because
+     * the alternative is the back of their own head filling it; an eye placed deliberately has no such problem, and
+     * a mirror that left out whoever is standing in front of it would be showing an empty room.
+     */
+    @Override
+    public void capture(Player viewer, CameraEye eye, CameraOptions options, Consumer<CameraShot> onShot) {
+        CameraEye.Plane near = eye.near();
+        CameraView.ClipPlane clip = near == null ? null : new CameraView.ClipPlane(
+                near.x(), near.y(), near.z(), near.normalX(), near.normalY(), near.normalZ());
+
+        CameraEye.Window frame = eye.window();
+        CameraView.Lens lens = frame == null ? null
+                : CameraView.Lens.of(frame.left(), frame.right(), frame.bottom(), frame.top());
+
+        CameraEye.Mask mask = eye.mask();
+        // Held against the size here rather than survived, the way an out-of-range size is: both are constants in
+        // somebody's code, so a mismatch is a bug to hear about once rather than a frame to draw half of.
+        if (mask != null && (mask.width() != options.width() || mask.height() != options.height())) {
+            throw new IllegalArgumentException("A mask for " + mask.width() + "x" + mask.height()
+                    + " pixels cannot draw a capture of " + options.width() + "x" + options.height()
+                    + " - see CameraEye.Mask");
+        }
+
+        capture(viewer, eye.from(), true, clip, lens, mask == null ? null : mask.wanted(), options, onShot);
+    }
+
+    private void capture(Player player, Location eye, boolean includeSelf, CameraView.ClipPlane clip,
+                         CameraView.Lens lens, boolean[] wanted, CameraOptions options,
+                         Consumer<CameraShot> onShot) {
         used = true;
         assets.ensure();
 
@@ -262,8 +310,8 @@ public final class CameraService implements Camera {
             return;
         }
 
-        int pixels = options.size();
-        Location eye = options.selfie() ? selfieFrom(player) : player.getEyeLocation();
+        int wide = options.width();
+        int tall = options.height();
         int reachable = viewDistanceBlocks(player);
         // Zero means "as far as this viewer can see", which is the sensible default: a capture that stops short
         // of the client's own horizon looks cropped.
@@ -285,7 +333,7 @@ public final class CameraService implements Camera {
         boolean paced = budget.claimPaced(player.getUniqueId());
 
         // On this thread, in this tick: everything the trace is allowed to touch.
-        CameraView view = WorldCapture.viewOf(eye, options, distance);
+        CameraView view = WorldCapture.viewOf(eye, options, distance, clip, lens, wanted);
         // Read either side of the copy rather than plumbed out of it. The cache counts every column a capture asks
         // for, and a capture is the only thing touching it on this thread, so the difference is exactly this one's.
         long wantedBefore = snapshots.lookups();
@@ -307,7 +355,7 @@ public final class CameraService implements Camera {
         List<EntitySnapshot> entities = new ArrayList<>();
         if (options.entities()) {
             entities.addAll(EntityCapture.take(player, eye, skins, ready.mobs(), framedMaps, details, ranges, framed,
-                    mobShapes, paced, tuning.limits().mobs(), options.selfie()));
+                    mobShapes, paced, tuning.limits().mobs(), includeSelf, clip));
         }
         // Split here: what is alive above, what is bolted to the world below. They are two different costs with
         // two different answers, and one timer over both says only that "entities" are slow.
@@ -319,7 +367,7 @@ public final class CameraService implements Camera {
                 tuning.limits().blockEntityDistance(), tuning.limits().blockEntities()));
         // Nor under it, for the same reason: a wall is part of the room, and a cinema with the screen left out is
         // not the shot anybody asked for.
-        entities.addAll(WallCapture.take(player, eye, walls, ready.atlas()));
+        entities.addAll(WallCapture.take(player, eye, walls, ready.atlas(), clip));
         long gathered = System.nanoTime();
         // Counted in the tick it happened in rather than when the shot comes back: a capture whose trace waits three
         // seconds for a thread still cost this tick, and a report that said otherwise would point at the wrong second.
@@ -335,7 +383,7 @@ public final class CameraService implements Camera {
         }
 
         try {
-            trace(ready, owner, player, pixels, number, world, view, entities, onShot, started, copied, gathered);
+            trace(ready, owner, player, wide, tall, number, world, view, entities, onShot, started, copied, gathered);
         } catch (RejectedExecutionException e) {
             // Raced another capture through the check above, or the plugin is stopping. Either way the caller is
             // owed an answer rather than a shot that never arrives.
@@ -344,19 +392,37 @@ public final class CameraService implements Camera {
         }
     }
 
+    /**
+     * Makes the pixels a mask left out transparent, which is what {@link CameraEye.Mask} promises.
+     *
+     * <p>The palette matches on colour and ignores alpha, so an untraced pixel is transparent black on the way in and
+     * the nearest thing to black on the way out - a masked capture would come back with a black surround rather than
+     * nothing. Sixteen thousand array writes against a trace of millions of them.
+     */
+    private static void blank(byte[] indices, boolean[] wanted) {
+        if (wanted == null) return;
+
+        for (int at = 0; at < indices.length; at++) {
+            if (!wanted[at]) {
+                indices[at] = 0;
+            }
+        }
+    }
+
     /** The off-thread half, split out so the tick half above reads as the tick half. */
-    private void trace(Baked ready, String owner, Player player, int pixels, int number,
+    private void trace(Baked ready, String owner, Player player, int wide, int tall, int number,
                        SnapshotWorld world, CameraView view, List<EntitySnapshot> entities,
                        Consumer<CameraShot> onShot, long started, long copied, long gathered) {
         captures.execute(() -> {
-            int[] argb = new int[pixels * pixels];
-            byte[] indices = new byte[pixels * pixels];
+            int[] argb = new int[wide * tall];
+            byte[] indices = new byte[wide * tall];
             long traceStarted = System.nanoTime();
             long traced;
             try {
-                ready.tracer().render(world, view, entities, pixels, pixels, argb);
+                ready.tracer().render(world, view, entities, wide, tall, argb);
                 traced = System.nanoTime();
                 ready.palette().quantize(argb, indices);
+                blank(indices, view.wanted());
             } catch (RuntimeException e) {
                 // With the stack, because without it this is unactionable. A capture failing is always a bug in here
                 // rather than something an admin did, and the message alone once cost an afternoon.
@@ -374,14 +440,14 @@ public final class CameraService implements Camera {
             // moment anything knows: a pack that stopped being readable reads as a pack that never had the file.
             assets.reportDamage();
 
-            CameraShot shot = new CameraShot(pixels, pixels, indices, ready.version());
+            CameraShot shot = new CameraShot(wide, tall, indices, ready.version());
             onMainThread(() -> {
                 onShot.accept(shot);
                 // After the shot is handed over, so a slow consumer is not timed as if the camera had been slow.
                 Follow follow = followed.get(player.getUniqueId());
                 if (follow != null && player.isOnline()) {
                     int[] sections = world.sections();
-                    tail(player, follow, new CaptureTimings(pixels, number, world.chunks(), sections[0], sections[1],
+                    tail(player, follow, new CaptureTimings(wide, tall, number, world.chunks(), sections[0], sections[1],
                             entities.size(), copied - started, gathered - copied, traced - traceStarted, quantized - traced));
                 }
             });
@@ -389,18 +455,59 @@ public final class CameraService implements Camera {
     }
 
     /**
-     * Hands a finished capture back to the main thread, where a caller is allowed to touch the server.
+     * Finished captures waiting to be handed to whoever asked for them, on the main thread.
      *
-     * <p>Wrapped because the trace no longer runs on a Bukkit task: nothing cancels it when the plugin stops, so it
-     * can finish afterwards and find there is no scheduler left to post to. A capture nobody can be handed is not
-     * worth a stack trace on the way down.
+     * <p>A queue rather than a scheduled task each, and that is worth a tick of latency to a live view. Posting each
+     * delivery with {@code runTask} gets it onto the main thread on the next tick, but at <b>no particular point</b> in
+     * it - and a freshly submitted task sorts after a repeating one, so in practice it landed after MapGUI's own tick had
+     * already painted and sent every wall. So a frame finished during tick N was not drawn until tick N+2: fifty
+     * milliseconds of a reflection lagging behind the person looking at it, for nothing but ordering.
+     *
+     * <p>Drained by {@link #deliverFinished()} at the head of that tick instead, so a capture that finished any time
+     * during a tick is painted at the start of the next one.
+     */
+    private final Queue<Runnable> finished = new ConcurrentLinkedQueue<>();
+
+    /**
+     * Hands every finished capture back to whoever asked for it. Main thread, before anything paints.
+     *
+     * <p>Drained to a bound rather than to empty, so a burst of captures cannot turn one tick into all of them - the
+     * rest are first in line on the next tick.
+     */
+    public void deliverFinished() {
+        for (int at = 0; at < MAX_DELIVERED_PER_TICK; at++) {
+            Runnable delivery = finished.poll();
+            if (delivery == null) return;
+
+            try {
+                delivery.run();
+            } catch (RuntimeException e) {
+                // A consumer that throws is that plugin's bug, and the other captures waiting behind it are not.
+                plugin.getLogger().log(Level.WARNING, "A camera capture's callback threw", e);
+            }
+        }
+    }
+
+    /**
+     * How many finished captures are handed over in one tick.
+     *
+     * <p>Comfortably more than {@link #MAX_QUEUED} can produce, so it never bites in practice - it is here so that
+     * nothing outside this class can make one tick unbounded.
+     */
+    private static final int MAX_DELIVERED_PER_TICK = 8;
+
+    /**
+     * Queues a finished capture for the main thread, where a caller is allowed to touch the server.
+     *
+     * <p>Guarded because the trace no longer runs on a Bukkit task: nothing cancels it when the plugin stops, so it can
+     * finish afterwards, and a capture nobody can be handed is not worth a stack trace on the way down.
      */
     private void onMainThread(Runnable delivery) {
-        try {
-            Bukkit.getScheduler().runTask(plugin, delivery);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            plugin.getLogger().fine(() -> "A capture finished after the plugin stopped, so nobody was told: " + e);
+        if (!plugin.isEnabled()) {
+            plugin.getLogger().fine("A capture finished after the plugin stopped, so nobody was told");
+            return;
         }
+        finished.add(delivery);
     }
 
     @Override
@@ -519,7 +626,8 @@ public final class CameraService implements Camera {
 
     private void report(Player player, CaptureTimings timings, int skipped) {
         player.sendMessage(Component.text("Capture ", NamedTextColor.GOLD)
-                .append(Component.text("#" + timings.number() + "  " + timings.size() + "x" + timings.size() + "  ", NamedTextColor.DARK_GRAY))
+                .append(Component.text("#" + timings.number() + "  " + timings.wide() + "x" + timings.tall()
+                        + " (" + timings.pixels() + " rays)  ", NamedTextColor.DARK_GRAY))
                 .append(Component.text(CaptureTimings.millis(timings.totalNanos()), NamedTextColor.WHITE))
                 .append(Component.text(" of work", NamedTextColor.DARK_GRAY))
                 .append(skipped == 0 ? Component.empty()
@@ -611,7 +719,7 @@ public final class CameraService implements Camera {
                         new EquipmentAssets(assets.stack()),
                         new EntityVariants(assets.stack())
                 ),
-                new FrameTracer(atlas, tuning.canopy()),
+                new FrameTracer(atlas, tuning.canopy(), tuning.shadowLift()),
                 ready.minecraftVersion()
         );
         return baked;

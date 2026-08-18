@@ -16,15 +16,23 @@ import java.util.Locale;
  *
  * @param number  which capture this is since the server started, because the first few are slower than the rest and
  *                the reason is the JIT rather than anything here
+ * @param wide    pixels across and {@code tall} pixels down. Both, because a capture is no longer necessarily square -
+ *                a wall of mirrors is photographed in one frame the shape of the wall - and a report that printed the
+ *                width twice described a 1664x128 frame as though it were two hundred times the picture it is
  * @param chunks  chunk columns copied out of the world, which is what the copy time is really a function of
  * @param filled  sections with blocks in them, out of {@code sections}
  */
-record CaptureTimings(int size, int number, int chunks, int filled, int sections, int entities,
+record CaptureTimings(int wide, int tall, int number, int chunks, int filled, int sections, int entities,
                       long copyNanos, long entityNanos, long traceNanos, long paletteNanos) {
 
     /** The four stages added up, which is what the capture actually spent. */
     long totalNanos() {
         return copyNanos + entityNanos + traceNanos + paletteNanos;
+    }
+
+    /** How many rays the frame is, which is what the trace time is a function of rather than either side of it. */
+    int pixels() {
+        return wide * tall;
     }
 
     static String millis(long nanos) {

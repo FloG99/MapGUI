@@ -16,9 +16,12 @@ import java.util.StringJoiner;
  * is being asked for, and by whom, so there is something to turn down. What of it lands on the main thread, which is
  * the only part that can cost a tick. Whether the machine is keeping up. Whether it is failing.
  *
- * <p>The trace, the palette, the chunk and section counts are all missing on purpose. They are the numbers for
- * deciding whether the renderer could be faster, not for deciding whether a server is in trouble, and they are still
- * a command away under {@code performance follow}.
+ * <p>The palette, the chunk and section counts are all missing on purpose. They are the numbers for deciding whether
+ * the renderer could be faster, not for deciding whether a server is in trouble, and they are still a command away
+ * under {@code performance follow}.
+ *
+ * <p>The trace was in that list and has been taken out of it, because for a <b>live view</b> it is not a cost - it is
+ * the latency. See {@link #addTracing}.
  *
  * <p>Bandwidth is missing for a different reason: a capture sends nothing. What reaches a client is the map frame a
  * screen paints it into, which {@code /mapgui performance} already counts - a second figure here would be the same
@@ -36,6 +39,10 @@ public final class CameraReport {
     /** A single capture holding the tick this long is a stutter a player sees, whatever the average says. */
     private static final double SPIKE_MILLIS = 10.0;
     private static final double STALL_MILLIS = 25.0;
+
+    /** A frame this slow to trace holds a live view under twenty a second whatever the budget allows, and this slow is not live. */
+    private static final double TRACE_SLOW_MILLIS = 50.0;
+    private static final double TRACE_BEHIND_MILLIS = 150.0;
 
     /** One capture is traced at a time, so a couple waiting is a burst clearing and more than that is a backlog. */
     private static final int BACKLOG = 2;
@@ -92,15 +99,7 @@ public final class CameraReport {
                             millis(now.blockEntityMillisEach()), now.blockEntitiesEach()), NamedTextColor.DARK_GRAY)));
 
             addLive(lines, now);
-
-            // Only when something is waiting. A trace time with nothing behind it is a renderer's number, and an empty
-            // queue is not news - it is the normal state, and printing it every time trains an eye to skip the line.
-            if (now.queued() > 0 || now.dropped() > 0) {
-                lines.add(Component.text("Waiting  ", NamedTextColor.GRAY)
-                        .append(Component.text(now.queued() + " queued", now.queued() > BACKLOG ? NamedTextColor.RED : NamedTextColor.YELLOW))
-                        .append(Component.text("  " + millis(now.traceMillisEach())
-                                + " to trace each, off the main thread", NamedTextColor.DARK_GRAY)));
-            }
+            addTracing(lines, now);
 
             // Turned away rather than failed, and said so in those words: nothing broke, the machine was asked for
             // more than it could draw, and the answer to that is to ask for less rather than to read a stack trace.
@@ -198,6 +197,44 @@ public final class CameraReport {
                         NamedTextColor.DARK_GRAY)));
     }
 
+    /**
+     * How long one frame takes to draw off the main thread, which for a live view is not a cost but its latency.
+     *
+     * <p>Printed whenever anything is being captured. It used to be printed only when a capture happened to be queued at
+     * the instant somebody typed the command, which is almost never - and that hid the one figure that explains a live
+     * view trailing behind the person looking at it. A mirror can cost half a millisecond of tick, which every line above
+     * this reports as free, and still take forty milliseconds a frame to draw: the tick share was the only number in the
+     * report that was never the problem.
+     *
+     * <p>And <b>one at a time</b>, which is the other half of it and equally invisible. A capture is already spread across
+     * every core, so a second one waits for the first rather than sharing the machine - two mirrors in a room do not
+     * halve each other's frame rate, they add their traces together. Said in the count of views, since that is the form
+     * the question arrives in: two mirrors got slower than one and nothing on the tick moved.
+     *
+     * <p>Coloured against a tick rather than against a number of milliseconds anybody would recognise: past 50ms a live
+     * view cannot reach twenty frames a second however the budget is set, and past 150 it is not what a player would call
+     * live at all.
+     */
+    private static void addTracing(List<Component> lines, CameraStats now) {
+        double each = now.traceMillisEach();
+        if (each <= 0) return;
+
+        Component line = Component.text("Tracing  ", NamedTextColor.GRAY)
+                .append(Component.text(millis(each), traceColor(each)))
+                .append(Component.text(" a frame, off the main thread", NamedTextColor.DARK_GRAY));
+
+        int views = now.live().viewers();
+        if (views > 1) {
+            line = line.append(Component.text("   one at a time, so " + views + " views wait for each other",
+                    NamedTextColor.DARK_GRAY));
+        }
+        if (now.queued() > 0) {
+            line = line.append(Component.text("   " + now.queued() + " waiting",
+                    now.queued() > BACKLOG ? NamedTextColor.RED : NamedTextColor.YELLOW));
+        }
+        lines.add(line);
+    }
+
     /** Whether an admin set anything for the unpaced line to be a warning about. */
     private static boolean limited(CameraStats now) {
         return now.liveMaxMillisPerTick() > 0 || now.liveFpsCeiling() > 0;
@@ -260,6 +297,14 @@ public final class CameraReport {
         if (percent >= TICK_NOTICEABLE) return NamedTextColor.YELLOW;
 
         return NamedTextColor.GREEN;
+    }
+
+    /** See {@link #addTracing}: a frame slower than a tick caps a live view below twenty, and much slower is not live. */
+    private static NamedTextColor traceColor(double millis) {
+        if (millis >= TRACE_BEHIND_MILLIS) return NamedTextColor.RED;
+        if (millis >= TRACE_SLOW_MILLIS) return NamedTextColor.YELLOW;
+
+        return NamedTextColor.WHITE;
     }
 
     private static NamedTextColor spikeColor(double value) {

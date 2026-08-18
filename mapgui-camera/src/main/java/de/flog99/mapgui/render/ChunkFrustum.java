@@ -75,12 +75,14 @@ public final class ChunkFrustum {
         double[] up = new double[3];
         view.basis(forward, right, up);
 
-        double tanHalf = Math.tan(Math.toRadians(view.fov()) / 2);
+        // The four edges of the picture. A plain field of view puts them at -tanHalf and +tanHalf, so each expression
+        // below comes out as the one it always did - and negating a negated tangent is exact, so bit for bit too.
+        CameraView.Lens lens = view.lens();
         this.sides = new Side[]{
-                side(tanHalf, forward, right, 1),
-                side(tanHalf, forward, right, -1),
-                side(tanHalf, forward, up, 1),
-                side(tanHalf, forward, up, -1)
+                side(-lens.left(), forward, right, 1),
+                side(lens.right(), forward, right, -1),
+                side(-lens.bottom(), forward, up, 1),
+                side(lens.top(), forward, up, -1)
         };
         this.sideLengths = new double[sides.length];
         for (int i = 0; i < sides.length; i++) {
@@ -91,10 +93,8 @@ public final class ChunkFrustum {
         double widest = 0;
         boolean degenerate = false;
 
-        for (int cornerX = -1; cornerX <= 1; cornerX += 2) {
-            for (int cornerY = -1; cornerY <= 1; cornerY += 2) {
-                double sx = cornerX * tanHalf;
-                double sy = cornerY * tanHalf;
+        for (double sx : new double[]{lens.left(), lens.right()}) {
+            for (double sy : new double[]{lens.bottom(), lens.top()}) {
                 double dx = forward[0] + right[0] * sx + up[0] * sy;
                 double dz = forward[2] + right[2] * sx + up[2] * sy;
 
@@ -116,16 +116,19 @@ public final class ChunkFrustum {
     }
 
     /**
-     * The plane holding one edge of the frame, as {@code tanHalf * forward} plus or minus a screen axis.
+     * The plane holding one edge of the frame, as {@code edge * forward} plus or minus a screen axis.
      *
-     * <p>A ray is {@code forward + right * sx + up * sy} for {@code |sx|, |sy| <= tanHalf}, and the basis is
-     * orthonormal, so dotting one against this comes out as {@code tanHalf +- sx} - non-negative for exactly the
-     * rays inside the frame. Which is what makes the four of them the frustum.
+     * <p>A ray is {@code forward + right * sx + up * sy}, and the basis is orthonormal, so dotting one against this
+     * comes out as {@code edge +- sx} - non-negative for exactly the rays on the inside of that edge. Which is what
+     * makes the four of them the frustum.
+     *
+     * @param edge how far out this edge sits, as a tangent, and always positive: the near side of the picture is
+     *             passed in negated by the caller, since a frame need not be centred on where the camera points
      */
-    private static Side side(double tanHalf, double[] forward, double[] axis, int sign) {
-        return new Side(tanHalf * forward[0] + sign * axis[0],
-                tanHalf * forward[1] + sign * axis[1],
-                tanHalf * forward[2] + sign * axis[2]);
+    private static Side side(double edge, double[] forward, double[] axis, int sign) {
+        return new Side(edge * forward[0] + sign * axis[0],
+                edge * forward[1] + sign * axis[1],
+                edge * forward[2] + sign * axis[2]);
     }
 
     /**

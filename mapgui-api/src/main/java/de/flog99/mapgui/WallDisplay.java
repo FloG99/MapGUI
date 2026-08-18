@@ -30,10 +30,12 @@ import java.util.function.Function;
  *
  * <p><b>Full-frame video on a wall is expensive.</b> Every map is 16 KB a frame, so a 2x2 at 10 fps is
  * 640 KB/s - 5.2 Mbit/s - <i>per viewer</i>, and a 6x6 is nine times that. That is per viewer in both modes,
- * since a wall is sent to each client separately either way. The viewer set and the dirty rectangle hold it
- * down: an empty room costs nothing, and a wall that mostly sits still pays only for the part that moves. Per
- * player costs a paint pass and a surface pair each on top, so it suits something walked up to rather than
- * something a crowd gathers round.
+ * since a wall is sent to each client separately either way. Three things hold it down: an empty room costs
+ * nothing, a wall sends no pixels to anyone who has turned away from it (see {@link Builder#cullOffScreen}),
+ * and one that mostly sits still pays only for the part that moves. Painting is not among them - a wall with
+ * an audience is drawn every frame whether or not any of them is looking at it. Per player costs a paint pass
+ * and a surface pair each on top, so it suits something walked up to rather than something a crowd gathers
+ * round.
  */
 public final class WallDisplay {
 
@@ -70,6 +72,20 @@ public final class WallDisplay {
     /** Set when the wall was asked to prerender and the transport can repoint its maps. */
     @Nullable
     private final WallLoop loop;
+
+    /** Set unless this wall streams to everyone in range regardless - see {@link Builder#cullOffScreen}. */
+    @Nullable
+    private final WallSight sight;
+
+    /**
+     * Viewers who need the whole picture rather than what changed since the last one - because they have just
+     * arrived, or because something changed while they were looking away and were being sent nothing.
+     *
+     * <p>Nobody joins it for merely looking away. A still wall, or a menu nobody touched, leaves an absent
+     * viewer with nothing to catch up on however long they were gone, which is what keeps the cull from ever
+     * costing more than it saves.
+     */
+    private final Set<UUID> behind = new HashSet<>();
 
     private int rangeSquared;
     private int intervalMs;
@@ -111,6 +127,10 @@ public final class WallDisplay {
         this.loop = builder.prerenderSteps > 0 && tiles.canShowLayers()
                 ? WallLoop.paint(layout, builder.content, builder.prerenderSteps, builder.prerenderPeriodMs)
                 : null;
+
+        // Never for a prerendered loop, which sends no pixels to cull and would have to re-send every layer
+        // it had already placed in the client - megabytes, to save the kilobyte a second playback costs.
+        this.sight = builder.cullOffScreen && loop == null ? new WallSight(layout) : null;
     }
 
     // ---- lifecycle ----
@@ -123,11 +143,11 @@ public final class WallDisplay {
     public void tick(long now) {
         if (previewOnly || closed) return;
 
-        List<Player> arrived = admitAndEvict(now);
-        List<Player> watching = online(viewers);
+        Audience audience = admitAndEvict(now);
+        List<Player> watching = audience.watching();
         if (watching.isEmpty()) return;
         if (loop != null) {
-            playLoop(arrived, watching, now);
+            playLoop(audience, now);
             return;
         }
         List<WallView> allViews = views();
@@ -139,11 +159,25 @@ public final class WallDisplay {
 
         for (Player player : watching) {
             WallView view = viewOf(player);
+            UUID id = player.getUniqueId();
+            boolean dirty = view.surface().isDirty();
+
+            // Not a packet for somebody who cannot have the wall on screen. They stay a viewer - their maps,
+            // their frames and their own screen are all left alone - so this is a pause and not an eviction,
+            // and coming back costs one frame where being evicted would cost a teardown as well.
+            if (sight != null && !sight.streaming(player, now, interactive && cursors.isAiming(player))) {
+                if (dirty) {
+                    behind.add(id);
+                }
+                continue;
+            }
+            boolean whole = behind.remove(id);
+
             // One frame is one packet per map that changed, and a wall that goes up in pieces tears.
             services.transport().bundled(player, () -> {
-                if (arrived.contains(player)) {
+                if (whole) {
                     tiles.sendAll(player, view.surface(), frame);
-                } else if (view.surface().isDirty()) {
+                } else if (dirty) {
                     tiles.sendChanged(player, view.surface(), frame);
                 }
                 if (interactive) {
@@ -156,11 +190,12 @@ public final class WallDisplay {
     }
 
     /** A prerendered wall: everything on arrival, and a nudge per frame after that. */
-    private void playLoop(List<Player> arrived, List<Player> watching, long now) {
+    private void playLoop(Audience audience, long now) {
         WallLoop playing = loop;
+        List<Player> arrived = audience.arrived();
         TileRegions frame = new TileRegions();
 
-        for (Player player : watching) {
+        for (Player player : audience.watching()) {
             // Kept together, or a wall would change one map at a time in front of whoever is watching.
             services.transport().bundled(player, () -> {
                 if (arrived.contains(player)) {
@@ -187,6 +222,10 @@ public final class WallDisplay {
         viewers.clear();
         cursors.clear();
         owned.clear();
+        behind.clear();
+        if (sight != null) {
+            sight.clear();
+        }
         onClose.accept(this);
     }
 
@@ -204,6 +243,10 @@ public final class WallDisplay {
      * <p>Empty for somebody who is not watching. That is not a shortcut: a wall exists only in the clients of the
      * people in front of it, and one who has walked out of range has been sent nothing to see - so there is nothing
      * to put in their photograph either.
+     *
+     * <p>What the wall is currently painting, which is not quite what a viewer's client holds if they have
+     * turned away and the stream has paused on them. Deliberately: a camera's eye is not its owner's eye, and
+     * a fixed one pointed at a screen its owner has their back to should still photograph what is playing.
      *
      * <p>A copy of the pixels, since the caller reads them off the main thread while the wall goes on painting.
      */
@@ -270,6 +313,16 @@ public final class WallDisplay {
      *
      * <p>Returns whether it was taken, so a wall can stay claimed on a nearby player without eating clicks
      * aimed at anything else.
+     *
+     * <p>A screen with <b>no cursor</b> is delivered to as well, at {@link Screen#clickedAnywhere} - which is
+     * what that is for, and what the held-map path has always done. It used to be turned away here, which made
+     * a cursorless wall the one surface in MapGUI whose clicks went nowhere: claimed off the connection, since
+     * any wall carrying a screen is aimed at, and then dropped on the floor. A mirror is the case that found
+     * it, being a wall you have to be able to punch and a screen that must not take your aim.
+     *
+     * <p>And it is told <b>where</b>, cursor or not, which a held screen cannot be: the position is a raytrace
+     * against the wall rather than the player's own pointing, so there is a real pixel to report and nothing is
+     * asked of the player to get it.
      */
     public boolean click(Player player, Click with) {
         WallLayout.Aim aim = cursors.aimOf(player);
@@ -279,9 +332,13 @@ public final class WallDisplay {
         if (session == null) return false;
 
         Screen screen = session.screen();
-        if (!screen.activateOn().accepts(with) || !screen.cursor()) return false;
+        if (!screen.activateOn().accepts(with)) return false;
 
-        session.cursorAt(aim.x(), aim.y());
+        // Only for a screen that has one, or this would move a cursor nothing draws and hover a tree whose
+        // nodes are not interactive.
+        if (screen.cursor()) {
+            session.cursorAt(aim.x(), aim.y());
+        }
         session.asActing(player, () -> deliver(player, session, aim, with));
         return true;
     }
@@ -376,11 +433,27 @@ public final class WallDisplay {
     // ---- viewers ----
 
     /**
+     * Who is being shown the wall once this tick's comings and goings are settled, and which of them are new.
+     *
+     * <p>Both lists rather than the viewer set, because the set is UUIDs and everything downstream wants
+     * players - and these are the very players the world was just asked for, so resolving them again would be
+     * a lookup each to arrive back where we started.
+     */
+    private record Audience(List<Player> watching, List<Player> arrived) {
+    }
+
+    /**
      * Everyone in range gets the wall; everyone who left gets it taken away.
      *
      * <p>Walking out and back re-sends everything, since a client throws away entities whose chunk unloads.
+     *
+     * <p>Range and nothing else, deliberately. Which way somebody is facing, and which side of the wall they
+     * are on, decide what is <i>sent</i> to a viewer and not whether they are one - see
+     * {@link Builder#cullOffScreen}. Both change several times a minute, and being thrown out of the viewer
+     * set closes a per-player screen and takes its state with it, so neither is a thing to be evicted over.
      */
-    private List<Player> admitAndEvict(long now) {
+    private Audience admitAndEvict(long now) {
+        List<Player> watching = new ArrayList<>();
         List<Player> arrived = new ArrayList<>();
         Set<UUID> present = new HashSet<>();
 
@@ -388,11 +461,18 @@ public final class WallDisplay {
             if (player.getLocation().distanceSquared(center) > rangeSquared) continue;
 
             present.add(player.getUniqueId());
+            watching.add(player);
             if (!viewers.add(player.getUniqueId())) continue;
 
             tiles.show(player);
             viewOf(player).startedAt(now);
             arrived.add(player);
+
+            // Their client has the frames and no pixels for them yet. Noted here rather than read off the
+            // arrival list, which lasts one tick - and somebody can arrive facing away for a good deal longer.
+            if (loop == null) {
+                behind.add(player.getUniqueId());
+            }
         }
 
         viewers.removeIf(id -> {
@@ -404,6 +484,10 @@ public final class WallDisplay {
                 tiles.hide(player);
             }
             cursors.forget(id);
+            behind.remove(id);
+            if (sight != null) {
+                sight.forget(id);
+            }
             if (loop != null) {
                 loop.forget(id);
             }
@@ -415,9 +499,10 @@ public final class WallDisplay {
             }
             return true;
         });
-        return arrived;
+        return new Audience(watching, arrived);
     }
 
+    /** Viewers as players, for {@link #close} - which has only the set to work from and no world walk to hand. */
     private List<Player> online(Set<UUID> ids) {
         List<Player> found = new ArrayList<>(ids.size());
         for (UUID id : ids) {
@@ -458,6 +543,7 @@ public final class WallDisplay {
         private long prerenderPeriodMs;
         private int aimMargin;
         private boolean showOthers;
+        private boolean cullOffScreen = true;
 
         private int minCols = 1;
         private int minRows = 1;
@@ -726,9 +812,46 @@ public final class WallDisplay {
             return this;
         }
 
-        /** How close a player has to be to be sent anything. Keep it inside the server's view distance. */
+        /** How close a player has to be to be a viewer at all. Keep it inside the server's view distance. */
         public Builder range(int value) {
             this.range = value;
+            return this;
+        }
+
+        /**
+         * Stop sending pixels to a viewer who cannot see the wall - because they are behind it, have turned far
+         * enough away from it, or have something solid in the way. On by default, and worth leaving on.
+         *
+         * <p>They stay a viewer throughout: their maps, their frames and their own screen are untouched, so
+         * this pauses the stream rather than taking the wall down, and turning back costs one frame at most.
+         * It costs nothing at all if nothing changed while they were away, which is what makes it safe on a
+         * menu or a still picture - those pay only when they actually animate.
+         *
+         * <p>The view it assumes is deliberately wider than anyone's, since the server is not told the
+         * client's field of view or aspect ratio, so this saves on somebody facing away rather than trimming
+         * the edges of what they can see. It also keeps sending for half a second after they look away,
+         * because heads turn quickly and a frame costs more than the glance saves.
+         *
+         * <p>Whether something is in the way is traced to nine points across the picture, so a wall showing
+         * round the side of a pillar goes on being sent. That is a sample rather than a proof: one visible only
+         * through a slit narrower than a third of it can still be missed. Glass is not what hides a wall, nor
+         * are panes, bars, ice or barriers - a wall behind a window is being watched, whatever a click aimed
+         * through it would do - but nor does one excuse whatever stands behind it, since a view that meets
+         * something it can see through carries on looking.
+         *
+         * <p>The trace is remembered per viewer and taken again when they move, though never more than every
+         * few ticks, so a crowd walking past a row of screens does not retrace every one of them every tick.
+         * Standing still costs almost nothing, at the price of up to a second to notice somebody walling a
+         * screen off - that delay and the grace period stack. All of them err towards sending.
+         *
+         * <p>What it does not save is drawing: the wall is painted every frame for as long as anybody is in
+         * range, whether or not any of them is looking.
+         *
+         * <p>Ignored by {@link #prerender}, which has no stream to pause and would have to re-send every
+         * layer it had already placed in the client.
+         */
+        public Builder cullOffScreen(boolean value) {
+            this.cullOffScreen = value;
             return this;
         }
 

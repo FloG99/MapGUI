@@ -13,6 +13,9 @@ import java.util.Set;
  * @param tint    {@code 0xFFRRGGBB} to multiply every texel of this layer by, or 0 for the ordinary none. What a
  *                sheep's fleece needs: the assets hold one white wool texture and the color is the animal's own,
  *                so it cannot come from the texture name the way a cold cow's coat does
+ * @param lit     whether the light and the face shade where this stands are applied to it, which is true of anything
+ *                made of matter. False for a <b>picture</b> whose pixels are already a finished image rather than a
+ *                surface being lit - see {@link #emissive}
  */
 public record EntitySnapshot(
         double x, double y, double z,
@@ -20,11 +23,36 @@ public record EntitySnapshot(
         float scale,
         EntityModel model,
         String texture,
-        int tint) {
+        int tint,
+        boolean lit) {
+
+    /** Lit like matter, which is everything the world is made of. */
+    public EntitySnapshot(double x, double y, double z, float bodyYaw, float headYaw, float pitch, float scale,
+                          EntityModel model, String texture, int tint) {
+        this(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, tint, true);
+    }
 
     /** Untinted, which is every layer but a dyed one. */
     public EntitySnapshot(double x, double y, double z, float bodyYaw, float headYaw, float pitch, float scale, EntityModel model, String texture) {
         this(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, 0);
+    }
+
+    /**
+     * The same thing drawn at its own brightness, with neither the light where it stands nor the face shade applied.
+     *
+     * <p>For a <b>picture</b> rather than a surface: a MapGUI wall's maps hold a finished image - a camera capture, a
+     * video frame, a menu - and lighting one again is counting the lighting twice. Harmless once and ruinous in a loop.
+     *
+     * <p>A mirror facing a mirror is that loop. Each pass multiplied the picture by the face shade of the wall it hangs
+     * on - 0.6 on an east or west wall - so the tunnel went 0.6, 0.36, 0.22 and was black by the fourth. It went
+     * <b>red</b> on the way down as well, which is the palette rather than the arithmetic: the darkest colours a map has
+     * are TERRACOTTA_BLACK at rgb(19,11,8) and COLOR_BLACK at rgb(13,13,13), so anything marching toward black lands on
+     * the warm one, and dark green leaves land there soonest.
+     *
+     * <p>Not for a map in a real item frame, which is paper on a wall and is lit like it - vanilla dims that too.
+     */
+    public EntitySnapshot emissive() {
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, tint, false);
     }
 
     /**
@@ -47,7 +75,7 @@ public record EntitySnapshot(
      * record itself.
      */
     public EntitySnapshot texture(String value) {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, value, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, value, tint, lit);
     }
 
     /**
@@ -55,7 +83,7 @@ public record EntitySnapshot(
      * did not. The shape is the expensive part and the pose is six numbers - see {@code MobCache}.
      */
     public EntitySnapshot at(double x, double y, double z, float bodyYaw, float headYaw, float pitch) {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model, texture, tint, lit);
     }
 
     /** The same layer in a dye color, for the one mob whose color is not in its texture. */
@@ -72,7 +100,7 @@ public record EntitySnapshot(
      * pair on every chested animal without knowing which of them build them.
      */
     public EntitySnapshot without(String... parts) {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.without(Set.of(parts)), texture, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.without(Set.of(parts)), texture, tint, lit);
     }
 
     /** A player, whose head turns, whose arms may be slim, and who chooses which skin layers to wear. */
@@ -299,12 +327,12 @@ public record EntitySnapshot(
 
     /** The same mob with its arms out in front, which its own model does the moment it picks a block up. */
     public EntitySnapshot carrying() {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.carrying(), texture, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.carrying(), texture, tint, lit);
     }
 
     /** The same mob with one arm out, which is how a golem stands while it has a poppy to hand over. */
     public EntitySnapshot offering() {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.offering(), texture, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.offering(), texture, tint, lit);
     }
 
     /**
@@ -313,7 +341,7 @@ public record EntitySnapshot(
      * @param pivotY where the tilt turns about, in entity pixels off the feet
      */
     public EntitySnapshot tilted(float xRot, float zRot, float pivotY) {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.tilted(xRot, zRot, pivotY), texture, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.tilted(xRot, zRot, pivotY), texture, tint, lit);
     }
 
     /**
@@ -325,7 +353,7 @@ public record EntitySnapshot(
      * @param pivotY where the turn happens, in entity pixels off the feet
      */
     public EntitySnapshot swimming(float tip, float spin, float pivotY) {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.swimming(tip, spin, pivotY), texture, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.swimming(tip, spin, pivotY), texture, tint, lit);
     }
 
     /**
@@ -336,7 +364,7 @@ public record EntitySnapshot(
      */
     public EntitySnapshot turned(float xRot, float yRot, float zRot, float pivotY) {
         return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale,
-                model.tilted(xRot, yRot, zRot, pivotY), texture, tint);
+                model.tilted(xRot, yRot, zRot, pivotY), texture, tint, lit);
     }
 
     /**
@@ -346,7 +374,7 @@ public record EntitySnapshot(
      * levelled. A mesh carries the rest pose only, so without this they stand there like scarecrows.
      */
     public EntitySnapshot posed(String part, float xRot, float yRot, float zRot) {
-        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.turned(part, xRot, yRot, zRot), texture, tint);
+        return new EntitySnapshot(x, y, z, bodyYaw, headYaw, pitch, scale, model.turned(part, xRot, yRot, zRot), texture, tint, lit);
     }
 
     /**

@@ -99,10 +99,55 @@ class CameraReportTest {
         assertFalse(out.contains("Failed"), "nothing threw, so nothing failed: " + out);
     }
 
-    /** An empty queue is the normal state, and a line printed every time is a line an eye learns to skip. */
+    /** An empty queue is the normal state, and a count of nothing waiting is a line an eye learns to skip. */
     @Test
     void theQueueIsOnlyMentionedWhenSomethingIsInIt() {
-        assertFalse(text(CameraReport.lines(stats())).contains("Waiting"));
+        assertFalse(text(CameraReport.lines(stats())).contains("waiting"), "nothing is queued in the sample");
+
+        CameraStats behind = new CameraStats(40, 10.0, 0, 2.0, 4.0, 5.0, 4.0, 3.5, 0.3, 0.2, 120, BLOCKS, 2, 0, 1, 3, 0, 0, 1.0, 10, null, List.of(), CameraStats.Live.NONE);
+        assertTrue(text(CameraReport.lines(behind)).contains("3 waiting"), text(CameraReport.lines(behind)));
+    }
+
+    /**
+     * The trace time is printed whether or not anything is queued, because for a live view it is the latency.
+     *
+     * <p>It used to be gated on the queue having something in it at the moment somebody asked, which is almost never. So
+     * a camera taking nearly two hundred milliseconds a frame printed four figures saying it was free and left that one
+     * out - and an admin comparing a mirror that visibly lagged against "0.34ms/t" was reading the only number in the
+     * report that could not have been the cause.
+     */
+    @Test
+    void theTraceTimeIsPrintedWithNothingQueued() {
+        assertEquals(0, stats().queued(), "the whole point of this one is that nothing is waiting");
+
+        String out = text(CameraReport.lines(stats()));
+        assertTrue(out.contains("184.0ms a frame"), out);
+        assertTrue(out.contains("off the main thread"), out);
+    }
+
+    /**
+     * Several live views are told that they wait for each other, since one capture is traced at a time.
+     *
+     * <p>The form the question arrives in is "two mirrors got slower than one and nothing on the tick moved", and the
+     * answer is on no other line: a capture is already spread across every core, so a second one queues behind the first
+     * rather than sharing the machine.
+     */
+    @Test
+    void severalLiveViewsAreToldTheyWaitForEachOther() {
+        assertTrue(text(CameraReport.lines(stats())).contains("3 views wait for each other"),
+                text(CameraReport.lines(stats())));
+    }
+
+    /** One view has nobody to take turns with, so saying so would only be a sentence to skip. */
+    @Test
+    void aLoneLiveViewIsNotToldAboutTakingTurns() {
+        CameraStats alone = new CameraStats(13, 3.2, 0, 0.34, 0.68, 4.1, 6.8, 6.0, 0.5, 0.3, 184.0, BLOCKS, 8, 62, 4, 0, 0, 0, 1.0, 10, null,
+                List.of(new CameraStats.Caller("MapMirrors", 3.0)),
+                new CameraStats.Live(1, 6.7, 6.7, 0.92));
+        String out = text(CameraReport.lines(alone));
+
+        assertTrue(out.contains("184.0ms a frame"), out);
+        assertFalse(out.contains("wait for each other"), out);
     }
 
     /** Four zeroes would read as "cheap" when what is wrong is that captures are not happening at all. */

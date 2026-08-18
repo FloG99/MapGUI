@@ -19,12 +19,13 @@ import de.flog99.mapgui.render.Canopy;
  * @param liveMaxMillisPerTick main-thread time a tick may spend on live views, or 0 for no budget
  * @param liveMaxFps          the most frames a second any one live view may take, or 0 for no ceiling
  * @param canopy              how far out the gaps in leaves close up
+ * @param shadowLift          how far off black an unlit block is drawn, 0 being exactly what the client does
  * @param reuse               how long each of the three caches may serve what it holds
  * @param limits              the caps that stop one busy scene turning a capture into thousands of models
  */
 public record CameraTuning(float fov, int maxDistance, double maxEntityDistance,
                            double liveMaxMillisPerTick, int liveMaxFps,
-                           Canopy canopy, Reuse reuse, Limits limits) {
+                           Canopy canopy, float shadowLift, Reuse reuse, Limits limits) {
 
     /**
      * What may be served from an earlier capture, and for how long. The only part of the camera that is not exact:

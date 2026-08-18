@@ -36,48 +36,68 @@ public final class RayCaster {
         FACE_SHADE[Direction.EAST.ordinal()] = 0.6f;
     }
 
-    /** Where the brightness slider sits, on the client's own 0 to 1 scale. Not a setting: the curve is right. */
-    private static final float GAMMA = 0.9f;
+    /**
+     * Where the brightness slider sits, on the client's own 0 to 1 scale.
+     *
+     * <p>All the way up, which is where most people leave it - so a capture matches what a player at 100% brightness is
+     * actually looking at.
+     */
+    private static final float GAMMA = 1.0f;
 
     /**
-     * How far the darkest light is lifted off black, weighted so nearly all of it lands on the dark end.
+     * How far the darkest light is lifted off black by default, weighted so nearly all of it lands on the dark end.
      *
-     * <p>The one place this parts company with the client on purpose. A screen renders a night in thousands of
-     * near-blacks and your eye adapts; a map has 143 colors and a viewer adapted to whatever else is on screen, so
-     * faithfully dark reads as a hole in the picture.
+     * <p>A setting rather than a constant - {@code camera.shadow-lift} - because it is a real preference, and it was
+     * settled twice in opposite directions before that was admitted. A screen renders a night in thousands of near-blacks
+     * and your eye adapts to them, while a map has 143 colours and a viewer whose eye is adapted to whatever else is on
+     * their screen. So a <i>faithful</i> dark can read as a hole in the picture rather than as a cave, and how much of
+     * that anybody wants is not something this file can know.
      *
-     * <p>Weighted by {@code (1 - light)^SHADOW_FALLOFF} rather than applied as a floor, which is the whole point of
-     * the shape: a floor is affine, so raising it enough to show a cave wall flattens the picture at noon to pay for
-     * it. This does nothing at all at light 15.
+     * <p>Both ends were tried and both were wrong. At <b>0.6</b>, where this began, a wholly unlit block drew at 0.60 of
+     * its own texture where the client draws it at 0.03 - an unlit room came out nearly as bright as a lit one, which is
+     * not a legible cave, it is no cave at all. At <b>0</b>, which is exactly what the client does, that same block is 4
+     * of 255 on stone and a dark room reads as a black rectangle.
      *
-     * <p><b>The two move together.</b> The table has to stay non-decreasing - an unlit block drawing brighter than a
+     * <p>The default is a fifth of the way up instead: an unlit block lands at 28 of 255, dark but legible, while the
+     * bright end barely moves - light 11 goes from 0.872 to 0.881, so a lit room is still the lit room the client draws.
+     *
+     * <p>The falloff moves with it. The table has to stay non-decreasing - an unlit block drawing brighter than a
      * torchlit one is worse than either being dark - and the client's own curve is nearly flat across the bottom, so
-     * a lift the dark end can absorb is small. At the old falloff of 2 the ceiling was 0.53, and 0.55 already drew
-     * light 1 darker than light 0. Softening the falloff is what buys the headroom; at 1.5 the ceiling is near 0.7.
-     * {@code LightTableTest} holds the line.
+     * there is a ceiling: at a falloff of 2, 0.55 already drew light 1 darker than light 0. {@code LightTableTest} holds
+     * that line whatever these are set to.
      */
-    static final float SHADOW_LIFT = 0.6f;
+    public static final float SHADOW_LIFT = 0.2f;
 
     /** See {@link #SHADOW_LIFT}: lower spreads the lift further up the range, and too low inverts the table. */
     private static final double SHADOW_FALLOFF = 1.5;
 
     /**
-     * Light level to multiplier: the client's own table with that lift applied, sixteen entries computed once so the
-     * per-texel cost is an array read.
+     * Light level to multiplier: the client's own table with the shadow lift applied, sixteen entries computed once so
+     * the per-texel cost is an array read.
      *
-     * <p>Reproduced rather than approximated because every guess at the shape is wrong visibly. It is not linear -
+     * <p>Reproduced rather than approximated because every guess at the shape is visibly wrong. It is not linear -
      * {@code l / (4 - 3l)} bends it steeply, so light 7 is a fifth of full and not a half - and then the brightness
      * slider blends toward a gentler curve and the whole table is pulled four percent toward grey.
+     *
+     * <p>Three of them, one per kind of dimension, and held per caster rather than statically now that the lift they are
+     * built with is a server's to choose. Sixteen floats each, built once per tracing thread.
      */
-    private static final float[] LIGHT = lightTable(0);
+    private record Lights(float[] overworld, float[] nether, float[] end) {
 
-    /** The same for a dimension that lights everything a little for nothing. A table rather than arithmetic per texel. */
-    private static final float[] NETHER_LIGHT = lightTable(0.1f);
+        static Lights lifted(float lift) {
+            return new Lights(lightTable(0, lift), lightTable(0.1f, lift), lightTable(0.25f, lift));
+        }
 
-    private static final float[] END_LIGHT = lightTable(0.25f);
+        /** Which of them a frame reads, by how much light its dimension gives away for nothing. */
+        float[] forAmbient(float ambient) {
+            if (ambient >= 0.2f) return end;
 
-    /** Package-private for {@code LightTableTest}, which is what keeps {@link #SHADOW_LIFT} tunable safely. */
-    static float[] lightTable(float ambient) {
+            return ambient >= 0.05f ? nether : overworld;
+        }
+    }
+
+    /** Package-private for {@code LightTableTest}, which is what keeps the lift tunable safely. */
+    static float[] lightTable(float ambient, float lift) {
         float[] table = new float[16];
 
         for (int level = 0; level < table.length; level++) {
@@ -90,7 +110,7 @@ public final class RayCaster {
             float lifted = 1 - (float) Math.pow(1 - curved, 4);
             float lit = curved + (lifted - curved) * GAMMA;
             float client = Math.clamp(lit + (0.75f - lit) * 0.04f, 0, 1);
-            table[level] = Math.min(1, client + SHADOW_LIFT * (float) Math.pow(1 - client, SHADOW_FALLOFF));
+            table[level] = Math.min(1, client + lift * (float) Math.pow(1 - client, SHADOW_FALLOFF));
         }
 
         return table;
@@ -99,13 +119,6 @@ public final class RayCaster {
     /** The client's table is indexed by level, so anything outside 0 to 15 is a bug rather than a dim room. */
     private float litBy(int level) {
         return lights[Math.clamp(level, 0, 15)];
-    }
-
-    /** Which table this frame reads, by how much light its dimension gives away. */
-    private static float[] tableFor(float ambient) {
-        if (ambient >= 0.2f) return END_LIGHT;
-
-        return ambient >= 0.05f ? NETHER_LIGHT : LIGHT;
     }
 
     /**
@@ -158,8 +171,20 @@ public final class RayCaster {
     /** Off only so that a test can render the same scene both ways and compare, since it must come out identical. */
     private final boolean skipEmpty;
 
+    /** The same, for {@link #hiddenByItsOwnKind}, which is the other place a frame is drawn by not looking. */
+    private final boolean skipSameKind;
+
     private final double[] direction = new double[3];
     private final Fragments fragments = new Fragments();
+
+    /**
+     * The blocks this caster has already looked at, which is most of the ones it is about to be asked for again.
+     *
+     * <p>Per caster, so per tracing thread, and pointed at the frame's world at the top of {@link #render}. See
+     * {@link SeenBlocks}: reading a block out of a chunk snapshot copies it, and the fluid surfaces alone ask about the
+     * same nine positions sixteen times over.
+     */
+    private final SeenBlocks seen = new SeenBlocks();
 
     /**
      * Scratch for the slab test, reused rather than allocated: a block with several boxes is tested once per pixel
@@ -201,6 +226,35 @@ public final class RayCaster {
     /** The frame being traced, so that the lazy sky does not have to be threaded through every shading call. */
     private CameraView frameView;
 
+    /**
+     * Which face a clipped ray enters its first block through, or null for a frame that is not clipped.
+     *
+     * <p>The walk skips the block it starts in, because a camera standing inside one should not have that block's inside
+     * painted over the frame. A <b>clipped</b> frame does not start where the camera is: it starts where the ray crosses
+     * the plane, which is a point in the middle of the room, and the block it lands in is an ordinary block that happens to
+     * be first.
+     *
+     * <p>Skipping it hid everything within a block of a mirror's glass - a chest pushed against one, a flower on the shelf
+     * below it, the snow on the floor under one on a wall - which is a whole layer of the room, and the layer nearest the
+     * viewer at that.
+     *
+     * <p>So it is walked like any other, and the face it was entered through is the one the plane lies on: rays cross
+     * along the plane's normal, so a mirror facing east has them coming in through that block's west face. Read off the
+     * dominant axis of the normal, which for the block face a mirror hangs on is exact.
+     */
+    private Direction crossedInto;
+
+    private static Direction crossedInto(CameraView.ClipPlane plane) {
+        double alongX = Math.abs(plane.normalX());
+        double alongY = Math.abs(plane.normalY());
+        double alongZ = Math.abs(plane.normalZ());
+
+        if (alongX >= alongY && alongX >= alongZ) return plane.normalX() > 0 ? Direction.WEST : Direction.EAST;
+        if (alongY >= alongZ) return plane.normalY() > 0 ? Direction.DOWN : Direction.UP;
+
+        return plane.normalZ() > 0 ? Direction.NORTH : Direction.SOUTH;
+    }
+
     /** Asked for once per frame rather than once per ray, since a world hands back the same structure every time. */
     private EmptySpace frameEmpty = EmptySpace.NONE;
 
@@ -213,26 +267,45 @@ public final class RayCaster {
     /** What the frame fades into instead of the sky, and 0 for a camera that is not under water. */
     private int submerged;
 
-    /** The light table this frame reads, which depends on the dimension and so cannot be static. */
-    private float[] lights = LIGHT;
+    /** The three tables this caster may read, built from the lift it was given. */
+    private final Lights tables;
+
+    /** The one this frame reads, which depends on the dimension and so is picked per frame. */
+    private float[] lights;
 
     public RayCaster(Textures atlas) {
         this(atlas, Canopy.DEFAULT);
     }
 
     public RayCaster(Textures atlas, Canopy canopy) {
-        this(atlas, canopy, true);
+        this(atlas, canopy, SHADOW_LIFT, true);
+    }
+
+    /** @param shadowLift how far off black an unlit block is drawn - see {@link #SHADOW_LIFT} */
+    public RayCaster(Textures atlas, Canopy canopy, float shadowLift) {
+        this(atlas, canopy, shadowLift, true);
     }
 
     RayCaster(Textures atlas, boolean skipEmpty) {
-        this(atlas, Canopy.DEFAULT, skipEmpty);
+        this(atlas, Canopy.DEFAULT, SHADOW_LIFT, skipEmpty);
     }
 
     RayCaster(Textures atlas, Canopy canopy, boolean skipEmpty) {
+        this(atlas, canopy, SHADOW_LIFT, skipEmpty);
+    }
+
+    RayCaster(Textures atlas, Canopy canopy, float shadowLift, boolean skipEmpty) {
+        this(atlas, canopy, shadowLift, skipEmpty, true);
+    }
+
+    RayCaster(Textures atlas, Canopy canopy, float shadowLift, boolean skipEmpty, boolean skipSameKind) {
         this.atlas = atlas;
         this.canopy = canopy;
         this.skipEmpty = skipEmpty;
+        this.skipSameKind = skipSameKind;
         this.entityTracer = new EntityTracer(atlas);
+        this.tables = Lights.lifted(shadowLift);
+        this.lights = tables.overworld();
     }
 
     /**
@@ -263,6 +336,25 @@ public final class RayCaster {
     public void render(VoxelSource world, CameraView view, List<EntitySnapshot> entities,
                        int width, int height, int[] out, int fromRow, int toRow) {
 
+        render(world, view, entities, null, width, height, out, fromRow, toRow);
+    }
+
+    /**
+     * The same, with the entities' screen rects already worked out.
+     *
+     * <p>For {@link FrameTracer}, which cuts a frame into several bands per thread and so would otherwise build the same
+     * {@link EntityScreen} - over every row of the frame, not just this band's - once per band. Immutable once built, so
+     * every band reads the one copy.
+     *
+     * @param prepared the screen for this whole frame, or null to work it out here
+     */
+    void render(VoxelSource world, CameraView view, List<EntitySnapshot> entities, EntityScreen prepared,
+                int width, int height, int[] out, int fromRow, int toRow) {
+
+        // Everything below reads the world through the memo rather than directly - see SeenBlocks. The two are the same
+        // world; this one only remembers what it has already been told.
+        world = seen.over(world);
+
         fog = view.fog();
         // Only the last stretch fades, which is what turns the distance cap into a haze instead of a wall.
         fogStart = view.maxDistance() - taperOf(view.maxDistance());
@@ -277,7 +369,7 @@ public final class RayCaster {
         }
 
         // Water wins over the air's fog, being the nearer medium, and it starts before the camera.
-        lights = tableFor(world.sky().ambientLight());
+        lights = tables.forAmbient(world.sky().ambientLight());
         submerged = world.submergedIn();
         if (submerged != 0) {
             fog = true;
@@ -286,6 +378,9 @@ public final class RayCaster {
         }
 
         frameView = view;
+        // For a clipped frame the walk does not start where the camera is, so its first block is not the camera's own -
+        // see crossedInto. Null for every other capture, which is what keeps them stepping exactly as they did.
+        crossedInto = view.clip() == null ? null : crossedInto(view.clip());
         frameEmpty = skipEmpty ? world.emptySpace() : EmptySpace.NONE;
         // Emptied per frame rather than trusted across them: the same caster renders the next snapshot too, and the
         // water in it has moved. A thousand longs is nothing next to a frame.
@@ -293,23 +388,48 @@ public final class RayCaster {
         // And the biome under a camera that has been carried somewhere else since.
         Arrays.fill(tintKeys, NO_POSITION);
         CameraView.Frame frame = view.frame();
-        EntityScreen screen = entities.isEmpty() ? null : new EntityScreen(entities, view, width, height);
+        EntityScreen screen = prepared != null ? prepared
+                : entities.isEmpty() ? null : new EntityScreen(entities, view, width, height);
+        // Projection stays measured from the apex whatever a clip does, so the screen rects above and the pixel
+        // directions below agree; only where a ray starts walking moves.
+        CameraView.ClipPlane clip = view.clip();
 
         for (int py = fromRow; py < toRow; py++) {
             int[] row = screen == null ? null : screen.row(py);
 
             for (int px = 0; px < width; px++) {
+                // A pixel the caller has said it will not look at is the cheapest kind of ray: the one not cast. Left
+                // as it was found, which the caller is promised is transparent - see CameraEye.Mask.
+                if (!view.wants(px, py, width)) {
+                    continue;
+                }
+
                 frame.direction(px, py, width, height, direction);
 
                 // Left uncomputed until something wants it: a sky is a gradient, a glow, a star hash, two celestial
                 // discs and a cloud sheet, and a pixel behind an opaque near surface never asks.
                 skyKnown = false;
 
-                fragments.reset();
-                traceBlocks(world, view, direction[0], direction[1], direction[2]);
+                // Where this ray enters the half-space it is allowed to see, which for an unclipped view - every
+                // capture out of a player's own head - is the eye itself and costs nothing to work out.
+                double enter = clip == null ? 0
+                        : clip.entry(view.x(), view.y(), view.z(), direction[0], direction[1], direction[2]);
 
-                if (row != null) {
-                    traceEntities(world, screen, row, px, py, view, direction[0], direction[1], direction[2]);
+                fragments.reset();
+
+                // A ray that never crosses the plane sees nothing at all. Skipping it rather than walking it is not
+                // only cheaper: the walk would start at infinity and read blocks at coordinates that are not numbers.
+                if (Double.isFinite(enter)) {
+                    double originX = view.x() + direction[0] * enter;
+                    double originY = view.y() + direction[1] * enter;
+                    double originZ = view.z() + direction[2] * enter;
+
+                    traceBlocks(world, view, originX, originY, originZ, direction[0], direction[1], direction[2]);
+
+                    if (row != null) {
+                        traceEntities(world, screen, row, px, py, view, originX, originY, originZ,
+                                direction[0], direction[1], direction[2]);
+                    }
                 }
 
                 // An opaque fragment means the background is multiplied by nothing, so the sky can stay unasked for.
@@ -337,7 +457,7 @@ public final class RayCaster {
     }
 
     private void traceEntities(VoxelSource world, EntityScreen screen, int[] row, int px, int py, CameraView view,
-                               double dx, double dy, double dz) {
+                               double originX, double originY, double originZ, double dx, double dy, double dz) {
 
         double limit = Math.min(fragments.opaqueDistance(), view.maxDistance());
 
@@ -350,11 +470,14 @@ public final class RayCaster {
             // one mesh holding both its shells, so stopping at the nearest texel draws the outer one over an inner
             // one that is never looked for. Each pass starts where the last ended and the walk is bounded by the
             // fragment list, so an entity with nothing to see into costs the one pass it always cost.
-            boolean more = entityTracer.first(screen.entity(index), view.x(), view.y(), view.z(), dx, dy, dz, limit);
+            EntitySnapshot drawn = screen.entity(index);
+            boolean more = entityTracer.first(drawn, originX, originY, originZ, dx, dy, dz, limit);
             while (more) {
                 double at = entityTracer.distance();
-                int lit = litEntity(world, entityTracer.color(), entityTracer.face(),
-                        view.x() + dx * at, view.y() + dy * at, view.z() + dz * at);
+                int lit = drawn.lit()
+                        ? litEntity(world, entityTracer.color(), entityTracer.face(),
+                                originX + dx * at, originY + dy * at, originZ + dz * at)
+                        : entityTracer.color() & 0xFFFFFF;
                 if (fog && at > fogStart) {
                     lit = fogged(lit, at, backdrop(world));
                 }
@@ -382,6 +505,9 @@ public final class RayCaster {
      * An entity texel shaded by where it is standing - drawn at its texture's own brightness a mob is lit for noon
      * wherever it is, and a cave full of fully lit zombies reads as pasted on. The light is read at the hit point,
      * which is the air the model occupies rather than the block underneath it.
+     *
+     * <p>Skipped for anything that is <b>not lit</b> - see {@link EntitySnapshot#emissive}, which is a picture rather
+     * than matter and carries its own light in its pixels.
      */
     private int litEntity(VoxelSource world, int texel, Direction face, double atX, double atY, double atZ) {
         int light = world.lightAt((int) Math.floor(atX), (int) Math.floor(atY), (int) Math.floor(atZ));
@@ -393,11 +519,14 @@ public final class RayCaster {
         return red << 16 | green << 8 | blue;
     }
 
-    /** One ray through the blocks, adding whatever it passes to {@link #fragments}. */
-    private void traceBlocks(VoxelSource world, CameraView view, double dx, double dy, double dz) {
-        double originX = view.x();
-        double originY = view.y();
-        double originZ = view.z();
+    /**
+     * One ray through the blocks, adding whatever it passes to {@link #fragments}.
+     *
+     * <p>The origin is handed in rather than read off the view, because a clipped frame starts each ray where it
+     * crosses the plane instead of at the eye - so distances here are measured from there.
+     */
+    private void traceBlocks(VoxelSource world, CameraView view, double originX, double originY, double originZ,
+                             double dx, double dy, double dz) {
 
         int blockX = (int) Math.floor(originX);
         int blockY = (int) Math.floor(originY);
@@ -416,8 +545,12 @@ public final class RayCaster {
         double nextZ = boundary(originZ, blockZ, dz, deltaZ);
 
         // The camera's own block is skipped: it was entered through no face, and standing inside a block should
-        // not paint that block's inside over the whole frame.
-        Direction entered = null;
+        // not paint that block's inside over the whole frame. A clipped frame is the exception, and the reason is that
+        // its walk starts at the plane rather than at the camera - see crossedInto.
+        Direction entered = crossedInto;
+        // What the ray is coming out of, or null where it has just crossed something it did not examine - see
+        // hiddenByItsOwnKind. Cleared by every jump, since the block a jump lands on has empty space behind it.
+        BakedState behind = null;
         double travelled = 0;
         double range = view.maxDistance();
 
@@ -497,6 +630,7 @@ public final class RayCaster {
                         nextY = boundary(originY, blockY, dy, deltaY);
                         nextZ = boundary(originZ, blockZ, dz, deltaZ);
                         travelled = exit;
+                        behind = null;
                         continue;
                     }
                 }
@@ -552,6 +686,7 @@ public final class RayCaster {
                         nextY = boundary(originY, blockY, dy, deltaY);
                         nextZ = boundary(originZ, blockZ, dz, deltaZ);
                         travelled = exit;
+                        behind = null;
                         continue;
                     }
                 }
@@ -560,9 +695,21 @@ public final class RayCaster {
                 // a block read where stepping on is a few adds.
                 if (blockY <= columnTop && blockY >= floor && blockY <= roof) {
                     BakedState state = world.stateAt(blockX, blockY, blockZ);
-                    if (!state.isEmpty() && !sample(world, state, entered, blockX, blockY, blockZ, originX, originY, originZ, dx, dy, dz, travelled)) {
-                        break;
+                    if (state.isEmpty()) {
+                        // Air behind the next block, so its face on this side is drawn rather than culled.
+                        behind = null;
+                    } else {
+                        // The inside of a body of water, of a pane of glass, of anything one material thick enough to
+                        // walk through: the same state on the side we came in from hides whatever this block would draw.
+                        if (!skipSameKind || state != behind || !hiddenByItsOwnKind(state, entered)) {
+                            if (!sample(world, state, entered, blockX, blockY, blockZ, originX, originY, originZ, dx, dy, dz, travelled)) {
+                                break;
+                            }
+                        }
+                        behind = state;
                     }
+                } else {
+                    behind = null;
                 }
             }
 
@@ -637,6 +784,56 @@ public final class RayCaster {
         double fraction = direction > 0 ? block + 1 - origin : origin - block;
         return fraction * delta;
     }
+
+    /**
+     * Whether an identical block on the side the ray came in through hides everything this one would draw.
+     *
+     * <p>What a body of water is made of. Water is translucent, so a ray does not stop at the surface - it walks down
+     * through every block of the ocean to the seabed - and <b>every one of those blocks draws nothing</b>, because the
+     * face it would draw is culled against the identical water behind it. Eighteen blocks of standing water measured at
+     * <b>164 ms</b> against 16 ms for the same scene in stone, and all of the difference was the renderer asking, block
+     * after block, a question it had already answered.
+     *
+     * <p>The test is the one {@link #culled} would make, decided from the state alone: a single full cube, not opaque, and
+     * a face on this side that carries a {@code cullface}. Given all three, an identical neighbour culls it - by the fluid
+     * rule where it holds fluid and by the identity rule otherwise - so there is nothing to add and nothing to stop the
+     * ray. Only the <b>entered</b> face matters, since a full cube is reported by the grid walk and the walk only ever
+     * consults the face it came in through.
+     *
+     * <p>Not a jump: the ray still steps a block at a time, because only a block read can say where the water ends. What
+     * it saves is everything except that read - the element walk, the face lookup, and the neighbour read inside
+     * {@link #culled} - and that was nearly all of it.
+     *
+     * <p>Remembered per state and side rather than worked out per block, keyed on identity because states are
+     * canonicalised: one instance per distinct state, so the answer for a given pair never changes. Two six-slot arrays,
+     * which is all a run of one material needs, and a stale entry from an earlier frame is still the right answer.
+     */
+    private boolean hiddenByItsOwnKind(BakedState state, Direction entered) {
+        int side = entered.ordinal();
+        if (hides[side] == state) return true;
+        if (showsThrough[side] == state) return false;
+
+        boolean hidden = decideHiddenByItsOwnKind(state, entered);
+        (hidden ? hides : showsThrough)[side] = state;
+        return hidden;
+    }
+
+    private static boolean decideHiddenByItsOwnKind(BakedState state, Direction entered) {
+        // Opaque never gets here twice: the first one ends the ray. Two elements mean the walk consults more than the
+        // face it came in through, and anything but a full cube has geometry the grid walk has not tested.
+        if (state.alpha() == BakedState.Alpha.OPAQUE || state.elements().size() != 1) return false;
+
+        BakedElement only = state.elements().getFirst();
+        if (!only.isFullBlock()) return false;
+
+        BakedFace drawn = only.face(entered);
+        // No face at all draws nothing either way. A face without a cullface is drawn whatever is behind it.
+        return drawn == null || drawn.cull() != null;
+    }
+
+    /** See {@link #hiddenByItsOwnKind}: the states known to hide, and to show, through each of the six sides. */
+    private final BakedState[] hides = new BakedState[6];
+    private final BakedState[] showsThrough = new BakedState[6];
 
     /**
      * Adds whatever this block contributes, and says whether the ray carries on.
@@ -731,13 +928,27 @@ public final class RayCaster {
      *
      * <p>A fluid needs its own rule rather than the identity one, since a source, a flowing block and a waterlogged
      * stair are three states holding the same water - comparing states leaves seams at the edges of a pool.
+     *
+     * <p>And a fourth case that is not about the neighbour at all: for a <b>clipped</b> frame, a neighbour behind the plane
+     * is not in the picture and cannot hide anything in it.
      */
-    private static boolean culled(VoxelSource world, BakedState state, BakedFace drawn,
-                                  int blockX, int blockY, int blockZ) {
+    private boolean culled(VoxelSource world, BakedState state, BakedFace drawn,
+                           int blockX, int blockY, int blockZ) {
         Direction against = drawn.cull();
         if (against == null) return false;
 
-        BakedState neighbour = world.stateAt(blockX + against.dx(), blockY + against.dy(), blockZ + against.dz());
+        int nextX = blockX + against.dx();
+        int nextY = blockY + against.dy();
+        int nextZ = blockZ + against.dz();
+
+        // A neighbour on the far side of a clip plane is not in this picture, so it hides nothing in it. Which is the
+        // difference between a mirror showing the chest pushed against it and showing a hole where the chest is: the face
+        // that touches the glass is hidden by the wall the mirror hangs on, and that wall is exactly what a reflection
+        // does not draw. Only for a clipped frame, so an ordinary capture culls what it always culled.
+        CameraView.ClipPlane clip = frameView == null ? null : frameView.clip();
+        if (clip != null && !clip.keeps(nextX + 0.5, nextY + 0.5, nextZ + 0.5)) return false;
+
+        BakedState neighbour = world.stateAt(nextX, nextY, nextZ);
         if (neighbour.isEmpty()) return false;
 
         if (neighbour.fullCube() && neighbour.alpha() == BakedState.Alpha.OPAQUE) return true;

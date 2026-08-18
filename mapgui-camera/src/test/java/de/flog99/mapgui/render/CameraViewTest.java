@@ -102,6 +102,37 @@ class CameraViewTest {
         assertEquals(0, right[1], EPSILON, "right stays horizontal");
     }
 
+    /**
+     * Which horizontal right, exactly, at yaw zero - because "any will do" is only true from in here.
+     *
+     * <p>Anything drawing a <b>flat surface</b> straight above or below the camera has to know: a mirror on a floor
+     * projects its glass back into the frame, and can only do that by reproducing these axes. Free to be any particular
+     * value here and load-bearing there, which is the kind of thing that moves under somebody tidying up a fallback - so
+     * it is written down.
+     *
+     * <p>At yaw zero, looking up: right is west and screen-up is north. Looking down: right is west and screen-up is
+     * south. Those are the two angles the client draws its own horizontal frames at, which is why {@code WallLayout}
+     * takes north as up on a floor and south on a ceiling.
+     */
+    @Test
+    void straightUpAndDownHaveStatedAxesAtYawZero() {
+        double[] forward = new double[3];
+        double[] right = new double[3];
+        double[] up = new double[3];
+
+        facing(0, -90).basis(forward, right, up);
+        assertEquals(-1, right[0], EPSILON, "looking up, right is west");
+        assertEquals(0, right[2], EPSILON);
+        assertEquals(-1, up[2], EPSILON, "and screen-up is north");
+        assertEquals(0, up[0], EPSILON);
+
+        facing(0, 90).basis(forward, right, up);
+        assertEquals(-1, right[0], EPSILON, "looking down, right is west too");
+        assertEquals(0, right[2], EPSILON);
+        assertEquals(1, up[2], EPSILON, "and screen-up is south");
+        assertEquals(0, up[0], EPSILON);
+    }
+
     /** The middle pixel of an odd-sized frame is exactly where the player looks, not half a pixel off. */
     @Test
     void theCenterPixelLooksWhereTheCameraDoes() {

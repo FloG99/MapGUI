@@ -27,10 +27,14 @@ public final class Sky {
     private static final double MOON_RADIUS = Math.atan(20.0 / 100.0);
 
     /**
-     * The most the night takes off a block's sky light. The client subtracts eleven, leaving open ground at level 4;
-     * seven leaves it at 8, for the same reason the renderer lifts the dark end of its light table.
+     * The most the night takes off a block's sky light, which is the client's own eleven - leaving open ground at level
+     * 4 at midnight.
+     *
+     * <p>It was seven, for the same reason the renderer used to lift the dark end of its light table: a map's 143 colours
+     * can make a faithful night read as a hole rather than as a night. Both are back to the client's numbers now, so a
+     * capture at midnight is as dark as midnight looks - see {@link RayCaster#SHADOW_LIFT}.
      */
-    private static final int MAX_SKY_DARKEN = 7;
+    private static final int MAX_SKY_DARKEN = 11;
 
     /**
      * What the sky dims to at midnight rather than to black, and a palette decision rather than an astronomical one.

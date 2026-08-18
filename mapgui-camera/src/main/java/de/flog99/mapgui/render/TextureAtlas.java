@@ -46,7 +46,14 @@ public final class TextureAtlas implements BlockModels.TextureAlpha, Textures {
      */
     @Override
     public Texture get(String name) {
-        return textures.computeIfAbsent(name, this::load);
+        // get before computeIfAbsent, which locks a bin whenever the key is not first in its chain - and this is asked
+        // once per drawn texel, on every tracing thread at once. See SnapshotWorld#baked, where that cost 350 ms a frame.
+        Texture known = textures.get(name);
+        if (known != null) return known;
+
+        Texture loaded = load(name);
+        Texture raced = textures.putIfAbsent(name, loaded);
+        return raced != null ? raced : loaded;
     }
 
     @Override
