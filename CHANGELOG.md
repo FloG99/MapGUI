@@ -10,6 +10,27 @@ Also walls that stop paying for viewers who are not looking at them.
 
 ### Running a server
 
+- **An entity's screen rect is solved for rather than approximated**, so nothing is clipped out of a frame it belongs in.
+
+  Reported as a mirror on a ceiling showing a mirror on the wall below it with a band of that wall missing and the block
+  behind it showing through, from some standing positions and not others. Nothing in the world was clipping it: the
+  picture was never **offered** to those rays. `EntityScreen` gives each entity a pixel rect and only tests a ray against
+  the entities whose rect covers it, and the rect took the bounding sphere's radius over its depth - which is the extent
+  of a sphere sitting on the frame's own axis. Anything off to one side is further from the camera than its depth says, so
+  its silhouette is wider by `1 / cos squared` of the angle it sits at: half again at the edge of an ordinary 70 degree
+  frame, double at 45 degrees off, which is where a ceiling mirror looks at a wall.
+
+  Most entities never noticed, because the sphere is a generous bound to begin with - a player's is two blocks where their
+  mesh needs about one. A wall's picture is a flat square whose sphere is only half again its own size, so the shortfall
+  came straight off the picture.
+
+  Solved instead: a line at tangent `t` touches a sphere at `(along, off)` of radius `r` where
+  `(off - t along)^2 = r^2 (1 + t^2)`, giving `t = (along off +- r sqrt(along^2 + off^2 - r^2)) / (along^2 - r^2)`. The two
+  roots are deliberately not symmetric about `off / along` - the near side of a sphere subtends more than the far side,
+  which was the other half of what the old arithmetic missed. `CeilingSeesWallTest` decides arithmetically which pixels
+  should land on the picture and holds every one of them to landing on it, from four standing positions; it fails if the
+  approximation is put back.
+
 - **A wall's picture is drawn on the face of the block it hangs on**, where it used to sit five map pixels proud of it.
 
   Reported as a strip of block showing through: hang a mirror on each of two walls that meet at a corner, and each one

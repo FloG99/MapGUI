@@ -137,9 +137,27 @@ final class EntityScreen {
     /**
      * The pixel rect of the entity's bounding sphere, padded by a pixel.
      *
-     * <p>A sphere rather than the eight corners of a rotated box: it cannot be too small, which is the only
-     * error that matters here - a rect that is too tight clips an arm off, one that is slightly loose only costs
-     * a few tests that miss.
+     * <p>A sphere rather than the eight corners of a rotated box: it cannot be too small, which is the only error that
+     * matters here - a rect that is too tight clips an arm off, one that is slightly loose only costs a few tests that
+     * miss.
+     *
+     * <p><b>Where the sphere's silhouette lands is solved for rather than approximated</b>, and the difference is not
+     * academic. Dividing the radius by the depth is the extent of a sphere sitting on the frame's own axis; anything off
+     * to one side is further away from the camera than its depth says, and its silhouette is correspondingly <b>wider</b>
+     * in the frame - by {@code 1 / cos squared} of the angle it sits at, which is half again at the edge of an ordinary
+     * 70 degree frame and double at 45 degrees off. Most entities survive that because the sphere is a generous bound to
+     * begin with, but a <b>wall's picture</b> is a flat square whose sphere is only half again its own size, so the
+     * shortfall came straight off the picture.
+     *
+     * <p>Reported as a mirror on a ceiling showing a mirror on the wall below it with a band of the wall missing along one
+     * edge - the band being the part of the picture that fell outside its own rect, where the entity was then never
+     * offered to a single ray. See {@code CeilingSeesWallTest}.
+     *
+     * <p>The solved form: a line from the camera at tangent {@code t} touches a sphere at {@code (along, off)} of radius
+     * {@code r} where {@code (off - t along)^2 = r^2 (1 + t^2)}, so
+     * {@code t = (along off +- r sqrt(along^2 + off^2 - r^2)) / (along^2 - r^2)}. Two roots, and they are not symmetric
+     * about {@code off / along} - the near side of a sphere subtends more than the far side, which is the other half of
+     * what the old arithmetic missed. A camera inside the sphere has no silhouette at all and is handled before this.
      */
     private boolean project(EntitySnapshot entity, CameraView view, double[] forward, double[] right, double[] up,
                             double tanHalf, int width, int height, int index) {
@@ -154,45 +172,63 @@ final class EntityScreen {
         double toZ = centerZ - view.z();
 
         double depth = toX * forward[0] + toY * forward[1] + toZ * forward[2];
-        if (depth <= 0.05) {
-            // Behind the camera, or so close that the projection blows up.
+        // Behind the camera, so close that the projection blows up, or near enough that the camera is inside the sphere -
+        // where every direction touches it and there is no rect to work out.
+        if (depth <= 0.05 || depth <= reach) {
             return depth > -reach && insideEverything(width, height, index);
         }
 
         double acrossAxis = toX * right[0] + toY * right[1] + toZ * right[2];
         double upAxis = toX * up[0] + toY * up[1] + toZ * up[2];
 
-        double halfExtentAcross;
-        double halfExtentUp;
-        double screenX;
-        double screenY;
+        double spread = depth * depth - reach * reach;
+        double lowAcross = tangent(depth, acrossAxis, reach, spread, false);
+        double highAcross = tangent(depth, acrossAxis, reach, spread, true);
+        double lowUp = tangent(depth, upAxis, reach, spread, false);
+        double highUp = tangent(depth, upAxis, reach, spread, true);
+
+        double leftPixel;
+        double rightPixel;
+        double topPixel;
+        double bottomPixel;
 
         CameraView.Lens lens = view.lens();
         if (lens.symmetric()) {
-            // Untouched for every capture but a reflection, since these rects are floored into pixel bounds and a last
-            // bit of difference can move an edge by one - which several tests here hold exactly.
-            halfExtentAcross = reach / depth / tanHalf * (width / 2.0);
-            halfExtentUp = reach / depth / tanHalf * (height / 2.0);
-            screenX = (acrossAxis / depth / tanHalf + 1) * (width / 2.0);
-            screenY = (1 - upAxis / depth / tanHalf) * (height / 2.0);
+            leftPixel = (lowAcross / tanHalf + 1) * (width / 2.0);
+            rightPixel = (highAcross / tanHalf + 1) * (width / 2.0);
+            // Up in the world is up the picture, so the frame's rows run the other way.
+            topPixel = (1 - highUp / tanHalf) * (height / 2.0);
+            bottomPixel = (1 - lowUp / tanHalf) * (height / 2.0);
         } else {
             // The same mapping a ray is built with, inverted: sx runs from left to right across the picture and sy from
             // top to bottom, so a point at sx lands at (sx - left) / (right - left) of the way across.
             double across = lens.right() - lens.left();
             double down = lens.top() - lens.bottom();
 
-            halfExtentAcross = reach / depth / across * width;
-            halfExtentUp = reach / depth / down * height;
-            screenX = (acrossAxis / depth - lens.left()) / across * width;
-            screenY = (lens.top() - upAxis / depth) / down * height;
+            leftPixel = (lowAcross - lens.left()) / across * width;
+            rightPixel = (highAcross - lens.left()) / across * width;
+            topPixel = (lens.top() - highUp) / down * height;
+            bottomPixel = (lens.top() - lowUp) / down * height;
         }
 
-        minX[index] = (int) Math.floor(screenX - halfExtentAcross) - 1;
-        maxX[index] = (int) Math.ceil(screenX + halfExtentAcross) + 1;
-        minY[index] = (int) Math.floor(screenY - halfExtentUp) - 1;
-        maxY[index] = (int) Math.ceil(screenY + halfExtentUp) + 1;
+        minX[index] = (int) Math.floor(Math.min(leftPixel, rightPixel)) - 1;
+        maxX[index] = (int) Math.ceil(Math.max(leftPixel, rightPixel)) + 1;
+        minY[index] = (int) Math.floor(Math.min(topPixel, bottomPixel)) - 1;
+        maxY[index] = (int) Math.ceil(Math.max(topPixel, bottomPixel)) + 1;
 
         return maxX[index] >= 0 && minX[index] < width && maxY[index] >= 0 && minY[index] < height;
+    }
+
+    /**
+     * One of the two tangents from the camera to the sphere, as a tangent of the angle off the frame's forward axis.
+     *
+     * @param off    how far the sphere's middle sits along the axis being solved for, and {@code spread} is
+     *               {@code along^2 - r^2}, which is positive because the camera is outside the sphere
+     * @param higher which of the two roots
+     */
+    private static double tangent(double along, double off, double reach, double spread, boolean higher) {
+        double root = reach * Math.sqrt(Math.max(0, along * along + off * off - reach * reach));
+        return (along * off + (higher ? root : -root)) / spread;
     }
 
     /** Standing inside the camera: no useful rect, so it is tested everywhere rather than dropped. */
