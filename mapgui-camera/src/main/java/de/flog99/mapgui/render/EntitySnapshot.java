@@ -475,10 +475,26 @@ public record EntitySnapshot(
     }
 
     /**
-     * Where a wall's map sits, in entity pixels off the middle of its block: on the block's own face, and a hair
-     * proud of it so that it does not fight whatever the block is made of.
+     * Where a wall's map sits, in entity pixels off the middle of its block: <b>on the block's own face</b>, to within a
+     * fraction of a map pixel.
+     *
+     * <p>Two corrections went into that number, and the reported symptom for both was the same: two mirrors on walls that
+     * meet at a corner each showed the other with a <b>strip of the block it hangs on</b> down the edge they touch, five
+     * map pixels of it. At a corner the other picture's displacement is sideways, so a ray aimed into the corner passes in
+     * front of the picture and lands on the block behind.
+     *
+     * <p>Four of those five pixels were {@link EntityModel#PICTURE_HALF_THICKNESS}: the picture is a slab straddling the
+     * position it is given and only its <b>front</b> face is drawn, so placing the slab's middle on the block face puts
+     * its picture half a slab proud. The fifth was a deliberate hair of proudness, kept so the picture does not fight the
+     * block it hangs on but wound down to an eighth of a map pixel, which is far too little to see and far more than the
+     * arithmetic needs to order two surfaces.
+     *
+     * <p>The face is the right answer rather than a compromise: {@code WallLayout} defines a wall's pixels as lying on
+     * the face of the block it hangs on, and a mirror clips its own frame at exactly that plane. The client draws the map
+     * a little further out, on the plate of the item frame carrying it - but a capture that followed the frame instead
+     * would put the reflection of a wall a frame's thickness away from where the wall says it is.
      */
-    private static final float WALL_FRONT = 8 + 16 / 128f;
+    private static final float WALL_FRONT = 8 - EntityModel.PICTURE_HALF_THICKNESS + 16 / 1024f;
 
     /** Half a block, since a framed map is drawn the full width of the block the frame is in. */
     private static final float MAP_HALF_WIDTH = 8;

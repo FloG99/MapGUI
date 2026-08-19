@@ -475,8 +475,15 @@ record EntityModel(List<MeshPart> parts, float height, float floor, float radius
                 1, 1, 1, List.of(slab), List.of())), true);
     }
 
-    /** Thin enough to read as flat and thick enough for a ray to meet, which is the painting's own thickness. */
-    private static final float PICTURE_HALF_THICKNESS = 0.5f;
+    /**
+     * Thin enough to read as flat and thick enough for a ray to meet, which is the painting's own thickness.
+     *
+     * <p>Package-private because <b>where the picture is drawn is this much in front of where it is placed</b> - the slab
+     * straddles {@code out} and only its front face carries the texture - so a caller placing one against a surface has
+     * to take it off. See {@link EntitySnapshot#wallMap}, where not taking it off put a wall's picture four map pixels
+     * proud of the block face and showed as a strip of that block in a mirror on the wall beside it.
+     */
+    static final float PICTURE_HALF_THICKNESS = 0.5f;
 
     /**
      * The picture at the size and place the item model states, extruded along its own outline.

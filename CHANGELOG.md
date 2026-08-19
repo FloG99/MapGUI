@@ -10,6 +10,23 @@ Also walls that stop paying for viewers who are not looking at them.
 
 ### Running a server
 
+- **A wall's picture is drawn on the face of the block it hangs on**, where it used to sit five map pixels proud of it.
+
+  Reported as a strip of block showing through: hang a mirror on each of two walls that meet at a corner, and each one
+  shows the other with a hairline of the block it hangs on down the edge they touch. Looking at a wall straight on, a few
+  pixels of proudness are invisible; at a corner the displacement is **sideways**, so a ray aimed into the corner passes
+  in front of the other picture and lands on the block behind it.
+
+  Four of the five pixels were the picture's own thickness. `EntityModel.picture` builds a slab straddling the position it
+  is given and draws only its **front** face, so placing the slab's middle on the block face puts its picture half a slab
+  proud - and half an entity pixel is four map pixels. The fifth was a deliberate hair of proudness, so the picture does
+  not fight the block it hangs on; it is now an eighth of a map pixel, which is far too little to see and far more than
+  the arithmetic needs to order two coincident surfaces.
+
+  The face is the right answer rather than a compromise: `WallLayout` defines a wall's pixels as lying on the face of the
+  block it hangs on, and a mirror clips its own frame at exactly that plane. `WallCornerTest` builds the reported corner
+  and holds every row of the column that looks into it to showing the other mirror rather than the block.
+
 - **The inside of a body of water is crossed without being examined.** Water is translucent, so a ray does not stop at
   the surface - it walks down through every block of the ocean to the seabed - and **every one of those blocks draws
   nothing**, because the face it would draw is culled against the identical water behind it. The renderer was asking,
