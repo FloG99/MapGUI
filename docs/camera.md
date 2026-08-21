@@ -247,7 +247,7 @@ can read as a hole in the picture rather than as a cave.
 
 Both ends of it were shipped and both were wrong, which is why it is a setting now rather than a constant.
 
-At **0.6**, where it started, a wholly unlit block drew at 154 of 255 on stone where the client draws it at 8 - an unlit
+At **0.6**, where it started, a wholly unlit block drew at 80 of 255 on stone where the client draws it at 4 - an unlit
 room came out very nearly as bright as a lit one, which is not a legible cave, it is no cave at all. At **0**, exactly what
 the client does, that block is 4 of 255 and a dark room is a black rectangle.
 

@@ -161,14 +161,14 @@ whole of it, and the reason this is 2.0.0 rather than 1.2.0.
   about the picture changes: the sphere is the one the rect was already derived from, and `Fragments` orders what it is
   given by depth however it arrives. `NarrowFrameEntitiesTest` holds both.
 
-- **Dark is drawn dark, and how dark is now a setting** - `camera.shadow-lift`, defaulting to 0.3. A capture is lit the
+- **Dark is drawn dark, and how dark is now a setting** - `camera.shadow-lift`, defaulting to 0.2. A capture is lit the
   way the client lights it, with the brightness slider all the way up, and then the bottom of that curve is lifted by
   this much.
 
   There was a lift under the bottom of the light curve, and the argument for it was real: a screen draws a night in
   thousands of near-blacks and your eye adapts, while a map has 143 colours and a viewer adapted to whatever else is on
   their screen, so a faithful dark can read as a hole rather than as a cave. What settled it was the size of what that
-  cost. Measured on stone, a wholly unlit block drew at **154 of 255** where the client draws it at **8** - an unlit room
+  cost. Measured on stone, a wholly unlit block drew at **80 of 255** where the client draws it at **4** - an unlit room
   came out very nearly as bright as a lit one, which is not a legible cave, it is no cave at all.
 
   The bright end barely moves: full daylight is 253 either way and light 12 goes from 232 to 237. Everything below about
