@@ -65,18 +65,28 @@ jobs:
 
       # GitHub's generated notes enumerate pull requests and nothing else, so a release whose work went
       # straight to main comes out nearly empty: v2.0.0 was 45 direct commits and 4 PRs, and only the 4
-      # appeared. This version's changelog section goes in front of them. The generated list still follows
-      # it, which is what credits an outside contributor.
+      # appeared. The changelog's opening lines for this version go in front of them. The generated list
+      # still follows, which is what credits an outside contributor.
       #
-      # Empty is fatal rather than skipped. A release with no notes is one nobody can read, and the section
-      # is written before the tag is pushed or it is not written at all.
-      - name: Take this version's section out of the changelog
+      # The opening only, not the whole section. A release page is read by somebody deciding whether to
+      # install this, who wants a short plain answer - the section itself runs to tens of KB and is right
+      # where it is, one link away. Which means those opening lines have to stand on their own: no "see
+      # below", nothing that only reads correctly with the rest of the section under it.
+      #
+      # Empty is fatal rather than skipped. A release with no notes is one nobody can read, and it is
+      # written before the tag is pushed or it is not written at all.
+      - name: Take this version's summary out of the changelog
         run: |
-          awk -v v="## $VERSION" '$0 == v {f=1; next} /^## /{f=0} f' CHANGELOG.md > release-notes.md
+          awk -v v="## $VERSION" '$0 == v {f=1; next} f && /^#{2,3} /{exit} f' CHANGELOG.md > release-notes.md
           if [ ! -s release-notes.md ]; then
             echo "::error::CHANGELOG.md has no '## $VERSION' section" >&2
             exit 1
           fi
+          {
+            echo
+            echo "Everything in this release, in full:"
+            echo "[CHANGELOG.md]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/CHANGELOG.md)"
+          } >> release-notes.md
           echo "$(wc -c < release-notes.md) bytes of notes"
 
       # The plugin is all a server needs. The examples are optional, and the two library jars are for anyone

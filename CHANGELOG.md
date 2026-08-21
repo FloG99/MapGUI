@@ -5,12 +5,14 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 
 ## 2.0.0
 
-A camera you can put somewhere other than a player's head, which is what a **mirror** needs.
-Also walls that stop paying for viewers who are not looking at them, a held right-click a screen can read as a
-**hold** rather than as clicks, and a pointer that reaches every position the client can draw it at.
+A camera can now be put anywhere in the world rather than only in a player's hand, which is what a mirror needs.
 
-**Breaking:** `Marker#x` and `Marker#y` are `double` rather than `int` - see the pointer entry below. That is the
-whole of it, and the reason this is 2.0.0 rather than 1.2.0.
+Also: a wall stops sending frames to anyone who is not looking at it, a screen can read a held right-click as a
+hold rather than as a stream of clicks, dark places in a capture are drawn lighter, and the map pointer reaches
+every position the client can draw it at rather than every other one.
+
+**Breaking:** `Marker#x` and `Marker#y` are `double` where they were `int`. That is the only break, and the
+reason this is 2.0.0 rather than 1.2.0. A plugin that does not touch `Marker` needs no change.
 
 ### Running a server
 
