@@ -3,12 +3,24 @@
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
 surface is `mapgui-api`, which carries the layout engine inside it.
 
-## 1.2.0
+## 2.0.0
 
 A camera you can put somewhere other than a player's head, which is what a **mirror** needs.
-Also walls that stop paying for viewers who are not looking at them.
+Also walls that stop paying for viewers who are not looking at them, a held right-click a screen can read as a
+**hold** rather than as clicks, and a pointer that reaches every position the client can draw it at.
+
+**Breaking:** `Marker#x` and `Marker#y` are `double` rather than `int` - see the pointer entry below. That is the
+whole of it, and the reason this is 2.0.0 rather than 1.2.0.
 
 ### Running a server
+
+- **An unlit block is drawn a good deal further off black**, `camera.shadow-lift` defaulting to 0.3 rather than 0.2.
+
+  A cave read as slightly darker than it should. The lift is still spent almost entirely on the dark end: an unlit block
+  goes from 28 of 255 on stone to 40, light 7 of 15 from 0.614 to 0.644, and light 11 from 0.881 to 0.885, so a lit room
+  is the same lit room it was. This is about as far as the lift goes while dark still reads as dark, which is why the
+  docs no longer hold 0.3 out as the point past which it stops. It stays a taste rather than a fact -
+  `camera.shadow-lift: 0.2` has the old figure back, and the clamp and the shape `LightTableTest` holds are unchanged.
 
 - **An entity's screen rect is solved for rather than approximated**, so nothing is clipped out of a frame it belongs in.
 
@@ -149,7 +161,7 @@ Also walls that stop paying for viewers who are not looking at them.
   about the picture changes: the sphere is the one the rect was already derived from, and `Fragments` orders what it is
   given by depth however it arrives. `NarrowFrameEntitiesTest` holds both.
 
-- **Dark is drawn dark, and how dark is now a setting** - `camera.shadow-lift`, defaulting to 0.15. A capture is lit the
+- **Dark is drawn dark, and how dark is now a setting** - `camera.shadow-lift`, defaulting to 0.3. A capture is lit the
   way the client lights it, with the brightness slider all the way up, and then the bottom of that curve is lifted by
   this much.
 
@@ -347,12 +359,26 @@ Also walls that stop paying for viewers who are not looking at them.
   What none of it saves is drawing. A wall with anybody in range is painted every frame whether or not any of them is
   looking, so video decode and terrain scans are unchanged.
 
+- **Shift+scroll counts every notch now**, where it counted one per report. The wheel reaches a server as "this
+  client has slot N selected", once a client tick however many notches went by inside it - so a flick arrived as a
+  single report several slots away and was read as one notch, capping a scroll at twenty rows a second whatever the
+  player did with the wheel. A map pinned to one slot also has its selection put straight back, so what arrives is
+  how far the selection has *drifted* rather than how far the wheel turned, and the two only agree once that answer
+  has landed. `Wheel` tells those apart - further out in the same direction is one turn carrying on, anything else
+  is a fresh turn from a selection that has been put back - which counts a flick exactly, up to the four notches a
+  tick beyond which nine slots in a ring cannot say which way round it went.
+
+- Fixed: **the pointer could only sit on every other position the client can draw.** A map icon's coordinate is a byte the client halves, so icons live in a space twice as fine as the map's pixels - and the pointer's position was rounded to a whole pixel before it got there, so every coordinate MapGUI ever sent was an even one and half the places a cursor can sit were unreachable.
+  It follows the head at half a pixel now, which is as fine as a map goes.
+  Hit testing still asks whole pixels, since a button covers pixels rather than halves of them: what changed is where the icon is drawn, not what it points at.
+  **Breaking:** `Marker#x` and `Marker#y` are `double` rather than `int`, snapped to those halves on the way in - so a marker still only counts as moved once it lands somewhere the client would draw differently, and a pointer drifting a hundredth of a pixel costs no packet.
+  `Marker.at` takes whole pixels as happily as fractional ones, and `pixelX()` and `pixelY()` answer which whole pixel a marker is in.
+
 ### Writing a plugin
 
 - **`WallDisplay.Builder#cullOffScreen(boolean)`** turns the above off, for a wall that should stream to everyone in
   range however they are facing and whatever is in front of them. On by default. Ignored by `prerender`, which has no
   stream to pause and would have to re-send every layer it had already placed in the client.
-
 
 - **`Camera#capture(Player, CameraEye, CameraOptions, Consumer)`** takes the frame from a point you choose rather than
   out of the viewer's eyes, and **`Camera#feed(Player, Supplier<CameraEye>, Supplier<CameraOptions>, Consumer)`** is the
@@ -415,6 +441,30 @@ Also walls that stop paying for viewers who are not looking at them.
   Off the main thread, so it buys back none of the tick and will not let more live views run - that budget is spent
   copying the world, per chunk column, which a mask does not touch. What it saves is real CPU on a busy machine.
 
+- **`Screen#holdable()` reads a held right-click as a hold**, arriving at `Screen#onHold(x, y)` once a tick for as
+  long as it is down and ending at `Screen#onHoldEnd()`, where before there was nothing to read. A client repeats a held button as a click every four ticks and says nothing whatever when it is
+  let go, so a stroke could only be guessed at from the gaps between clicks - which is a dotted line for a lagging
+  player and a pen that stays down after they have stopped.
+  It works off the one thing a client does report: letting go of an item it was **using**. On the press MapGUI
+  raises that player's hand for them - `HandRaiser` sends them the "using an item" entity flag, which a client is
+  never otherwise told about itself, since it is told about the world rather than about itself. From then on the
+  client says nothing until the button comes up and then says so exactly once, and the **four-tick repeat stops**,
+  so one press is one click rather than five a second.
+  **Raised from outside rather than by giving the map something edible to hold**, which is the difference between
+  this working and this being unusable. A client that starts a use itself drops the held item to the bottom of the
+  screen and springs it back - vanilla's "you used that" bob, played for food, shields and everything else - and on
+  a map that bob *is* the screen, once per press. `Minecraft.startUseItem` is the only thing that plays it, and the
+  flag goes around it: `LocalPlayer` reads it, starts the use quietly, and no animation runs. Nothing is eaten, no
+  cooldown starts, the server is using nothing, and no other player is told.
+  The map keeps its own stack but for `use_effects`, which says `can_sprint` and full speed - without it a client
+  using an item walks at a fifth speed, which is right for eating and wrong for holding a button.
+  `onHoldEnd` is also called when the map loses the mouse mid-hold - scrolled away from, a prompt opening over it,
+  the screen closing under a stroke - since the client stops there and tells nobody, and a hand left raised would
+  swallow every press after it. Every carry mode works; not a wall, where the hand holding the button is holding
+  the player's own item. `onHold` arrives on the tick of the press, so a tap too short to span one still counts, and
+  it rides MapGUI's own tick - a screen following the cursor needs no scheduler and no plugin of its own.
+  `/mapgui hand open sketch` is the demo, and `/mapgui hand give sketch` the same one as an item.
+
 ### Under the bonnet
 
 - The tracer walks each ray from a **clipped origin** rather than from the eye, which is the whole of the change in
@@ -429,6 +479,20 @@ Also walls that stop paying for viewers who are not looking at them.
   space skip. So `CameraView.Frame#direction` and `EntityScreen` branch on it and keep the expressions they always used,
   rather than being rewritten in the general form and hoping the arithmetic lands the same way. `ChunkFrustum` needed no
   branch: negating an already negated tangent is exact, so its four planes come out the same numbers either way.
+
+## 1.1.1
+
+A capture reads a resource pack's own item models where it used to read the vanilla fallback.
+
+- **An item is drawn as the model its `custom_model_data` names.** A pack that keeps working for players who
+  declined it points `item_model` at something vanilla and puts its own model behind a select on a
+  `custom_model_data` string - and only a client with the pack runs that select, so a capture read the fallback
+  and photographed the plain vanilla item. Where the string is a key naming an item definition, that definition
+  is what the pack meant, so it is tried first. A string naming nothing resolves to no layers and the next id is
+  tried, which is what the candidate list was already for. A namespace is required, since `custom_model_data` is
+  free text and a plugin may well be keeping a count in it.
+- The release no longer carries a javadoc jar - Maven Central requires one and gets one, but on a GitHub
+  release it is four megabytes of html nobody unzips. The api jars are named like the rest of the assets.
 
 ## 1.1.0
 
@@ -561,12 +625,6 @@ Also real map printing, more ways to carry a GUI, and a live view driven for you
   a viewfinder shows a pointer only while sneaking. With `clamp-pitch` on the head goes to mid range with it, and the
   player's next move ends that, so a screen never holds a head against them. Off, it starts nearer an edge for a
   player already looking far up or down, who has no head movement left to bring it back the other way.
-
-- Fixed: **the pointer could only sit on every other position the client can draw.** A map icon's coordinate is a byte the client halves, so icons live in a space twice as fine as the map's pixels - and the pointer's position was rounded to a whole pixel before it got there, so every coordinate MapGUI ever sent was an even one and half the places a cursor can sit were unreachable.
-  It follows the head at half a pixel now, which is as fine as a map goes.
-  Hit testing still asks whole pixels, since a button covers pixels rather than halves of them: what changed is where the icon is drawn, not what it points at.
-  **Breaking:** `Marker#x` and `Marker#y` are `double` rather than `int`, snapped to those halves on the way in - so a marker still only counts as moved once it lands somewhere the client would draw differently, and a pointer drifting a hundredth of a pixel costs no packet.
-  `Marker.at` takes whole pixels as happily as fractional ones, and `pixelX()` and `pixelY()` answer which whole pixel a marker is in.
 
 - Fixed: **a trident or a shield in a hand was drawn a block and a half to one side.** The shapes the client draws in
   code arrive in the frame a mesh is built in, which is a half circle from the one a block model is built in, and the
@@ -1075,7 +1133,7 @@ Also real map printing, more ways to carry a GUI, and a live view driven for you
   written against and keep. MapGUI's own counter starts below the band rather than at the very top, where it would
   otherwise have handed that id to the second screen opened after every restart. Ids at or below 0 are refused at the
   other end, since the server allocates real map ids upwards from there and painting one replaces the picture of a
-  map somebody owns. See [carrying a GUI](docs/hand.md#giving-a-resource-pack-something-to-recognise) for the
+  map somebody owns. See [carrying a GUI](docs/hand.md#giving-a-resource-pack-something-to-recognize) for the
   `items/filled_map.json` side of it.
 - **A carried screen now recognises its own item by name rather than by map id.** Which hand holds it, whether it is
   still being carried, and which stack to take back when it closes were all answered by comparing the id stamped into
@@ -1089,37 +1147,6 @@ Also real map printing, more ways to carry a GUI, and a live view driven for you
   `openWhileHolding` appeared to be consumed, scoped or drawn, and stayed that way until something unrelated
   resent the slot. A knowledge book vanished from the hand on every click. Only sent when the main hand holds a
   real item, so a popup being clicked through costs nothing.
-- **`Screen#holdable()` reads a held right-click as a hold**, arriving at `Screen#onHold(x, y)` once a tick for as
-  long as it is down and ending at `Screen#onHoldEnd()`, where before there was nothing to read. A client repeats a held button as a click every four ticks and says nothing whatever when it is
-  let go, so a stroke could only be guessed at from the gaps between clicks - which is a dotted line for a lagging
-  player and a pen that stays down after they have stopped.
-  It works off the one thing a client does report: letting go of an item it was **using**. On the press MapGUI
-  raises that player's hand for them - `HandRaiser` sends them the "using an item" entity flag, which a client is
-  never otherwise told about itself, since it is told about the world rather than about itself. From then on the
-  client says nothing until the button comes up and then says so exactly once, and the **four-tick repeat stops**,
-  so one press is one click rather than five a second.
-  **Raised from outside rather than by giving the map something edible to hold**, which is the difference between
-  this working and this being unusable. A client that starts a use itself drops the held item to the bottom of the
-  screen and springs it back - vanilla's "you used that" bob, played for food, shields and everything else - and on
-  a map that bob *is* the screen, once per press. `Minecraft.startUseItem` is the only thing that plays it, and the
-  flag goes around it: `LocalPlayer` reads it, starts the use quietly, and no animation runs. Nothing is eaten, no
-  cooldown starts, the server is using nothing, and no other player is told.
-  The map keeps its own stack but for `use_effects`, which says `can_sprint` and full speed - without it a client
-  using an item walks at a fifth speed, which is right for eating and wrong for holding a button.
-  `onHoldEnd` is also called when the map loses the mouse mid-hold - scrolled away from, a prompt opening over it,
-  the screen closing under a stroke - since the client stops there and tells nobody, and a hand left raised would
-  swallow every press after it. Every carry mode works; not a wall, where the hand holding the button is holding
-  the player's own item. `onHold` arrives on the tick of the press, so a tap too short to span one still counts, and
-  it rides MapGUI's own tick - a screen following the cursor needs no scheduler and no plugin of its own.
-  `/mapgui hand open sketch` is the demo, and `/mapgui hand give sketch` the same one as an item.
-- **Shift+scroll counts every notch now**, where it counted one per report. The wheel reaches a server as "this
-  client has slot N selected", once a client tick however many notches went by inside it - so a flick arrived as a
-  single report several slots away and was read as one notch, capping a scroll at twenty rows a second whatever the
-  player did with the wheel. A map pinned to one slot also has its selection put straight back, so what arrives is
-  how far the selection has *drifted* rather than how far the wheel turned, and the two only agree once that answer
-  has landed. `Wheel` tells those apart - further out in the same direction is one turn carrying on, anything else
-  is a fresh turn from a selection that has been put back - which counts a flick exactly, up to the four notches a
-  tick beyond which nine slots in a ring cannot say which way round it went.
 - **A map in the offhand no longer takes over the player's aim.** The pitch clamp is for a map held up in front of
   you, so it now applies only in the main hand - an offhand viewfinder or quest log leaves your head alone whatever
   `cursor.clamp-pitch` and `Screen#clampPitch` say. Unclamped, the vertical axis follows the head as a delta the way

@@ -55,17 +55,19 @@ Four things have no API equivalent, and they are the whole of `mapgui-nms-26_2`.
 `mapgui-api` - `MapTransport`, `PacketInput`, `RotationController`, `SavedMapPixels` - and `ServerBackend`
 hands over one of each:
 
-- **Sending map pixels and a fake item** as `ClientboundMapItemDataPacket` and
+- **`MapTransport` - sending map pixels and a fake item** as `ClientboundMapItemDataPacket` and
   `ClientboundSetPlayerInventoryPacket`. Bukkit's `MapRenderer` requires a real map to render, which is exactly
   what we are avoiding - so the transport goes direct. It also means MapGUI decides *when* frames go out, which
-  is what the frame limits are built on, and only the changed rectangle is sent.
-- **Pushing a player's pitch back into range without touching their yaw.** Yaw is the horizontal cursor axis,
-  so setting both at once would send a yaw that is already a tick stale and snap their aim sideways mid-flick.
-
-- **Writing a picture into the pixels the world itself saves for a map**, which is what makes a printed map
-  survive MapGUI being uninstalled.
-- **Repointing a client-only item frame at a different map id**, so a prerendered loop plays without sending
-  pixels.
+  is what the frame limits are built on, and only the changed rectangle is sent. The client-only item frames a
+  wall hangs on are the transport's too, including repointing one at a different map id so a prerendered loop plays
+  without sending pixels.
+- **`PacketInput` - reading the two gestures no event can see**, drop and right-click into air, off a netty
+  handler placed just before the packet handler. See below for why those two.
+- **`RotationController` - pushing a player's pitch back into range without touching their yaw.** Yaw is the
+  horizontal cursor axis, so setting both at once would send a yaw that is already a tick stale and snap their
+  aim sideways mid-flick.
+- **`SavedMapPixels` - writing a picture into the pixels the world itself saves for a map**, which is what
+  makes a printed map survive MapGUI being uninstalled.
 
 Everything else is plain Paper API - terrain from `BlockData#getMapColor`, most input from ordinary events. The
 other modules build against `paper-api` alone, in seconds, with no dev bundle.

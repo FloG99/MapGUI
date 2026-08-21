@@ -5,7 +5,7 @@ commitment about the future - see [the roadmap](roadmap.md) for that.
 
 ## Bandwidth is the budget, not compute
 
-The single most useful thing to internalise, because it points optimisation effort in a non-obvious
+The single most useful thing to internalize, because it points optimization effort in a non-obvious
 direction: nothing here is compute-bound and it probably never will be.
 
 A map is 128x128 = 16,384 bytes, which is the entire render target. A full repaint is a tree walk over a few

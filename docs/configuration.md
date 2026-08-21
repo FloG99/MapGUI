@@ -53,6 +53,10 @@ Placing is ended by right-click or Q rather than a command, since the preview is
 
 ## config.yml
 
+The core of it is below. Two sections are large enough to live with the feature they configure - `camera:` in
+[camera](camera.md#what-to-watch) and `video:` in [video](video.md#mp4-and-live-streams) - and the file itself
+carries the same notes as comments, so an admin who never opens these docs is not missing anything.
+
 ```yaml
 commands:
   # /mapgui and everything under it. Off means never registered, so nothing of MapGUI's shows up in a
@@ -69,6 +73,25 @@ prompts:
   # inventory tricks; "anvil" renames an item.
   # Other plugins can register their own and be named here.
   default: dialog
+
+hand:
+  # How a GUI in a player's hand is carried, unless the screen or the plugin opening it says otherwise:
+  # popup, item, pinned or offhand. See docs/hand.md, which is entirely about this choice.
+  carry: popup
+
+  # Which hotbar slot, 0 to 8, a pinned map sits in. Ignored by the other modes.
+  slot: 8
+
+  # Whether the player may move a pinned map to another slot of their own - never out of their inventory.
+  movable: false
+
+  # Whether the map may be carried in the offhand, for `item` and `pinned`. Always true for `offhand`,
+  # always false for `popup`, which claims both hands to draw itself big.
+  offhand: false
+
+  # What gives a map in the OFFHAND the player's mouse. A map in the main hand always has it, and so does a
+  # popup, so this is only ever about the offhand: main-hand, swap-hands, right-click, sneak, always, never.
+  focus: main-hand
 
 animations:
   # Ease scrolling and color changes instead of snapping.
@@ -112,6 +135,11 @@ walls:
   # view-distance - beyond that the client has unloaded the chunk and thrown the frames away.
   view-distance: 48
 
+  # Send a short looping animation once instead of streaming it, and play it by pointing each client at the
+  # frames it already has. Only for animations of 32 frames or fewer; the cost is memory and one burst.
+  # See docs/walls.md, "A loop sent once instead of forever".
+  prerender: true
+
   # Longest edge videos are decoded at. Bigger walls upscale rather than decoding again, since a
   # resize would otherwise mean re-reading the file for every step. 256 is 1:1 for a 2x2 wall.
   #
@@ -132,6 +160,7 @@ a ceiling rather than a default. See [animation](animation.md#frame-limits).
 | `plugins/MapGUI/config.yml` | the above |
 | `plugins/MapGUI/videos/` | drop GIFs here to make them placeable |
 | `plugins/MapGUI/walls.yml` | where placed walls are recorded. Written on every change, not on shutdown |
+| `plugins/MapGUI/assets/` | resource packs the camera draws with, which outrank any a plugin supplies. See [camera](camera.md#supplying-them-yourself) |
 
 `walls.yml` holds only a position, a size and a content name. A wall whose content is missing - a deleted GIF,
 a plugin that is not loaded - stays in the file and simply does not come up, and returns when its content

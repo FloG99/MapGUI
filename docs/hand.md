@@ -149,7 +149,7 @@ player and that screen. With no registered name behind it, though, so when the i
 screen ends and the item goes with it - MapGUI handed it over, so MapGUI takes it back. An item somebody found for
 themselves is never confiscated that way.
 
-## Giving a resource pack something to recognise
+## Giving a resource pack something to recognize
 
 A filled map is drawn from its `map_id` component and nothing else - the client reads no NBT, no custom data, no
 name. So the id is the only handle a pack has on one map item as against another, and by default MapGUI hands out
@@ -188,8 +188,8 @@ like a phone rather than a rolled-up paper map:
 }
 ```
 
-A map id serialises as a plain integer, so `when` is the number itself. Keep the `fallback` as vanilla's own
-definition or every other map in the game loses its colours.
+A map id serializes as a plain integer, so `when` is the number itself. Keep the `fallback` as vanilla's own
+definition or every other map in the game loses its colors.
 
 **Take one off the top**, `Integer.MAX_VALUE - 1` and downwards. The range has three parts:
 
@@ -202,7 +202,7 @@ definition or every other map in the game loses its colours.
 Nothing polices which of the thousand you take, so two plugins both reaching for `MAX_VALUE - 1` would collide. If
 yours is one of several on a server, count down from somewhere of your own rather than from the top.
 
-A collision costs you the model and nothing else: MapGUI recognises its own items by the GUI name in their
+A collision costs you the model and nothing else: MapGUI recognizes its own items by the GUI name in their
 persistent data, not by the id, so two screens sharing one still work.
 Each player is sent their own pixels for it, so a pinned id shows everybody their own screen - two copies in sight at
 once are the only exception, and they show one picture between them.

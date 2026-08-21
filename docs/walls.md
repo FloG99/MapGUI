@@ -53,6 +53,37 @@ Only for `content`, and only when the content repeats exactly - the steps are pa
 anything reading the world, the clock or the viewer freezes as it was. A menu cannot be prerendered at all,
 since it has to answer clicks.
 
+### Nobody is looking at it
+
+A wall in range of somebody facing the other way is a wall being streamed to somebody who cannot see it. That
+is off by default:
+
+```java
+.cullOffScreen(false)     // stream to everyone in range, looking or not
+```
+
+On - which is the default - a viewer stops being sent pixels while they are behind the wall, turned far enough
+away from it, or have something solid in the way. They stay a viewer throughout: their maps, their frames and
+their own screen are untouched, so this pauses the stream rather than taking the wall down, and turning back
+costs one frame at most. Nothing at all if nothing changed while they were away, which is what makes it safe
+on a menu or a still picture.
+
+Everything about it errs towards sending. The view it assumes is wider than anyone's, because the server is
+never told a client's field of view, so it saves on somebody facing away rather than trimming the edges of
+what they can see. It keeps sending for half a second after they look away, since heads turn quickly. Whether
+something is in the way is traced to nine points across the picture, so a wall showing round the side of a
+pillar goes on being sent - and glass, panes, bars, ice and barriers do not hide one, whatever a click aimed
+through them would do.
+
+What it does not save is *drawing*: the wall is painted every frame for as long as anybody is in range,
+whether or not any of them is looking. And `prerender` ignores it, having no stream to pause.
+
+### Something drawn on top
+
+`overlay(WallContent)` paints over whatever the wall already shows, rather than replacing it the way `content`
+does. Transparent pixels let what is underneath through, so it stacks with a menu - which is what the
+placement preview's grid is drawn as.
+
 ### Floors and ceilings
 
 They work, with one thing you do not get to choose: which way the picture faces. An item frame on a

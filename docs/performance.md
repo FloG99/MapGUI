@@ -23,7 +23,7 @@ that.
 |---|---|
 | **Frame rate** | `animations.fps`, `animations.loop-fps`, `walls.fps`. Halving the rate halves the bytes |
 | **Area** | the cost is the rectangle that *changed*, so a small animation is cheap and a full-bleed one is not |
-| **Audience** | `walls.view-distance` decides who is sent anything at all |
+| **Audience** | `walls.view-distance` decides who is sent anything at all, and a wall stops sending to anyone in range who is not looking at it |
 
 ## What the wire actually carries
 
@@ -45,6 +45,10 @@ to each other, one streamed and one prerendered, measured about 3 Mbit/s against
 
 - **A screen nobody is looking at.** Nothing is sent while it is put away.
 - **A wall in an empty room.** The viewer set is checked before anything is painted.
+- **A wall nobody is facing.** A viewer behind it, turned away from it, or with something solid in the way
+  stops being sent pixels until they look back - see
+  [nobody is looking at it](walls.md#nobody-is-looking-at-it). It pauses the stream rather than the paint, so
+  it is bandwidth this saves and not main-thread time.
 - **A still picture.** Nothing goes dirty, so it is sent once and then never again. Give it `fps(1)` or
   `fps(0)` and it costs one send for its whole life.
 - **Hover, clicks and cursor movement on a wall.** Cursors are map markers rather than pixels, so a pointer

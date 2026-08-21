@@ -4,7 +4,7 @@ Two terminals, and you get save-and-look in a couple of seconds:
 
 ```
 ./gradlew -t :examples:gallery:classes     # recompile on save
-./preview                                  # http://127.0.0.1:7654
+./preview.sh                               # http://127.0.0.1:7654, or preview.cmd on Windows
 ```
 
 Edit a color, save, and the browser updates - the server reloads the recompiled class in a fresh classloader
@@ -14,9 +14,10 @@ Only the previewed module reloads. MapGUI itself sits in the parent classloader,
 or a widget needs the preview restarted. Stop it with Ctrl+C, or `curl http://127.0.0.1:7654/shutdown` - the
 banner prints both, along with the pid.
 
-Use the `preview` script rather than `gradlew previewServe` directly: Gradle's rich console pins a progress bar
-to the bottom line, so a task that never finishes sits at "93% EXECUTING" forever and covers the server's own
-output. The script just adds `--console=plain`.
+Use the `preview.sh` / `preview.cmd` script rather than `gradlew previewServe` directly: Gradle's rich console
+pins a progress bar to the bottom line, so a task that never finishes sits at "93% EXECUTING" forever and
+covers the server's own output. The script just adds `--console=plain`, and passes anything else you give it
+straight through.
 
 ## It is interactive
 
@@ -44,13 +45,17 @@ On a 128 pixel canvas that answers "why is this three pixels off" far faster tha
 ## Your own screen
 
 ```
-./gradlew previewServe -Pscreen=com.example.MyScreen -Pmodule=my-plugin
+./gradlew previewServe -Pscreen=com.example.MyScreen -Pmodule=examples/todo
 ```
+
+`-Pmodule` is the module's directory, relative to the repository root - the compiled classes are read from
+`<module>/build/classes/java/main` by a child classloader, which is what makes a rebuild appear without a
+restart. `-Pport` moves it off 7654.
 
 Or render a single PNG, which is also how you capture screenshots in CI:
 
 ```
-./gradlew preview -Pscreen=com.example.MyScreen -Pscale=4
+./gradlew preview -Pscreen=com.example.MyScreen -Pscale=4 -Pout=build/shot.png
 ```
 
 Both use the real layout engine, the real map font and the real palette, so colors are quantized exactly as

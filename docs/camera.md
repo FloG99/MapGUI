@@ -238,11 +238,11 @@ is by day.
 The curve from level to multiplier is the client's own, reproduced rather than approximated, with the brightness
 slider **all the way up** - which is where most people leave it. It is not linear and no guess at its shape is close:
 light 7 is a fifth of full and not a half, and then the slider blends that toward a gentler curve, and then the whole
-table is pulled four percent toward grey, which is why full daylight comes out at 0.99 rather than 1.
+table is pulled four percent toward gray, which is why full daylight comes out at 0.99 rather than 1.
 
 **And then a lift under the bottom of that curve, which is `camera.shadow-lift` and is the one lighting number that is
 a taste.** The argument for it is real: a screen draws a night in thousands of near-blacks and your eye adapts to them,
-while a map has 143 colours and a viewer whose eye is adapted to whatever else is on their monitor - so a *faithful* dark
+while a map has 143 colors and a viewer whose eye is adapted to whatever else is on their monitor - so a *faithful* dark
 can read as a hole in the picture rather than as a cave.
 
 Both ends of it were shipped and both were wrong, which is why it is a setting now rather than a constant.
@@ -251,9 +251,9 @@ At **0.6**, where it started, a wholly unlit block drew at 154 of 255 on stone w
 room came out very nearly as bright as a lit one, which is not a legible cave, it is no cave at all. At **0**, exactly what
 the client does, that block is 4 of 255 and a dark room is a black rectangle.
 
-The default is **0.2**: that block lands at 28 of 255, dark but legibly a room. The lift is weighted onto the dark end,
-so the bright half barely moves - light 11 of 15 goes from 0.872 to 0.881, and full daylight is 253 whatever it is set to.
-Turn it up for a legible cave, down for a faithful one; past about 0.3 dark stops reading as dark.
+The default is **0.3**: that block lands at 40 of 255, dark but legibly a room. The lift is weighted onto the dark end,
+so the bright half barely moves - light 11 of 15 goes from 0.872 to 0.885, and full daylight is 253 whatever it is set to.
+That is about as far up as it goes while dark still reads as dark; turn it down for a faithful cave.
 
 Night is the same decision by the other lever: the client takes 11 off sky light at midnight, leaving open ground at
 level 4, and so does this. It used to take 7, which left midnight looking like dusk.
@@ -270,17 +270,17 @@ instead - the nearest thing to a neutral near-black in the palette - and the hor
 dome keeps a faint gradient instead of flattening to one shade. Warm sky belongs to dawn and dusk, where the glow
 band puts it near the horizon on the sun's own side.
 
-**The band at dawn and dusk is the client's own, colour and shape both.** Its colour comes out of the same arithmetic
+**The band at dawn and dusk is the client's own, color and shape both.** Its color comes out of the same arithmetic
 the client bakes its `minecraft:visual/sunrise_sunset_color` keyframes from, and its shape is the fan the client
 draws: an apex on the horizon where the sun is going down, a rim that runs the whole way round the camera, and the
-colour interpolated between. That is worth taking rather than approximating, because the shape is not something an
+color interpolated between. That is worth taking rather than approximating, because the shape is not something an
 eye can tune from a screenshot - the band covers **the whole half of the sky the sun is on**, tapering to nothing at
 exactly a quarter turn round, and it is only about 18 degrees tall at its middle, less as it fades. Any falloff
 written to look right beside the sun is wrong ninety degrees away from it, in a way you only notice standing there.
 
 **And it hangs far deeper than it rises**, which is the other half of what a sunrise looks like. Above the sun the
 fan's rim ends it inside those 18 degrees; below there is no rim in the way, so the sheet carries on under the camera
-and the colour goes down with it - eighteen degrees over the sun there is nothing left, eighteen under there is still
+and the color goes down with it - eighteen degrees over the sun there is nothing left, eighteen under there is still
 seven tenths. Nothing hides that half either: the client's dark disc is drawn only while the eye is *below* the
 world's horizon height, so anybody standing on the surface at dawn is looking at the underside of this wherever the
 world does not cover it. In a photograph that is the bottom of the frame, past where the copied world runs out.
@@ -310,7 +310,7 @@ which is where a tenth of the way to full is a third again as bright.
 **The Nether's air hides distance by itself.** The client's fog there is not optional and not far off: from a twentieth
 of the render distance out to half of it, with the distance capped at 192 blocks first, so nothing is ever sharper than
 96 blocks away. Its color is the biome's own `fog_color` rather than one constant for the dimension - a crimson forest
-is dark red, a soul sand valley teal, basalt deltas grey - and that color is read from the same place the grass and
+is dark red, a soul sand valley teal, basalt deltas gray - and that color is read from the same place the grass and
 water colors are.
 
 ## Distant leaves
@@ -427,7 +427,7 @@ It is **advisory**. Nothing stops a plugin capturing without asking - it is the 
 with what the viewers are getting and the two settings that decided it, since 6.7 fps means one thing when the budget
 ran out and quite another when the ceiling is 6.
 
-A still taken by a plugin that never asks is not paced at all, which is the intended behaviour: one photograph is one
+A still taken by a plugin that never asks is not paced at all, which is the intended behavior: one photograph is one
 photograph. `camera.reuse.chunks.stills-for-ms` is worth turning on alongside a live view - see
 [reuse and caps](#reuse-and-caps).
 
@@ -470,7 +470,7 @@ its own plane is already inside the half-space and is not clipped at all - there
 
 ### Framing it on a window rather than an angle
 
-A field of view can only describe a frame centred on where the camera points. A reflection has to look **straight out of
+A field of view can only describe a frame centered on where the camera points. A reflection has to look **straight out of
 the glass** rather than at the mirror it belongs to - that is what lets two mirrors on one wall agree about the room - so
 a mirror the viewer is not squarely in front of sits off to one side of the frame, and an angle can only reach it by
 widening until it does. Everything the widening adds is room the mirror does not show and resolution it does not get.
@@ -541,7 +541,7 @@ shape rather than of anybody looking at it, and is built once.
 Worth stating, because two of them are the difference between a reflection and a video of a room, and neither is
 something the API can do for you.
 
-**Look straight out of the glass, not at the middle of the mirror.** Aiming at a centre makes the projection a property
+**Look straight out of the glass, not at the middle of the mirror.** Aiming at a center makes the projection a property
 of that particular mirror, so two mirrors side by side photograph the room slightly differently and the join shows.
 Along the plane's own normal, the projection depends only on the plane and the viewer - which every mirror on that wall
 shares, so any number of them crop out of one consistent picture and line up exactly.
@@ -836,7 +836,7 @@ filing a bug.
 One rule behind all of those: an entity is drawn from vanilla's geometry where
 [`EntityMeshes`](../mapgui-camera/src/main/java/de/flog99/mapgui/render/EntityMeshes.java) names a mesh for it (every
 mob a normal world contains, plus armor stands, end crystals, minecarts and every kind of boat), and from its bounding
-box where the assets carry a texture at `entity/<type>`. A type with neither is left out rather than drawn as a grey
+box where the assets carry a texture at `entity/<type>`. A type with neither is left out rather than drawn as a gray
 box or as the missing-texture checkerboard.
 
 Paintings and item frames are not among them. A painting is the slab the client draws, at its variant's own size,
@@ -846,7 +846,7 @@ with whatever is hanging in it, at the place and size the client hangs one.
 - **The text on a sign** is drawn, front and back, in the sign's own dye and at the place the client's own transform
   puts it: from the middle of the block, turned to the way the sign faces, dropped and pushed back against the wall
   for a wall sign, then a third of a block up and a hair proud of the board. The lettering is drawn per capture with
-  MapGUI's map font rather than read from anywhere - a sign's text is four strings, and the client rasterises them
+  MapGUI's map font rather than read from anywhere - a sign's text is four strings, and the client rasterizes them
   every frame too. Hanging signs are the exception: their board is a different size on a different chain, so their
   text is left out rather than drawn in the wrong place.
 
@@ -856,13 +856,13 @@ with whatever is hanging in it, at the place and size the client hangs one.
   one. End portals and end gateways get a built-in stand-in instead, since the client draws those from a shader
   rather than from a mesh. What is standing on a shelf is drawn too, at the three places the client stands it -
   though a shelf can be told to drop its items to the bottom instead, and that flag is on the block entity's own
-  data with nothing in Bukkit to read it, so they are always drawn centred.
+  data with nothing in Bukkit to read it, so they are always drawn centered.
 
 - **The items the client draws in code** - a chest, a shulker box, a conduit, a shield, a banner, a trident, a head, a
   decorated pot, a copper golem statue - are drawn from the same mesh the block entity is, placed inside the item's
   box by the transform the item definition states.
 
-  **A held or dropped one carries no data:** a banner is drawn in its base colour with no patterns, a pot with four
+  **A held or dropped one carries no data:** a banner is drawn in its base color with no patterns, a pot with four
   plain sides, and a statue in the standing pose whichever it really is. All three live in the stack's components,
   which the asset layer that resolves an item model never sees. Where they stand in the world they are drawn in full.
 
@@ -949,7 +949,7 @@ with whatever is hanging in it, at the place and size the client hangs one.
 - **A villager's clothes, a horse's markings, a tropical fish's pattern and glowing eyes**, each a second pass over
   the same mesh, composited rather than layered. Eyes are what made an enderman's white: the skin holds white eyes
   and the layer over it holds pink ones, so a capture that skipped the layer drew the pair vanilla never shows
-  anybody. A tropical fish is the extreme case - two greyscale textures and two dyes rather than one of 3072
+  anybody. A tropical fish is the extreme case - two grayscale textures and two dyes rather than one of 3072
   pictures.
 
   Compositing costs the one thing ordering gave vanilla - it cannot hide the robe's hood where a hat covers it - and
@@ -963,9 +963,9 @@ with whatever is hanging in it, at the place and size the client hangs one.
   inflation and a chestplate ends up inside the chest.
 
   What each piece is made of comes from its own json rather than from its name, which matters for leather - a
-  greyscale shape the client multiplies by a dye colour, and so one that drew as iron when probed for by name. The
+  grayscale shape the client multiplies by a dye color, and so one that drew as iron when probed for by name. The
   json says the two things a name cannot: that a layer may be several passes, and that a pass is dyeable and with
-  what colour when nobody has dyed it.
+  what color when nobody has dyed it.
 
 - **An in-hand item**, out of the item model's own `display` block and the client's own hand chain, so a plain item
   lies flat with its face to the sky, a sword stands up across the body and a bow is upright and turned a further
@@ -979,7 +979,7 @@ with whatever is hanging in it, at the place and size the client hangs one.
   alternative is a rim around the 16x16 frame, which is a rim around nothing for most icons - **347 of 26.2's 796
   item icons never touch their frame**, and measured edge on, a bow, an apple, a stick, a pickaxe and a hoe drew
   nothing at all. Seen face on the picture is unchanged, checked over all 796 icons for zero pixels differing in
-  colour.
+  color.
 
   **What the stack says it draws as wins over what it is.** Vanilla's `item_model` component overrides the model an
   item uses, so a stick given `item_model=minecraft:diamond_sword` is a sword to everybody looking at it, and a
@@ -994,7 +994,7 @@ with whatever is hanging in it, at the place and size the client hangs one.
   states up to seven, so a held block is one snapshot per texture; 606 of 731 block items state a single texture and
   cost what they always did.
 
-  Which colour a tinted face takes comes from the item's definition rather than from the block, and the two differ:
+  Which color a tinted face takes comes from the item's definition rather than from the block, and the two differ:
   the same `oak_leaves` model is a fixed green in a hand and the biome's green in the world. A **dropped** block is
   the same model under the client's `ground` transform rather than its `thirdperson` one - a quarter of a block
   rather than three eighths. A dropped *sprite* stays a single flat quad: it is turned to face whoever is looking, so

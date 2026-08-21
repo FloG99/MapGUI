@@ -45,24 +45,16 @@ see [design notes](design-notes.md) for the reasoning behind the closed ones.
 - **Markers could carry a `Component`.** The transport builds `MapDecoration` names itself, so a marker label
   could be styled instead of being a plain `String`. It stays a String because that is what
   `Label#revealOnHover` produces, and half-supporting it would be worse than not.
-- **Horse and llama models.** Everything else people photograph has one now. These two have two-segment legs and an
-  angled neck, and their UVs could not be read off the texture with any confidence, so they stay bounding boxes
-  until somebody can check them against the real thing.
-- **Held items, armor and name tags** on a captured entity.
-- **A live camera view.** The trace is already fast enough at a low resolution - the constraint is egress, since
-  every pixel changes every frame and the dirty rectangle buys nothing. The way through is that turning your head
-  does not invalidate a `ChunkSnapshot`, only moving does, so a look-around preview can re-trace for free and
-  only re-capture when the player crosses a block.
+- **Name tags** over a captured entity. Held items and armor are drawn; the label above a head is not.
 - **Voxel LOD past a distance.** Marching a 4x4x4 mip of averaged colors beyond about 64 blocks. At map
   resolution a block that far off is well under a pixel, so averaging is antialiasing rather than a compromise.
 
 ## Video
 
-- **Live streams.** Two open problems: a frame budget so a slow decode cannot stall the main thread, and a
-  source that is not a file. Read the bandwidth note in [design notes](design-notes.md) first - the constraint
-  is egress per viewer, not render time.
 - **Temporal quantization.** See "ordered dithering fights the dirty rectangle". Probably the single highest
   value change for video.
+- **Seeking, and a position a plugin can set.** A `LiveSource` plays from where it opened. A film on a wall
+  wants a scrub bar, which means asking the decoder for a timestamp rather than for the next frame.
 
 ## Preview
 

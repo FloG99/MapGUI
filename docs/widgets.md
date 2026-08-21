@@ -103,15 +103,31 @@ afterwards it applies to whatever draws next, including text and images, which h
 ### Fonts
 
 The vanilla map font is the default and needs nothing. For anything else, `AwtFont` takes any font the JVM can
-load - a TrueType file shipped with your plugin, at any size - and rasterizes each glyph once. A screen picks
-its font by overriding `font()`:
+load - a family the JVM already has, or a TrueType file shipped in your own jar - and rasterizes each glyph
+once. A screen picks its font by overriding `font()`:
 
 ```java
-private static final TextFont TITLE = AwtFont.load(MyPlugin.fontFile(), 16f, true);
+private static final TextFont TITLE = AwtFont.named("SansSerif", Font.PLAIN, 16, true);
 
 @Override
 public TextFont font() {
     return TITLE;
+}
+```
+
+`load(InputStream, size, antiAliased)` is the other way in, for a face you ship inside your own jar. It reads
+a stream rather than a file, and it throws `IOException`, so it wants a method rather than a field
+initializer:
+
+```java
+private static final TextFont TITLE = title();
+
+private static TextFont title() {
+    try (InputStream in = MyPlugin.class.getResourceAsStream("/font/title.ttf")) {
+        return AwtFont.load(in, 16f, true);
+    } catch (IOException e) {
+        return AwtFont.named("SansSerif", Font.PLAIN, 16, true);
+    }
 }
 ```
 
@@ -154,9 +170,11 @@ scrolling stay with `Text`, on plain text.
 ## Reusing a look
 
 ```java
+private static final Color ACCENT = Theme.DARK.accent();
+
 private static final Consumer<Button> FILLED = b -> b
-        .background(ACCENT).radius(4).textColor(WHITE)
-        .hoverBackground(WHITE).hoverTextColor(ACCENT).transition(220);
+        .background(ACCENT).radius(4).textColor(Color.WHITE)
+        .hoverBackground(Color.WHITE).hoverTextColor(ACCENT).transition(220);
 
 Button("Save").apply(FILLED).onClick(this::save)
 ```
@@ -187,7 +205,7 @@ seconds reads as broken; a spinner reads as busy**, which is the truth. Keep the
 reader wanting one can go and ask.
 
 `size`, `dots`, `period` and `color` are the knobs, and the defaults are a 14-pixel ring of eight, one turn a
-second. It steps from dot to dot rather than sliding between them: on a 128-pixel map of 61 colours a smooth fade
+second. It steps from dot to dot rather than sliding between them: on a 128-pixel map of 61 colors a smooth fade
 lands on the same few indices anyway, so snapping is crisper to look at *and* cheaper to send.
 
 `size` is a limit rather than an order. A ring only lands on whole pixels when the gap between two facing dots is
@@ -266,8 +284,11 @@ Button("Delete").cursorIcon("RED_X")
 Any node can carry a tooltip that sits right under the pointer, with room for a few words:
 
 ```java
-Toggle(on).caption("Show other players")
+Toggle(settings::showOthers).caption("Show other players")
 ```
+
+`Toggle` takes a `BooleanSupplier` rather than a boolean, so it reads the current answer every time the screen
+is built rather than the one that was true when the tree was made.
 
 ## Long text
 

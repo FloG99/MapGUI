@@ -5,7 +5,7 @@ There are two artifacts with two audiences, and they go to different places.
 | | `mapgui-api` | `MapGUI.jar` |
 |---|---|---|
 | For | plugin **developers** | **server owners** |
-| Goes to | Maven Central | a GitHub release, then Hangar and Modrinth |
+| Goes to | Maven Central | a GitHub release, then Hangar |
 | Obtained by | one line in a build file | downloading it into `plugins/` |
 | Contains | only the classes you compile against | everything - api, layout, nms, runtime |
 | Used at | compile time | runtime |
@@ -151,10 +151,9 @@ They then add `mavenLocal()` and depend on `io.github.flog99:mapgui-api:1.0.0-SN
 
 ## Where the plugin jar goes
 
-Maven Central is for developers. Server owners want [Hangar](https://hangar.papermc.io) and
-[Modrinth](https://modrinth.com), which is where Paper points them - both are manual uploads today, and both
-take the same `MapGUI.jar` the release workflow already produces.
+Maven Central is for developers. Server owners want [Hangar](https://hangar.papermc.io), which is where Paper
+points them, and it takes the same `MapGUI.jar` the release workflow already produces. A manual upload today.
 
-Publish both from the same tag, so the version a developer compiled against and the version a server is
-running are the same number. The API a plugin compiles against must not be *newer* than the plugin installed -
-that is the one direction that breaks, with a `NoSuchMethodError` on whatever was added in between.
+Publish it from the same tag, so the version a developer compiled against and the version a server is running
+are the same number. The API a plugin compiles against must not be *newer* than the plugin installed - that is
+the one direction that breaks, with a `NoSuchMethodError` on whatever was added in between.

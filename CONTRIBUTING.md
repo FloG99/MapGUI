@@ -15,7 +15,7 @@ module builds against `paper-api` alone, in seconds.
 ```
 ./gradlew runServer          # a Paper test server with the plugin and every example loaded
 ./gradlew test               # the unit tests, no server involved
-./preview                    # the headless preview, see docs/preview.md
+./preview.sh                 # the headless preview, see docs/preview.md
 ```
 
 ## Where things go
@@ -25,8 +25,9 @@ See [docs/architecture.md](docs/architecture.md) for the module layout. Two rule
 - **`mapgui-layout` must not depend on Bukkit.** It is what lets the layout engine be unit tested and rendered
   headlessly. Anything it needs from the server arrives as an interface.
 - **`mapgui-nms` is the only module allowed to touch `net.minecraft`.** If something needs server internals, it
-  goes behind an interface in `mapgui-api` and gets implemented there. Two things live there today and there
-  should not be a third without a reason written down.
+  goes behind an interface in `mapgui-api` and gets implemented there. Four live there today - `MapTransport`,
+  `PacketInput`, `RotationController` and `SavedMapPixels` - and there should not be a fifth without a reason
+  written down.
 
 Adding to `mapgui-api` adds to what a plugin compiles against, so it is the hardest thing to take back. Prefer
 the plugin module unless a consumer genuinely needs it, and mark framework-only entry points
@@ -72,12 +73,12 @@ old code is not testing the fix.
 
 ## Licensing
 
-MapGUI is LGPL-3.0-or-later, and anything you contribute to it is under that licence too. There is no CLA and
-no copyright assignment - you keep your copyright, the project keeps the licence.
+MapGUI is LGPL-3.0-or-later, and anything you contribute to it is under that license too. There is no CLA and
+no copyright assignment - you keep your copyright, the project keeps the license.
 
 Files under `examples/` are MIT instead, so that people can copy from them freely. Contributions there are MIT.
 
-Do not paste code in from a source under an incompatible licence, including anything a model generated from
+Do not paste code in from a source under an incompatible license, including anything a model generated from
 unclear provenance. If a snippet came from somewhere, say where in the PR.
 
 ## Pull requests

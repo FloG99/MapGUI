@@ -9,7 +9,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.github.flog99:mapgui-api:1.1.0")
+    compileOnly("io.github.flog99:mapgui-api:2.0.0")
 }
 ```
 
@@ -52,6 +52,8 @@ A screen is a class with one job: describe itself.
 import static de.flog99.mapgui.ui.Ui.*;
 
 public final class CounterScreen extends Screen {
+
+    private static final Color ACCENT = Theme.DARK.accent();
 
     private final State<Integer> count = state(0);
 

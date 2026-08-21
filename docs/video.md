@@ -80,9 +80,13 @@ A GIF is decoded once into memory and drawn from there. A video or a stream is d
 thread, and the wall paints whatever frame is current when it comes round:
 
 ```java
-LiveSource source = new FfmpegSource("/media/clip.mp4", 256, 256, true);
 MapGui.get().wall().at(block, face).size(2, 2).content(WallContent.live(source)).open();
 ```
+
+`WallContent.live` takes a `LiveSource`, which is the interface in `mapgui-api`. MapGUI's own FFmpeg
+implementation of it lives in the plugin rather than the API, so it is not something your plugin can name at
+compile time - a file or a stream in `config.yml` is how you reach that one, and `LiveSource` is there for a
+frame source of your own: a capture card, a render, another plugin's output.
 
 That is what makes a two hour film possible where a GIF of it would not fit in memory, and it is why nothing
 waits: FFmpeg scales inside the decoder, quantizing is a table lookup per pixel, and a stall in the stream

@@ -88,7 +88,7 @@ plugins/
 ```
 
 2. **Restart the server.** `/reload` is not enough: the examples declare `load: BEFORE` on MapGUI, and that
-   ordering is only honoured at startup.
+   ordering is only honored at startup.
 3. As an operator, run any of these. Every permission defaults to `op`, so there is nothing to configure first.
    **The demos register no commands of their own** - everything they can do is reached through `/mapgui hand open`
    and `/mapgui wall place`, so installing them costs your server no command surface at all.
@@ -96,6 +96,7 @@ plugins/
 | Command | Shows |
 |---|---|
 | `/mapgui hand open gallery` | every widget, and the layout rules side by side |
+| `/mapgui hand open type` | a TrueType face at any size, and Adventure components drawn with their own colors |
 | `/mapgui hand open todo` | state, scrolling, text prompts, per-row closures |
 | `/mapgui hand open minimap` | terrain rendering, and a screen with no cursor - worn in the offhand, swap hands to put it away |
 | `/mapgui hand open camera` | a screenshot of the world, and a screen that aims instead of pointing - offhand, raised as a mode, swap hands to put it away |
@@ -108,7 +109,7 @@ plugins/
 Move the mouse to aim, **right-click to select**, and the wheel to scroll. **Q closes** the ones that fill the
 hotbar; the minimap and the camera are worn in the offhand, where **swapping hands** puts them away. Walking, jumping
 and sneaking all still work. The sketch board draws for as long as you **hold** the right button - left-click cycles
-the colour, sneak and left-click clears it, shift+scroll sizes the brush. Placing a wall is left-click for the bottom-left corner, look at the far corner to
+the color, sneak and left-click clears it, shift+scroll sizes the brush. Placing a wall is left-click for the bottom-left corner, look at the far corner to
 size it, then left-click again - or right-click to cancel.
 
 Delete the examples jar when you are done; that is the whole off switch, and MapGUI keeps working without it.
@@ -125,7 +126,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.github.flog99:mapgui-api:1.1.0")
+    compileOnly("io.github.flog99:mapgui-api:2.0.0")
 }
 ```
 
@@ -191,7 +192,7 @@ What that means in practice:
 - **Writing a plugin against `mapgui-api`** carries none either. Your plugin is your own, closed and paid if you
   like: you depend on MapGUI, you do not distribute it, and LGPL exists precisely to permit that.
 - **Modifying MapGUI itself** and shipping your version is the one case with a condition - publish those
-  modifications under the same licence.
+  modifications under the same license.
 
 The examples are [MIT](examples/LICENSE) instead, deliberately, so you can lift code from them straight into
 your own plugin without inheriting anything.
