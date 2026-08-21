@@ -63,6 +63,22 @@ jobs:
             -F bundle=@build/central-bundle.zip \
             "https://central.sonatype.com/api/v1/publisher/upload?name=MapGUI-$VERSION&publishingType=USER_MANAGED"
 
+      # GitHub's generated notes enumerate pull requests and nothing else, so a release whose work went
+      # straight to main comes out nearly empty: v2.0.0 was 45 direct commits and 4 PRs, and only the 4
+      # appeared. This version's changelog section goes in front of them. The generated list still follows
+      # it, which is what credits an outside contributor.
+      #
+      # Empty is fatal rather than skipped. A release with no notes is one nobody can read, and the section
+      # is written before the tag is pushed or it is not written at all.
+      - name: Take this version's section out of the changelog
+        run: |
+          awk -v v="## $VERSION" '$0 == v {f=1; next} /^## /{f=0} f' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## $VERSION' section" >&2
+            exit 1
+          fi
+          echo "$(wc -c < release-notes.md) bytes of notes"
+
       # The plugin is all a server needs. The examples are optional, and the two library jars are for anyone
       # who would rather drag a jar in than add a dependency - sources included, for a usable IDE.
       #
@@ -75,6 +91,7 @@ jobs:
         with:
           draft: true
           generate_release_notes: true
+          body_path: release-notes.md
           fail_on_unmatched_files: true
           files: |
             mapgui-plugin/build/libs/MapGUI-${{ env.VERSION }}.jar
