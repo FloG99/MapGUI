@@ -58,15 +58,17 @@ public final class RayCaster {
      * not a legible cave, it is no cave at all. At <b>0</b>, which is exactly what the client does, that same block is 4
      * of 255 on stone and a dark room reads as a black rectangle.
      *
-     * <p>The default is a fifth of the way up instead: an unlit block lands at 28 of 255, dark but legible, while the
-     * bright end barely moves - light 11 goes from 0.872 to 0.881, so a lit room is still the lit room the client draws.
+     * <p>The default is not quite a third of the way up instead: an unlit block lands at 40 of 255, dark but legible,
+     * while the bright end barely moves - light 11 goes from 0.872 to 0.885, so a lit room is still the lit room the
+     * client draws. That is about as far up as this goes while a dark room still reads as dark; above it the picture
+     * flattens rather than the cave getting clearer.
      *
      * <p>The falloff moves with it. The table has to stay non-decreasing - an unlit block drawing brighter than a
      * torchlit one is worse than either being dark - and the client's own curve is nearly flat across the bottom, so
      * there is a ceiling: at a falloff of 2, 0.55 already drew light 1 darker than light 0. {@code LightTableTest} holds
      * that line whatever these are set to.
      */
-    public static final float SHADOW_LIFT = 0.2f;
+    public static final float SHADOW_LIFT = 0.3f;
 
     /** See {@link #SHADOW_LIFT}: lower spreads the lift further up the range, and too low inverts the table. */
     private static final double SHADOW_FALLOFF = 1.5;

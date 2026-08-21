@@ -127,12 +127,12 @@ camera:
   # faithful and often not what you want, because a map is not a screen - it has 143 colours to say "dark" with,
   # and a viewer whose eye is adapted to the rest of their monitor rather than to a cave.
   #
-  # 0.2 lands that same block at 28 of 255 - dark, but you can see it is a room. The lift is weighted onto the
-  # dark end, so a lit room barely moves: light 11 of 15 goes from 0.872 to 0.881.
+  # 0.3 lands that same block at 40 of 255 - dark, but you can see it is a room. The lift is weighted onto the
+  # dark end, so a lit room barely moves: light 11 of 15 goes from 0.872 to 0.885.
   #
-  # Turn it up for a legible cave, down for a faithful one. Past about 0.3 a dark room stops reading as dark at
-  # all, and the far end is a flat grey picture.
-  shadow-lift: 0.2
+  # That is about as far up as it goes while dark still reads as dark. Turn it down for a faithful cave; above
+  # here a dark room flattens toward grey rather than getting clearer, and the far end is a flat grey picture.
+  shadow-lift: 0.3
 
   # How far entities are drawn in a capture, in blocks. Every one in range is a model to assemble, so this is
   # what the entity half of a capture costs - and past about this far a mob is a couple of pixels on a map.

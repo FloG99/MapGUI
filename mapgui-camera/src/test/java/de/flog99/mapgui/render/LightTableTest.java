@@ -41,7 +41,7 @@ class LightTableTest {
      * The lift lands where it was aimed: on the dark end and almost nowhere else.
      *
      * <p>Which is what makes it safe to turn up. At the default an unlit block goes from 0.03 - the client's own figure,
-     * and four of 255 on stone, which reads as a hole rather than as a dark room - to about a fifth of the way up, while
+     * and four of 255 on stone, which reads as a hole rather than as a dark room - to about a third of the way up, while
      * a well lit block moves by less than a hundredth. A lift that brightened the top would be a floor under everything
      * and a flat picture.
      */
