@@ -168,6 +168,13 @@ where a stroke is one pixel wide and there is nothing left to be accurate about.
 at eight pixels, which is what most text on a 128 pixel canvas is sitting next to, so a small face beside it
 usually wants `false` or it reads as blur.
 
+**A caller-supplied font changes every line on the screen.** `OpenOptions.font(...)` sets the default face, so a
+screen laid out against the map's own eight pixel font gets six pixels taller per line under a fourteen pixel
+one - which on a 128 pixel canvas is enough to overrun it. A column with no room left takes the space out of
+whatever will give it, and an image gives by being *cropped*: `Bitmap` never scales, so the picture is quietly
+lost rather than shrunk. If your screen honours a caller's font, either put the growing part in a `Scroll` or
+pin what must not shrink with `minHeight`.
+
 Load a font once and hand back the same instance - a font caches a rasterized glyph per character, so building
 one per call rasterizes the alphabet again every frame.
 
