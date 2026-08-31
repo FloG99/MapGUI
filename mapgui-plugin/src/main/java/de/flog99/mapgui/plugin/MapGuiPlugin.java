@@ -57,6 +57,9 @@ public final class MapGuiPlugin extends JavaPlugin {
         saveDefaultConfig();
         migrateConfig();
         config = MapGuiConfig.from(getConfig());
+        // Before warmUp, which is what fills the table - and the table is filled once. Choosing afterwards
+        // would leave half the server on one formula, so MapColors refuses it rather than half-applying it.
+        MapColors.matching(config.colorMatching());
         MapColors.warmUp();
 
         // Everything that reaches into the server, for the version this server happens to be.

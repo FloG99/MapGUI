@@ -1,5 +1,6 @@
 package de.flog99.mapgui.plugin;
 
+import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.ui.Dither;
 import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.plugin.camera.CameraTuning;
@@ -38,6 +39,7 @@ public record MapGuiConfig(
         int downloadMaxFileMb,
         int downloadMaxTotalMb,
         int downloadMaxFrames,
+        MapColors.Matching colorMatching,
         Dither mediaDither,
         boolean mediaSteady,
         Map<String, String> streams,
@@ -73,6 +75,7 @@ public record MapGuiConfig(
                 Math.max(1, config.getInt("media.download.max-file-mb", 256)),
                 Math.max(1, config.getInt("media.download.max-total-mb", 2048)),
                 Math.max(1, config.getInt("media.download.max-frames", 1200)),
+                matching(config),
                 dither(config),
                 config.getBoolean("media.steady", true),
                 streams(config),
@@ -188,6 +191,23 @@ public record MapGuiConfig(
      */
     private static String preferred(FileConfiguration config, String now, String before) {
         return config.isSet(now) || !config.isSet(before) ? now : before;
+    }
+
+    /**
+     * Which formula picks the nearest palette entry to a colour.
+     *
+     * <p>An unreadable name falls back to what the server did before rather than failing the load, for the same
+     * reason a bad dither mode does: a typo in one setting should not stop a server starting.
+     */
+    private static MapColors.Matching matching(FileConfiguration config) {
+        String name = config.getString("colors.matching", "vanilla");
+        try {
+            return MapColors.Matching.valueOf(name.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            Bukkit.getLogger().warning("colors.matching is set to \"" + name + "\", which is not one of "
+                    + Arrays.toString(MapColors.Matching.values()) + ". Using VANILLA.");
+            return MapColors.Matching.VANILLA;
+        }
     }
 
     /**

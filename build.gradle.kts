@@ -49,6 +49,9 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        // Figure generators write into docs/images and are off unless asked for, since a build should not
+        // rewrite committed artwork as a side effect of running the tests.
+        systemProperty("mapgui.figures", providers.gradleProperty("figures").isPresent.toString())
     }
 
     tasks.withType<ProcessResources>().configureEach {
