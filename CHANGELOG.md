@@ -5,7 +5,7 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 
 ## Unreleased
 
-Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it never did before, so another plugin can watch a click or refuse a wall without cooperation from whoever put it there. Dithering became a choice rather than one fixed rule, and the choice belongs to whatever knows the answer - a fill, a decoder, a plugin, or the server owner. A plugin can play a url it was handed - a file, a stream, a YouTube or Twitch page - rather than only one an admin named in `config.yml`. And a screen can decline a click, so a wall can be a picture one moment and a menu the next.
+Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it never did before, so another plugin can watch a click or refuse a wall without cooperation from whoever put it there. Dithering became a choice rather than one fixed rule, and the choice belongs to whatever knows the answer - a fill, a decoder, a plugin, or the server owner. A plugin can play a url it was handed - a file, a stream, a YouTube or Twitch page - rather than only one an admin named in `config.yml`. And a screen can decline a click, so a wall can be a picture one moment and a menu the next. Video holds still through the noise that used to make it shimmer, several walls can share one picture and one send, and which palette entry a colour becomes is a choice.
 
 **Breaking, all of it small:** `MapGui.open(player, screen, HandOptions)` is gone, replaced by an options record. `Screen.theme()`, `font()`, `background()` and `fps()` are `final`, with `defaultTheme()` and its siblings as the override points. `Justify.SPACE_AROUND` now means what it means everywhere else. `Fill#uniform()` is gone. `GifFrames.read` takes a `Quantizer` where it took a `Palette`. `MapGui#open` and `WallDisplay.Builder#open` return null when a listener cancels. `MapTransport#framedMaps` takes a `FrameStyle`, which matters only to a plugin implementing the transport itself. `video.ffmpeg` and `video.streams` are now `media.ffmpeg` and `media.streams`, migrated on load rather than silently dropped.
 
@@ -13,6 +13,14 @@ Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it ne
 
 - **Paper 26.1 as well as 26.2.** One NMS module per version, picked by family at startup, so `26.1.2` runs on the module built for `26.1`. `/mapgui status` names the backend it loaded, which is the first thing worth knowing when a report arrives from a version you do not run. Everything above the backend modules now compiles against the oldest supported Paper, so an API that only exists in the newer one cannot slip in and become a `NoSuchFieldError` on the older one - which is exactly what had already happened once, to every camera capture.
 - **`video.*` is `media.*`**, because FFmpeg now decodes stills as well as video. `config-version` and a migration on load handle the rename: the old keys keep working, the file is rewritten once, and one line says what moved. Your comments and blank lines survive it, because the migration edits the file as text rather than loading and re-saving it.
+- **`media.steady`, on by default: a video pixel holds still through noise.** Real footage wobbles a little between frames, and in full colour that is invisible. Rounded to a couple of hundred palette entries it is not - a pixel between two entries flips back and forth every frame, which shimmers, and which makes the changed part of a map the whole map. Measured on noisy footage over thirty frames of 64x64, in pixels differing from the frame before: 11,493 down to 303, and 33,896 down to 889 with error diffusion under it, while a moving picture still changes every pixel it changed before at 2.9% more colour error.
+
+  The entry already shown is kept unless the new one is closer to the colour wanted by more than a threshold, which is measured against the palette: an entry's nearest neighbour is a median of 186 away in squared RGB, so the threshold sits below that. Comparing the two entries to each other instead - which looks equivalent - holds a pixel a full quantization step behind and accumulates over a pan, at seven times the error of not holding at all by the thirtieth frame.
+
+- **`colors.matching: vanilla | perceptual`.** Which formula picks the nearest palette entry. `perceptual` matches in Oklab and is closer than vanilla on both halves: 3.9% on saturated colour with its worst case a fifth better, and 13% at the tail on greys, scored in CIELAB so the referee is neither. `docs/images/colour-matching.png` draws the two over the same ramps.
+
+  Vanilla stays the default because switching moves every pixel of every map that already exists. Read once at startup, so it needs a restart rather than a reload - and choosing after anything has drawn is refused rather than half-applied.
+
 - **New keys.** `media.resolve-page-urls` turns page-url resolution on, off by default, because it downloads and runs a program. `media.download.max-file-mb`, `max-total-mb` and `max-frames` bound what a download may cost. `media.dither` is how everything decoded is matched to the palette - a video, a still, a downloaded clip - and defaults to `NONE` like every other dithering default.
 
 ### For a plugin using MapGUI
@@ -58,6 +66,12 @@ Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it ne
 ### Walls
 
 - **`visibleTo` and `controlledBy`** take a `Predicate<Player>` each, so "everyone reads it, staff operate it" is sayable. Whether a wall was interactive used to follow only from whether it carried a screen.
+- **`channel(name)` puts several walls behind one picture.** Six televisions playing one clip cost what one costs. A client keeps a picture per map id and a map id is not tied to a place, so the walls hang the same ids: one of them paints and sends, the rest hang frames and do neither, which shares the decode and the paint as well as the bytes. A wall joining a channel that is already running costs a mount packet and nothing per frame after it.
+
+  The drawing wall sends to every viewer of every wall on the channel, since somebody at the far television needs those ids in their client and no other wall will put them there. Where each wall is, who may see it, how far it reaches and who is near enough to be streamed to all stay its own.
+
+  Every wall on a channel shows the same thing at the same moment, which is the point - two walls of one clip a second apart look like a fault. So a channel is for content and not for a menu, and a screen is refused; so is a wall of another size, rather than being quietly given a picture of its own. Prerendering and a channel are refused together, being two ways of sending nothing that have not been measured against each other.
+
 - **`reach`** sets the interact distance per display, defaulting to the 64 blocks every wall has had.
 - **`glowing`, `invisible` and `itemRotation`** expose the item-frame cosmetics. All three keep their old values by default, so no existing wall changes appearance. `invisible` is the interesting one: the frames are already client-only, so hiding them costs nothing and leaves the picture looking painted onto the blocks.
 
