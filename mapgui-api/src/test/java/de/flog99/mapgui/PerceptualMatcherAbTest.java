@@ -58,9 +58,12 @@ class PerceptualMatcherAbTest {
 
     /** Nearest in Oklab, the thing being proposed. */
     private static Color oklab(Color wanted) {
-        Oklab.Lab from = Oklab.of(rounded(wanted));
-        return best(entry -> Oklab.difference(from, Oklab.of(entry)));
+        return MapColors.INSTANCE.color(PERCEPTUAL.index(rounded(wanted)));
     }
+
+    /** The production matcher itself, so this measures what would ship rather than a copy of it. */
+    private static final de.flog99.mapgui.ui.PerceptualPalette PERCEPTUAL =
+            new de.flog99.mapgui.ui.PerceptualPalette(MapColors.INSTANCE);
 
     private static Color best(java.util.function.ToDoubleFunction<Color> cost) {
         Color found = null;

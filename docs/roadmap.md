@@ -50,16 +50,17 @@ Seven modes shipped; these are the places that cannot yet ask for one, or that w
 - **`ORDERED_FINE` as a gradient's own default.** `Fill.gradient` answers `ORDERED`, the 4x4 tile it has always
   used. The 8x8 is a finer texture across the large smooth areas a gradient tends to be. Measure before changing
   it: a finer pattern compresses worse, and the map packet's own compression is the budget.
-- **A perceptual metric in the matcher - measured, and shipped as a choice rather than a default.**
-  `colors.matching: perceptual` matches in Oklab instead of vanilla's weighting. It is 3.9% closer on saturated
-  colour with its worst case a fifth better, and 2.1% further on greys, scored in CIELAB so the referee is
-  neither contender. Not a default, because greys are what menus are made of and because it would change every
-  pixel of every existing map.
+- **A perceptual metric in the matcher - done, as a choice rather than a default.** `colors.matching: perceptual`
+  matches in Oklab, and is closer than vanilla on both halves: 3.9% on saturated colour with its worst case a
+  fifth better, and 13% at the tail on greys. Scored in CIELAB, which neither contender uses.
 
-  What is left of the entry: **split by chroma rather than choosing one formula for everything**, the way the
-  dark table already splits by it, so saturated colour gets Oklab and grey keeps vanilla. Worth measuring before
-  believing - plain RGB looked obviously right too and lost to vanilla outright, and extending the dark table's
-  own rule upward cost 7% over the range.
+  It is only better on greys because it is told to be. On its own it invented a tan for a warm grey - the same
+  complaint the dark end had, arriving at mid brightness - so a colour with no hue worth keeping pays for a
+  candidate's colourfulness, exactly as the dark table already made it. Without that rule greys were 2% worse
+  rather than 2% better, which is the whole distance between the two versions of this entry.
+
+  Not the default, because turning it on moves every pixel of every map that already exists. That is the only
+  argument left against it.
 
 ## Rendering
 
