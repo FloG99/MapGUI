@@ -194,7 +194,8 @@ final class WallRegistry implements Listener, LiveWalls {
     }
 
     void closeAll() {
-        for (WallDisplay wall : List.copyOf(open)) wall.close();
+        // Not close(), which is vetoable: a plugin disabling has nothing left to tick a wall a listener kept.
+        for (WallDisplay wall : List.copyOf(open)) wall.closeAnyway();
         open.clear();
         claims.clear();
         walls.invalidate();

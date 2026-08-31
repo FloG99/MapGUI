@@ -10,6 +10,7 @@ import de.flog99.mapgui.GuiCatalog;
 import de.flog99.mapgui.HeldTrigger;
 import de.flog99.mapgui.Session;
 import de.flog99.mapgui.WallDisplay;
+import de.flog99.mapgui.event.MapGuiScreenOpenEvent;
 import de.flog99.mapgui.map.MapPrinter;
 import de.flog99.mapgui.prompt.PromptRegistry;
 import org.bukkit.entity.Player;
@@ -39,11 +40,13 @@ final class SessionManager implements MapGui {
     }
 
     @Override
+    @Nullable
     public Session open(Player player, Screen screen) {
         return from(player, screen, null, null);
     }
 
     @Override
+    @Nullable
     public Session open(Player player, Screen screen, HandOptions hand) {
         return from(player, screen, hand, null);
     }
@@ -54,6 +57,7 @@ final class SessionManager implements MapGui {
      * <p>Which is what lets {@code /mapgui hand list} name it, and what lets an unregistering plugin's menus be
      * closed while its classes are still loaded - the next repaint of one would otherwise fail to find them.
      */
+    @Nullable
     Session from(Player player, Screen screen, @Nullable HandOptions hand, @Nullable String entry) {
         HandOptions carried = carry(screen, hand);
         // A pinned id where the screen asked for one, so a resource pack has something to recognise it by, and one
@@ -69,11 +73,18 @@ final class SessionManager implements MapGui {
      * also what lets the same item show two players their own screen - map data goes down one connection, so one id
      * can mean different pixels to different people.
      */
+    @Nullable
     Session openCarried(Player player, Screen screen, HandOptions hand, String entry, int mapId) {
         return open(player, screen, hand.sane(), entry, mapId);
     }
 
+    @Nullable
     private Session open(Player player, Screen screen, HandOptions hand, @Nullable String entry, int mapId) {
+        // Before anything is closed, since a veto has to leave whatever the player already had open alone -
+        // and before the session exists, so there is nothing to unwind and no close to report for a screen
+        // that never opened.
+        if (!MapGuiScreenOpenEvent.allows(player, screen, false)) return null;
+
         close(player, true);
 
         PlayerSession session = new PlayerSession(plugin, player, display, screen, hand);
