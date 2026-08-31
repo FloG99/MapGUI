@@ -5,14 +5,69 @@ surface is `mapgui-api`, which carries the layout engine inside it.
 
 ## Unreleased
 
-**A screen can decline a click.** `activateOn()` accepts `Click.NONE`, and then the press is not taken off the
-player at all - it reaches the world as though no map were up, so a viewer can shoot through a wall, hit what is
-behind it, and place against it. Everything else swallows a click aimed at the screen exactly as before, so a
-screen that has never heard of this is unaffected.
+Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it never did before, so another plugin can watch a click or refuse a wall without cooperation from whoever put it there. Dithering became a choice rather than one fixed rule, and the choice belongs to whatever knows the answer - a fill, a decoder, a plugin, or the server owner. A plugin can play a url it was handed - a file, a stream, a YouTube or Twitch page - rather than only one an admin named in `config.yml`. And a screen can decline a click, so a wall can be a picture one moment and a menu the next.
 
-Read every tick rather than once, which is the point: a screen that is a menu now and a picture in a moment can
-say so. It works the same in the hand and on a wall - the wall answers from a snapshot taken on the tick, since
-whether a click belongs to it has to be decided on the network thread where the screen is not ours to touch.
+**Breaking, all of it small:** `MapGui.open(player, screen, HandOptions)` is gone, replaced by an options record. `Screen.theme()`, `font()`, `background()` and `fps()` are `final`, with `defaultTheme()` and its siblings as the override points. `Justify.SPACE_AROUND` now means what it means everywhere else. `Fill#uniform()` is gone. `GifFrames.read` takes a `Quantizer` where it took a `Palette`. `MapGui#open` and `WallDisplay.Builder#open` return null when a listener cancels. `MapTransport#framedMaps` takes a `FrameStyle`, which matters only to a plugin implementing the transport itself. `video.ffmpeg` and `video.streams` are now `media.ffmpeg` and `media.streams`, migrated on load rather than silently dropped.
+
+### Running a server
+
+- **Paper 26.1 as well as 26.2.** One NMS module per version, picked by family at startup, so `26.1.2` runs on the module built for `26.1`. `/mapgui status` names the backend it loaded, which is the first thing worth knowing when a report arrives from a version you do not run. Everything above the backend modules now compiles against the oldest supported Paper, so an API that only exists in the newer one cannot slip in and become a `NoSuchFieldError` on the older one - which is exactly what had already happened once, to every camera capture.
+- **`video.*` is `media.*`**, because FFmpeg now decodes stills as well as video. `config-version` and a migration on load handle the rename: the old keys keep working, the file is rewritten once, and one line says what moved. Your comments and blank lines survive it, because the migration edits the file as text rather than loading and re-saving it.
+- **New keys.** `media.resolve-page-urls` turns page-url resolution on, off by default, because it downloads and runs a program. `media.download.max-file-mb`, `max-total-mb` and `max-frames` bound what a download may cost. `media.dither` is how everything decoded is matched to the palette - a video, a still, a downloaded clip - and defaults to `NONE` like every other dithering default.
+
+### For a plugin using MapGUI
+
+- **Six events in `de.flog99.mapgui.event`**, all raised on the main thread: `MapGuiClickEvent`, `MapGuiScreenOpenEvent`, `MapGuiScreenCloseEvent`, `MapGuiWallPlaceEvent`, `MapGuiWallRemoveEvent` and `MapGuiViewerChangeEvent`. See [events](docs/events.md).
+
+  `MapGuiWallPlaceEvent` is cancellable, which is what lets a claim or region plugin refuse a MapGUI wall. `MapGuiClickEvent` carries the layout path of whatever was pressed - `settings/volume` - so a listener that does not own the screen can still say which control was used.
+
+- **`MediaService`, through `MapGui.media()`.** `stream(url)` plays anything FFmpeg can open, page urls included, and `download(url, progress)` fetches it once and shares the file with every wall showing it. Any url, passed in code: a `/stream <url>` command is a normal thing to build, and gating it by permission is the calling plugin's business. `media.streams` stays a shortcut for `/mapgui wall place <name>`, not an allowlist.
+
+  A download is keyed on the url you asked for rather than the one it was fetched from, which is the difference between a cache and a disk that fills: a page url resolves to a differently signed address every time, so keying on that would re-download a video already on disk on every call.
+
+  `stream(url, Dither)` and `download(url, Dither, progress)` name a mode for that one piece of media; the plain calls take what `media.dither` says, and `defaultDither()` reads it back so a screen offering the modes can show which is in force.
+- **`MapGui.open` collapses onto one options record.** `open(player, screen, OpenOptions.of(hand))` replaces the `HandOptions` overload, and `OpenOptions` carries the theme, the font, the background and an fps ceiling beside the hand.
+- **A screen can be restyled while it is open.** `Session#presentation(shown -> shown.theme(Theme.LIGHT))` changes it and invalidates for you, because a screen resolves its styling against the session on every `build()` rather than capturing it at open. An override of the old `theme()` silently beat whoever opened the screen, which is why those four are now final.
+- **`MapSurface#painter()` and `MapGui#draw(player, mapId, painter -> ...)`** for maps MapGUI is not putting up for you. That took two singletons in the right order before.
+
+### Writing a GUI
+
+- **Minimum and maximum sizes on any node** - `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, and `widthBetween` / `heightBetween` for both at once. `HUG | FIXED | FILL` could not say "as wide as the content but never past 80", and the bounds apply on top of whichever of the three is in use, an exact size included: `width(200).maxWidth(120)` is 120 rather than one of the two being quietly dropped.
+
+  A capped `fill()` child hands its surplus to its `fill()` siblings instead of losing it off the end of the row, which is what makes `fill().maxWidth(80)` a centered content column on a wide wall. `maxHeight` on a `Scroll` is a list that grows until it does not fit and only then scrolls. See [widgets](docs/widgets.md#layout).
+
+- **`Flow(...)`** - a row that wraps onto a new line when it runs out of width, and with `columns(n)` a grid, since the two are the same layout with one thing decided differently: where a line ends. Children align within their own line's height.
+- **`Justify.SPACE_EVENLY`** - the same space between the children as at the edges. `SPACE_AROUND` used to lay out identically to this, leaving the new constant nothing to be; it now gives each child equal space on both sides, so an edge gap is half an inner one. A screen that wants the old spacing asks for `SPACE_EVENLY`.
+- **A font can be set per node**, `Text("Gallery").font(TITLE)`, covering that node's subtree in both the measure and the paint pass, so a heading in another face no longer means drawing it by hand. **`Fonts.trueType("font/title.ttf", 16f)`** reads a face out of the calling plugin's own resources and caches it. No font file is bundled with MapGUI. A third argument says whether to anti-alias it, defaulting to on: below about twelve pixels a stroke is one pixel wide, so blending its edges reads as blur rather than as shape, and beside the map's own on-or-off font at eight it reads as blur next to crisp.
+- **`Image("icons/pickaxe.png")`** does the same for artwork, cached on the calling plugin's classloader and the path. A path that is not there draws nothing, as a null image always has.
+- **`Progress()`**, a determinate bar beside the indeterminate `Spinner`: a level, pips for anything read at a glance, or a travelling block when the total turns out not to exist. It takes a `Fill`, so a gradient bar dithers along its ramp as it fills.
+- **A screen can decline a click.** `activateOn()` accepts `Click.NONE`, and then the press is not taken off the player at all - it reaches the world as though no map were up, so a viewer can shoot through a wall, hit what is behind it, and place against it. It is read every tick rather than once, which is the point. On a wall the answer comes from a snapshot taken on the tick, since whether a click belongs to it has to be decided on the network thread where the screen is not ours to touch.
+
+### Dithering
+
+- **Seven modes rather than one.** `Dither` names them: `NONE`, the ordered family `ORDERED` (the 4x4 tile gradients have always used), `ORDERED_FINE` and `BLUE_NOISE`, and the error diffusion family `FLOYD_STEINBERG`, `ATKINSON` and `SIERRA_LITE`. `Quantizer` applies one - `perPixel()` for anything drawing a colour at a time, `quantize(argb, width, height, out)` for anything holding a whole rect.
+
+  The two families are not a taxonomy. A `Surface` holds palette bytes and the painter matches each pixel as it draws it, so a mode that hands its leftover error to pixels not yet drawn can only run where every colour is known up front: `Painter#image`, and decoding. Asked for anywhere else it stands in `ORDERED_FINE` and says so through `Quantizer#diffuses()`.
+
+- **`NONE` is the default everywhere, and a gradient carries its own.** `Fill#dither()` is how a fill asks: `null` means no opinion and the painter's scope decides, and `Fill.gradient(...)` answers `ORDERED`, because a gradient is by definition asking for a ramp the palette cannot express. Flat fills are no longer asked the question at all, and `Fill#uniform()` went with it.
+- **`Painter#pushDither(Dither)` and `popDither(previous)`**, the same idiom as `pushClip`/`popClip`. It reaches fills and images; a line, a glyph and a flat `fill(rect, color)` still snap, because dithering an anti-aliased glyph only speckles its edge.
+- **Anything decoded goes through a `Quantizer`** - a GIF, a still, a video, a downloaded clip. Decoding is the only place their dithering can be set, since the pixels are palette indices from that moment on, and it is also the cheapest: applied once per frame rather than once per frame per viewer per repaint. `GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE, Dither.ATKINSON))`. See [video](docs/video.md).
+
+  Which matters most for a photograph, and a photograph is most of what arrives as a JPEG, a WebP or a video. `FLOYD_STEINBERG` is the one to try there, and an error diffusion mode rather than an ordered one, because a player scales frames after they are decoded and resampling a periodic tile beats against itself as moire.
+
+### Walls
+
+- **`visibleTo` and `controlledBy`** take a `Predicate<Player>` each, so "everyone reads it, staff operate it" is sayable. Whether a wall was interactive used to follow only from whether it carried a screen.
+- **`reach`** sets the interact distance per display, defaulting to the 64 blocks every wall has had.
+- **`glowing`, `invisible` and `itemRotation`** expose the item-frame cosmetics. All three keep their old values by default, so no existing wall changes appearance. `invisible` is the interesting one: the frames are already client-only, so hiding them costs nothing and leaves the picture looking painted onto the blocks.
+
+### Images and video
+
+- **A video keeps its proportions.** The size a decoder is given is a bounding box rather than a shape, so what comes out is the largest picture with the source's own proportions that fits inside it, letterboxed by whatever draws it. A portrait video used to be squashed square before anything could letterbox it, and a picture that arrives already distorted is letterboxed faithfully distorted. It is never enlarged either: a small video on a big wall is scaled once, when it is drawn.
+- **WebP, AVIF, HEIC and JPEG XL** draw through the FFmpeg that is already optional here, and animated WebP and APNG come out as animations. PNG, JPEG, BMP and GIF need nothing and keep working with `media.ffmpeg` off, since `ImageIO` is always tried first. A file neither can read says so, and names `media.ffmpeg`.
+- **YouTube and Twitch.** A page url is resolved to a media url with yt-dlp, which MapGUI fetches into its own folder along with the JavaScript runtime that YouTube's signature challenge needs - nothing has to be installed, and nothing on the machine is used or altered. yt-dlp deliberately tracks its newest release, because its extractors stop working within weeks otherwise; FFmpeg stays pinned, because our own bindings are compiled against it.
+
+  Signed media urls expire, so a stream re-resolves and reconnects before the deadline rather than after the picture dies, and keeps the old frames until the new connection has produced one. Live content must be streamed; a clip you will show more than once is better downloaded, because a local file has no expiry, no rate limit and proper seeking.
 
 ## 2.0.0
 
