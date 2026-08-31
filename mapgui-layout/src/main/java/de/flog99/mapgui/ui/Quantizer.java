@@ -86,6 +86,25 @@ public interface Quantizer {
     }
 
     /**
+     * The same, remembering the last frame so a pixel does not flicker between two entries that look alike.
+     *
+     * <p>For a <b>stream of frames</b> and nothing else: video, a live source, an animation being decoded. Real
+     * footage wobbles a little between frames, and rounded to this palette that wobble becomes a pixel flipping
+     * between two entries every frame - which shimmers, and which makes the changed part of the map the whole
+     * map, every frame.
+     *
+     * <p><b>Stateful, so give each source its own.</b> Everything {@link #of} returns is safe to share; this is
+     * not, and two videos through one of these would judge each other's pixels. Not thread-safe either, which
+     * suits a decoder that runs on a thread of its own.
+     *
+     * <p>Useless on a still, which has no previous frame, and harmless: the first call through one of these is
+     * exactly {@link #of}.
+     */
+    static Quantizer steady(Palette palette, Dither mode) {
+        return new Steady(of(palette, mode), palette, Steady.DEFAULT_THRESHOLD);
+    }
+
+    /**
      * Any palette, asked pixel by pixel. Which covers {@link Dither#NONE} as well as the ordered family - the
      * difference between them is entirely inside the palette it holds.
      */

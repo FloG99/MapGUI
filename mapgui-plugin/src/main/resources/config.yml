@@ -375,6 +375,18 @@ media:
   # This is the default. A plugin calling MediaService may name a mode per stream and override it.
   dither: NONE
 
+  # Whether a pixel in a video holds still through noise rather than flickering between two palette entries
+  # that look the same.
+  #
+  # Real footage wobbles a little between frames, and in full colour that is invisible. Rounded to the map
+  # palette it is not: a pixel sitting between two entries flips back and forth every frame. That shimmers, and
+  # because MapGUI only sends the part of a map that changed, it also makes the changed part the whole map every
+  # frame - on a busy wall the difference is most of the bandwidth.
+  #
+  # A held pixel is never more than a hair further from its true colour than it would have been, so this is not
+  # a quality trade. Turn it off if a very slow fade looks like it is stepping.
+  steady: true
+
   # Shortcuts for /mapgui wall place <name>. Anything FFmpeg can open: rtmp, rtsp, hls, a plain http url,
   # and with resolve-page-urls on, a page url too.
   #

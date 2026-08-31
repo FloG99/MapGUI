@@ -188,7 +188,7 @@ public final class MapGuiPlugin extends JavaPlugin {
             getServer().getScheduler().runTaskAsynchronously(this, tools::warm);
         }
         return new MediaSources(this, resolver, cache, config.wallVideoSize(), config.wallFps(), config.downloadMaxFrames(),
-                config.mediaDither());
+                config.mediaDither(), config.mediaSteady());
     }
 
     /**

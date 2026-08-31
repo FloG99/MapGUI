@@ -44,11 +44,14 @@ public final class MediaSources implements MediaService {
     /** What {@code media.dither} says, used by anything that does not name a mode of its own. */
     private final Dither dither;
 
+    /** What {@code media.steady} says: whether a stream of frames holds a pixel through noise. */
+    private final boolean steady;
+
     /** Bukkit's own pool, so a download is not a thread this plugin has to remember to stop. */
     private final Executor async;
 
     public MediaSources(Plugin plugin, StreamResolver resolver, MediaCache cache, int size, int fps, int maxFrames,
-                        Dither dither) {
+                        Dither dither, boolean steady) {
         this.log = plugin.getLogger();
         this.resolver = resolver;
         this.cache = cache;
@@ -56,6 +59,7 @@ public final class MediaSources implements MediaService {
         this.fps = fps;
         this.maxFrames = maxFrames;
         this.dither = dither;
+        this.steady = steady;
         this.async = task -> plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
     }
 
@@ -164,9 +168,15 @@ public final class MediaSources implements MediaService {
      * <p>Undithered unless something asked otherwise, like every other default. A wall showing a photograph
      * gains from Floyd-Steinberg, but which walls those are is known to the plugin putting them up and to the
      * server owner, not to this.
+     *
+     * <p><b>A fresh one every call, because a steady quantizer remembers.</b> It holds the previous frame to
+     * decide the next, so one shared between two videos would judge each against the other. One per source is
+     * also exactly the right scope: the frames it compares are the ones it produced.
      */
-    private static Quantizer quantizer(Dither mode) {
-        return Quantizer.of(MapColors.INSTANCE, mode);
+    private Quantizer quantizer(Dither mode) {
+        return steady
+                ? Quantizer.steady(MapColors.INSTANCE, mode)
+                : Quantizer.of(MapColors.INSTANCE, mode);
     }
 
     private static CompletableFuture<Frames> failed(String reason) {
