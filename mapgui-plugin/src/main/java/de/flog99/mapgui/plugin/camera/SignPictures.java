@@ -1,6 +1,5 @@
 package de.flog99.mapgui.plugin.camera;
 
-import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.MapSurface;
 import de.flog99.mapgui.MapTextFont;
 import de.flog99.mapgui.render.Texture;
@@ -83,7 +82,7 @@ final class SignPictures {
         if (lines.stream().allMatch(line -> line == null || line.isBlank())) return null;
 
         MapSurface surface = new MapSurface(WIDTH, LINES * LINE_HEIGHT);
-        Painter painter = new Painter(surface, MapColors.INSTANCE, MapTextFont.INSTANCE);
+        Painter painter = surface.painter();
 
         for (int line = 0; line < Math.min(LINES, lines.size()); line++) {
             String text = lines.get(line);

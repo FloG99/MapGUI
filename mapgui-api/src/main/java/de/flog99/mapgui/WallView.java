@@ -45,7 +45,7 @@ final class WallView {
     private WallView(WallLayout layout, @Nullable WallSession session, @Nullable WallContent content) {
         this.surface = new MapSurface(layout.pixelWidth(), layout.pixelHeight());
         this.canvas = new MapSurface(layout.pixelWidth(), layout.pixelHeight());
-        this.painter = new Painter(canvas, MapColors.INSTANCE, MapTextFont.INSTANCE);
+        this.painter = canvas.painter();
         this.session = session;
         this.content = content;
     }

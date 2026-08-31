@@ -1,7 +1,9 @@
 package de.flog99.mapgui;
 
+import de.flog99.mapgui.ui.Painter;
 import de.flog99.mapgui.ui.Rect;
 import de.flog99.mapgui.ui.Surface;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
@@ -61,6 +63,21 @@ public final class MapSurface implements Surface {
         this.spanLeft = new int[height * tileCols];
         this.spanRight = new int[height * tileCols];
         clearDirty();
+    }
+
+    /**
+     * A painter for this surface, holding the map palette and the vanilla map font.
+     *
+     * <p>Which is what a painter is for a map every time, so there is no reason for every caller to name both
+     * singletons and remember which order they go in. Hand it a font of your own with
+     * {@link Painter#font(de.flog99.mapgui.ui.TextFont)} if the default is not the one you want.
+     *
+     * <p>A painter is a pen rather than a document - it holds a clip and a font and nothing else - so taking a
+     * fresh one costs nothing, and one kept for the life of a surface is just as correct.
+     */
+    @ApiStatus.Experimental
+    public Painter painter() {
+        return new Painter(this, MapColors.INSTANCE, MapTextFont.INSTANCE);
     }
 
     @Override

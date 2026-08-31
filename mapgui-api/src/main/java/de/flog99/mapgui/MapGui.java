@@ -4,14 +4,17 @@ import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.map.MapPrinter;
 import de.flog99.mapgui.media.MediaService;
 import de.flog99.mapgui.prompt.PromptRegistry;
-import org.jetbrains.annotations.ApiStatus;
+import de.flog99.mapgui.ui.Painter;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.RegisteredServiceProvider;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -145,6 +148,28 @@ public interface MapGui {
      * <p>Also where the bandwidth counters live, if you want to report on what your own maps cost.
      */
     MapTransport transport();
+
+    /**
+     * Draws one map-sized picture and sends it to a player, under a map id you own.
+     *
+     * <p>The one-shot case, for a map that is not a screen: a printed page, a chart rendered when somebody asks
+     * for it, a picture pushed into a frame you spawned. Everything a screen brings - layout, input, a repaint
+     * loop - is what makes {@link #open} the wrong tool for a picture that is drawn once and then left alone.
+     *
+     * <pre>{@code
+     * int mapId = MapIds.next();
+     * MapGui.get().draw(player, mapId, painter -> painter.image(0, 0, chart));
+     * }</pre>
+     *
+     * <p>Nothing is remembered, exactly as with {@link #transport()}: a viewer who reloads their chunks has to be
+     * drawn to again. Take ids from {@link MapIds#next()} so they cannot collide with MapGUI's own.
+     */
+    @ApiStatus.Experimental
+    default void draw(Player player, int mapId, Consumer<Painter> drawing) {
+        MapSurface surface = new MapSurface(MapSurface.TILE, MapSurface.TILE);
+        drawing.accept(surface.painter());
+        transport().sendMap(player, mapId, surface, List.of());
+    }
 
     /**
      * Captures what a player is looking at, onto a map.
