@@ -166,10 +166,26 @@ business deciding whose.
 pixels wants - and it throws `IOException`, so it wants a method rather than a field initializer.
 
 Load a font once and hand back the same instance - a font caches a rasterized glyph per character, so building
-one per call rasterizes the alphabet again every frame. One font per screen rather than per label, because
-measuring and painting have to agree: a layout sized with one font and drawn with another puts the words in
-the wrong place. For a heading in a different face, `font()` on the node is the way - see
-[per-node fonts](#per-node-fonts).
+one per call rasterizes the alphabet again every frame.
+
+### Per-node fonts
+
+`font()` on the screen is where the tree starts. Any node can take another for itself and everything under it:
+
+```java
+Column(
+        Text("Gallery").font(TITLE),
+        Text("Sixteen pictures, one wall")
+)
+```
+
+The subtree is measured *and* painted in it - the measure pass gets a context carrying the font, the paint pass
+has it pushed and popped around the subtree - so what sized the words is always what drew them. That is the whole
+reason this is not simply a colour-style modifier: a layout sized with one font and drawn with another puts the
+words in the wrong place.
+
+The nearest font wins, and the one it displaced is back in place for the next sibling. `null`, the default, means
+whatever the enclosing subtree is using.
 
 The last argument is anti-aliasing. Glyphs are rendered to coverage rather than on-or-off pixels, so
 part-covered edges are blended with what is behind them. Worth having at large sizes and mostly noise at small
