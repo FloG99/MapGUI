@@ -162,8 +162,11 @@ of its own.
 business deciding whose.
 
 `Fonts` is always anti-aliased, since a plugin reaching for its own face is doing it for the look.
-`AwtFont.load(InputStream, size, antiAliased)` is the way past that, which is what a pixel font at eight
-pixels wants - and it throws `IOException`, so it wants a method rather than a field initializer.
+`AwtFont.load(InputStream, size, antiAliased)` is the way past that - and it throws `IOException`, so it wants
+a method rather than a field initializer. Anti-aliasing is what its last argument decides: glyphs are rendered
+to coverage rather than on-or-off pixels, so part-covered edges are blended with what is behind them. Worth
+having at large sizes and mostly noise at small ones, which is why it is a choice, and which is what a pixel
+font at eight pixels wants turned off.
 
 Load a font once and hand back the same instance - a font caches a rasterized glyph per character, so building
 one per call rasterizes the alphabet again every frame.
@@ -187,9 +190,6 @@ words in the wrong place.
 The nearest font wins, and the one it displaced is back in place for the next sibling. `null`, the default, means
 whatever the enclosing subtree is using.
 
-The last argument is anti-aliasing. Glyphs are rendered to coverage rather than on-or-off pixels, so
-part-covered edges are blended with what is behind them. Worth having at large sizes and mostly noise at small
-ones, which is why it is a choice.
 
 ### Adventure components
 
