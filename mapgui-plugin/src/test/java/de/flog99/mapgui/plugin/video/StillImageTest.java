@@ -1,6 +1,9 @@
 package de.flog99.mapgui.plugin.video;
 
+import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.media.Frames;
+import de.flog99.mapgui.ui.Dither;
+import de.flog99.mapgui.ui.Quantizer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -23,6 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class StillImageTest {
 
+    /** Nearest entry, which is the default everywhere and so what most of these hold. */
+    private static final Quantizer PLAIN = Quantizer.of(MapColors.INSTANCE);
+
     @TempDir
     Path folder;
 
@@ -30,7 +36,7 @@ class StillImageTest {
     void readsAPngWithoutFfmpeg() throws IOException {
         Path file = png(64, 32);
 
-        Frames read = StillImage.read(file, 128);
+        Frames read = StillImage.read(file, PLAIN, 128);
         assertEquals(1, read.count(), "a still is one frame");
         assertEquals(64, read.width());
         assertEquals(32, read.height());
@@ -40,7 +46,7 @@ class StillImageTest {
 
     @Test
     void keepsTransparencyTransparent() throws IOException {
-        Frames read = StillImage.read(png(64, 32), 128);
+        Frames read = StillImage.read(png(64, 32), PLAIN, 128);
         byte[] pixels = read.pixels(0);
 
         // png() paints the left half opaque red and leaves the right half alone.
@@ -50,7 +56,7 @@ class StillImageTest {
 
     @Test
     void shrinksToTheLongestEdgeAndKeepsTheShape() throws IOException {
-        Frames read = StillImage.read(png(400, 200), 128);
+        Frames read = StillImage.read(png(400, 200), PLAIN, 128);
 
         assertEquals(128, read.width());
         assertEquals(64, read.height());
@@ -58,7 +64,7 @@ class StillImageTest {
 
     @Test
     void neverEnlarges() throws IOException {
-        Frames read = StillImage.read(png(16, 16), 256);
+        Frames read = StillImage.read(png(16, 16), PLAIN, 256);
 
         assertEquals(16, read.width(), "upscaling here would only cost memory - the player scales when it draws");
     }
@@ -68,7 +74,7 @@ class StillImageTest {
         Path file = folder.resolve("logo.webp");
         Files.write(file, new byte[] {'R', 'I', 'F', 'F', 0, 0, 0, 0});
 
-        IOException refused = assertThrows(IOException.class, () -> StillImage.read(file, 128));
+        IOException refused = assertThrows(IOException.class, () -> StillImage.read(file, PLAIN, 128));
         assertTrue(refused.getMessage().contains("media.ffmpeg"), "the fix has to be in the message: " + refused.getMessage());
     }
 
@@ -93,6 +99,54 @@ class StillImageTest {
 
         assertTrue(frames.durationMs() > 0, "a duration of zero would divide by zero in indexAt");
         assertEquals(0, frames.indexAt(0));
+    }
+
+    /**
+     * The reason the quantizer is a parameter: a still is decoded once, so this is the only place its dithering
+     * can be set - and a photograph is the content that gains most from it.
+     */
+    @Test
+    void aStillCanBeDithered() throws IOException {
+        Path file = ramp(64, 16);
+
+        byte[] plain = StillImage.read(file, PLAIN, 128).pixels(0);
+        byte[] dithered = StillImage.read(file, Quantizer.of(MapColors.INSTANCE, Dither.FLOYD_STEINBERG), 128)
+                .pixels(0);
+
+        assertNotEquals(-1, firstDifference(plain, dithered),
+                "a gradient quantized with error diffusion cannot come out identical to nearest-entry matching");
+        assertEquals(plain.length, dithered.length);
+    }
+
+    @Test
+    void ditheringDoesNotLeakAcrossASeeThroughEdge() throws IOException {
+        Frames read = StillImage.read(png(64, 32), Quantizer.of(MapColors.INSTANCE, Dither.FLOYD_STEINBERG), 128);
+        byte[] pixels = read.pixels(0);
+
+        // Error pushed into a transparent pixel is how a picture grows a halo of whatever was beside its hole.
+        assertEquals(Frames.TRANSPARENT, pixels[read.width() - 1]);
+        assertNotEquals(Frames.TRANSPARENT, pixels[0]);
+    }
+
+    private static int firstDifference(byte[] left, byte[] right) {
+        for (int i = 0; i < Math.min(left.length, right.length); i++) {
+            if (left[i] != right[i]) return i;
+        }
+        return -1;
+    }
+
+    /** A horizontal gradient, which is what the palette cannot express and dithering is for. */
+    private Path ramp(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int level = 30 + x * 200 / width;
+                image.setRGB(x, y, 0xFF000000 | level << 16 | level << 8 | level);
+            }
+        }
+        Path file = folder.resolve("ramp" + width + "x" + height + ".png");
+        ImageIO.write(image, "png", file.toFile());
+        return file;
     }
 
     /** A picture with an opaque left half and a see-through right half, so both paths are exercised. */

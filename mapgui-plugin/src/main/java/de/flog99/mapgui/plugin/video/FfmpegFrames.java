@@ -1,6 +1,7 @@
 package de.flog99.mapgui.plugin.video;
 
 import de.flog99.mapgui.media.Frames;
+import de.flog99.mapgui.ui.Quantizer;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
@@ -42,8 +43,8 @@ final class FfmpegFrames {
     private static final int STILL_MS = 100;
 
     /** A picture, or a short animation, at its own pace. */
-    static Frames still(Path file, int maxSize) throws IOException {
-        return decode(file, maxSize, 0, STILL_MAX_FRAMES, false, percent -> { });
+    static Frames still(Path file, Quantizer quantizer, int maxSize) throws IOException {
+        return decode(file, quantizer, maxSize, 0, STILL_MAX_FRAMES, false, percent -> { });
     }
 
     /**
@@ -53,16 +54,18 @@ final class FfmpegFrames {
      * frames and 230 MB of heap at 256 pixels, and the wall would draw one frame in three of it. At the wall's
      * own rate it is a third of that and identical on screen.
      *
+     * @param quantizer what matches every frame to the palette, applied once here rather than once per repaint
      * @param maxFrames refused rather than truncated past this, because a clip cut off halfway is a bug report
      *                  and a refusal with a reason is an answer
      * @param progress  0 to 100 as the decode runs, on this thread
      */
-    static Frames clip(Path file, int maxSize, int fps, int maxFrames, IntConsumer progress) throws IOException {
-        return decode(file, maxSize, Math.max(1, fps), maxFrames, true, progress);
+    static Frames clip(Path file, Quantizer quantizer, int maxSize, int fps, int maxFrames, IntConsumer progress)
+            throws IOException {
+        return decode(file, quantizer, maxSize, Math.max(1, fps), maxFrames, true, progress);
     }
 
-    private static Frames decode(Path file, int maxSize, int fps, int maxFrames, boolean refuseAtCap,
-                                 IntConsumer progress) throws IOException {
+    private static Frames decode(Path file, Quantizer quantizer, int maxSize, int fps, int maxFrames,
+                                 boolean refuseAtCap, IntConsumer progress) throws IOException {
         try (FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(file.toFile());
              Java2DFrameConverter converter = new Java2DFrameConverter()) {
             grabber.start();
@@ -99,7 +102,7 @@ final class FfmpegFrames {
                 Pixels.Shrunk shrunk = Pixels.shrink(image, maxSize);
                 width = shrunk.width();
                 height = shrunk.height();
-                frames.add(Pixels.quantize(shrunk.argb()));
+                frames.add(StillImage.indices(shrunk, quantizer));
                 starts.add(step > 0 ? wantedAt : at);
                 wantedAt += step;
 
