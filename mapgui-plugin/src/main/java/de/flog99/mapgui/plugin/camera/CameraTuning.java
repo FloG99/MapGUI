@@ -1,6 +1,7 @@
 package de.flog99.mapgui.plugin.camera;
 
 import de.flog99.mapgui.render.Canopy;
+import de.flog99.mapgui.ui.Dither;
 
 /**
  * The numbers under {@code camera:} in config.yml, in one piece.
@@ -25,7 +26,7 @@ import de.flog99.mapgui.render.Canopy;
  */
 public record CameraTuning(float fov, int maxDistance, double maxEntityDistance,
                            double liveMaxMillisPerTick, int liveMaxFps,
-                           Canopy canopy, float shadowLift, Reuse reuse, Limits limits) {
+                           Canopy canopy, float shadowLift, Dither dither, Reuse reuse, Limits limits) {
 
     /**
      * What may be served from an earlier capture, and for how long. The only part of the camera that is not exact:

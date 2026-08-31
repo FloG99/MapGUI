@@ -96,9 +96,8 @@ lightness to keep a hue. On a ramp that is a band of skin tone through the middl
 hue worth keeping pays for a candidate's colourfulness, which is the rule the dark end of the palette already
 had for the same reason. Without it, greys came out 2% worse instead of 2% better.
 
-Vanilla stays the default anyway, because changing it moves every pixel of every map that already exists and
-nothing about an upgrade should do that quietly. Turning it on is worth it, and most worth it on a server whose
-walls are photographs - cameras, video, terrain.
+Perceptual is the default. It does move every pixel of every map drawn before it, which is why it is in the
+release notes rather than left to be noticed - `vanilla` is there for a server that would rather nothing moved.
 
 ## Video holds still when nothing is happening
 
