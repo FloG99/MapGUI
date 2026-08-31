@@ -3,27 +3,21 @@ package de.flog99.mapgui.ui;
 import java.awt.Color;
 
 /**
- * Blends two palette entries in a 4x4 threshold pattern instead of snapping to the nearest one.
+ * Blends two palette entries in a threshold pattern instead of snapping to the nearest one.
  *
  * <p>The map palette is a few dozen base colors times four brightnesses, so an arbitrary ramp has
  * very few stops to land on - a green to yellow gradient snaps to about four distinct colors across
  * 110 pixels, which reads as stripes rather than a gradient. Alternating between the two nearest
  * entries per pixel trades that banding for a fine texture the eye averages out.
  *
+ * <p>Which pattern decides how that texture looks, and nothing else here changes with it - see
+ * {@link OrderedMatrix}. This is the whole of the ordered dither family: {@link Dither#ORDERED},
+ * {@link Dither#ORDERED_FINE} and {@link Dither#BLUE_NOISE} are this class with three different tiles.
+ *
  * <p>Finding the pair is two nearest-neighbor searches over the whole palette, so results are
  * memoized per color; per pixel it costs a lookup and a comparison.
  */
 public final class DitheredPalette implements Palette {
-
-    /** Ordered 4x4 Bayer thresholds, the classic pattern for this. */
-    private static final int[][] THRESHOLD = {
-            {0, 8, 2, 10},
-            {12, 4, 14, 6},
-            {3, 11, 1, 9},
-            {15, 7, 13, 5},
-    };
-
-    private static final int LEVELS = 16;
 
     /**
      * A fill whose colors keep changing - an animated gradient, a scrolling rainbow - would grow
@@ -34,6 +28,7 @@ public final class DitheredPalette implements Palette {
 
     private final Palette base;
     private final byte[] entries;
+    private final OrderedMatrix matrix;
 
     /**
      * Color-to-blend memo, open-addressed on a raw {@code int} key so the per-pixel lookup allocates
@@ -48,9 +43,15 @@ public final class DitheredPalette implements Palette {
     private record Blend(byte low, byte high, int ratio) {
     }
 
+    /** Bayer 4x4, which is what a gradient has always been drawn with. */
     public DitheredPalette(Palette base) {
+        this(base, OrderedMatrix.bayer4());
+    }
+
+    public DitheredPalette(Palette base, OrderedMatrix matrix) {
         this.base = base;
         this.entries = base.entries();
+        this.matrix = matrix;
     }
 
     @Override
@@ -73,8 +74,7 @@ public final class DitheredPalette implements Palette {
         if (color.getAlpha() < 255) return base.index(color);
 
         Blend blend = blendFor(color.getRGB() & 0xFFFFFF);
-        int threshold = THRESHOLD[Math.floorMod(y, 4)][Math.floorMod(x, 4)];
-        return blend.ratio() > threshold ? blend.high() : blend.low();
+        return blend.ratio() > matrix.threshold(x, y) ? blend.high() : blend.low();
     }
 
     @Override
@@ -85,8 +85,7 @@ public final class DitheredPalette implements Palette {
         if ((argb >>> 24) != 0xFF) return base.index(new Color(argb, true));
 
         Blend blend = blendFor(argb & 0xFFFFFF);
-        int threshold = THRESHOLD[Math.floorMod(y, 4)][Math.floorMod(x, 4)];
-        return blend.ratio() > threshold ? blend.high() : blend.low();
+        return blend.ratio() > matrix.threshold(x, y) ? blend.high() : blend.low();
     }
 
     /** The blend for an opaque color's int key, computing on a miss. Allocation-free apart from growth. */
@@ -166,11 +165,11 @@ public final class DitheredPalette implements Palette {
         byte other = closest(mirrorRed, mirrorGreen, mirrorBlue, nearest);
         Color high = base.color(other);
 
-        return new Blend(nearest, other, ratio(red, green, blue, low, high));
+        return new Blend(nearest, other, ratio(red, green, blue, low, high, matrix.levels()));
     }
 
-    /** How far along the low-to-high line the wanted color sits, in threshold levels. */
-    private static int ratio(int red, int green, int blue, Color low, Color high) {
+    /** How far along the low-to-high line the wanted color sits, in the tile's threshold levels. */
+    private static int ratio(int red, int green, int blue, Color low, Color high, int levels) {
         int spanRed = high.getRed() - low.getRed();
         int spanGreen = high.getGreen() - low.getGreen();
         int spanBlue = high.getBlue() - low.getBlue();
@@ -182,7 +181,7 @@ public final class DitheredPalette implements Palette {
                 + (long) (green - low.getGreen()) * spanGreen
                 + (long) (blue - low.getBlue()) * spanBlue;
 
-        return (int) Math.max(0, Math.min(LEVELS, along * LEVELS / spanLength));
+        return (int) Math.max(0, Math.min(levels, along * levels / spanLength));
     }
 
     private byte closest(int red, int green, int blue, byte exclude) {
