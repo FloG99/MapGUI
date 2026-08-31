@@ -1,12 +1,22 @@
 package de.flog99.mapgui.plugin.video;
 
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -95,5 +105,42 @@ class ToolchainTest {
     @Test
     void handlesTheLineEndingsGithubActuallySends() throws IOException {
         assertEquals("a11f", Toolchain.checksumFor("a11f  yt-dlp\r\nb22f  yt-dlp.exe\r\n", "yt-dlp"));
+    }
+
+    /**
+     * A refused download has to be a refusal rather than a wait.
+     *
+     * <p>An unread streamed body leaves its exchange unfinished, and closing an {@link HttpClient} waits for
+     * every exchange - so dropping the body of a 404 does not report the 404, it hangs the thread that closes the
+     * client, forever. That is exactly what a wrong asset name looks like, and it hid the warning meant to explain
+     * it. Preemptive, because the failure this guards against is an unbounded wait rather than a wrong answer.
+     */
+    @Test
+    void anErrorStatusIsReportedRatherThanWaitedOn() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        // Bigger than a socket buffer, so the body genuinely has to be drained rather than arriving with the
+        // headers - with a small one there is nothing left in flight and nothing to wait for.
+        byte[] body = new byte[512 * 1024];
+        server.createContext("/missing", exchange -> {
+            exchange.sendResponseHeaders(404, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            URI uri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/missing");
+            assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+                try (HttpClient http = HttpClient.newHttpClient()) {
+                    HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
+                    HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+                    assertEquals(404, response.statusCode());
+                    Toolchain.discard(response.body());
+                }
+            }, "closing the client after an error status must not wait on a body nobody read");
+        } finally {
+            server.stop(0);
+        }
     }
 }
