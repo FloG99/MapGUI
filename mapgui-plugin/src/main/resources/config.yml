@@ -8,12 +8,13 @@ colors:
   # palette has a couple of hundred entries and everything is rounded to one of them, so this only decides
   # which way it rounds.
   #
-  #   vanilla     What Minecraft itself uses. Slightly better on greys, which is what menus, panels and text
-  #               are made of - so it suits a server whose maps are mostly interfaces.
+  #   vanilla     What Minecraft itself uses, and what every map you already have looks like.
   #   perceptual  Nearest in Oklab, a space built so that equal distances look equally different. Measurably
-  #               closer on saturated colour and visibly smoother on a colour ramp, at the cost of about two
-  #               per cent on greys, which is small enough not to be visible. Suits a server whose maps are
-  #               mostly photographs: camera captures, video walls, terrain.
+  #               closer on both halves - about 4% on saturated colour and 13% at the tail on greys - and
+  #               visibly smoother on a colour ramp. Most worth it on a server whose maps are photographs:
+  #               camera captures, video walls, terrain.
+  #
+  # Vanilla is the default only because changing it moves every pixel of every map that already exists.
   #
   # See docs/images/colour-matching.png for the two side by side, and docs/performance.md for the numbers.
   # Read once at startup, so changing it needs a restart rather than a reload.

@@ -63,18 +63,25 @@ and everything rounds to one of them, so this only decides which way it rounds.
 
 Measured over 20,000 colours above the dark range, scored in CIELAB, which neither formula uses:
 
-| | mean dE | on greys | on saturated colour | worst case |
-|---|---|---|---|---|
-| `vanilla` | 17.98 | **2.49** | 18.78 | 69.4 |
-| `perceptual` | **17.32** | 2.54 | **18.04** | **63.3** |
+| | mean dE | on greys | greys, p95 | on saturated colour | worst case |
+|---|---|---|---|---|---|
+| `vanilla` | 17.98 | 2.49 | 5.58 | 18.78 | 69.4 |
+| `perceptual` | **17.32** | **2.44** | **4.85** | **18.04** | **63.3** |
 
-So perceptual is about 4% closer overall, 4% closer on saturated colour with its worst case a fifth better, and
-2% further on greys. `docs/images/colour-matching.png` is the two drawing the same ramps: the greys are
-indistinguishable, and the saturated ramps are visibly smoother - vanilla puts stray magenta through a purple
-ramp and goes olive through red-to-yellow.
+Perceptual is closer on both halves: about 4% on saturated colour with its worst case a fifth better, and 13% at
+the tail on greys. `docs/images/colour-matching.png` draws the two over the same ramps - the saturated ones are
+visibly smoother, where vanilla puts stray magenta through a purple ramp and goes olive through red-to-yellow.
 
-Vanilla is the default because it is what every existing map already looks like. A server whose walls are mostly
-photographs - cameras, video, terrain - is the case for changing it.
+It only wins on greys because it is told to. Left to itself a perceptual space keeps a faint hue faithfully,
+which is right for a colour and wrong for something nearly grey: a warm grey at rgb(129,123,118) reached past
+the neutral rgb(117,117,117) for a tan rgb(147,124,113), because the tan's hue matched and Oklab will pay in
+lightness to keep a hue. On a ramp that is a band of skin tone through the middle of a grey. So a colour with no
+hue worth keeping pays for a candidate's colourfulness, which is the rule the dark end of the palette already
+had for the same reason. Without it, greys came out 2% worse instead of 2% better.
+
+Vanilla stays the default anyway, because changing it moves every pixel of every map that already exists and
+nothing about an upgrade should do that quietly. Turning it on is worth it, and most worth it on a server whose
+walls are photographs - cameras, video, terrain.
 
 ## Video holds still when nothing is happening
 
