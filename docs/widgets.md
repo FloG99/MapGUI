@@ -248,6 +248,37 @@ turn and under both mirrors, which is as round as eight squares on a grid this s
 canvas, which is 16 KB a frame. Take it off screen when the thing it was waiting for arrives. A screen with
 animation turned off draws it standing still rather than repainting forever.
 
+`Progress()` is the other half, for a wait that *can* say how far along it is:
+
+```java
+Progress().value(done / (double) total).bar(theme().accent()).background(theme().surface())
+```
+
+The node's own `background` is the track and its `border` is the frame, since a bar is a box with something
+drawn inside it. What `bar` adds is the something, and it takes a `Fill` rather than a `Color` so it can ramp:
+
+```java
+Progress().value(health).bar(Fill.gradient(danger, success, Fill.Direction.HORIZONTAL))
+```
+
+The gradient belongs to the **track**, not to the filled part, so filling walks along the ramp instead of
+squeezing the whole of it into whatever is done so far. Non-solid fills dither, so the ramp does not band.
+
+`segments(n)` draws it as separate pips instead of a level, which is how Minecraft counts anything a player
+reads at a glance - hearts, armour, hunger - and reads better than a level does at these sizes. A pip lights
+only once it is fully earned, so a bar one pip short of the end never draws a full one:
+
+```java
+Progress().segments(10).segmentGap(1).value(lives / 10.0).bar(theme().danger())
+```
+
+`indeterminate()` sends a block travelling along it instead, for a download that reports its length sometimes
+and not others - the layout around it does not change shape when the total turns out not to exist. It costs
+frames exactly as a spinner does; where there is never a total, a spinner says the same thing in a dozen pixels.
+
+With no width of its own a bar takes the width it is offered, which is what a bar in a column wants, and it is
+six pixels tall unless `height` says otherwise.
+
 ## Themes
 
 Colors come from a `Theme` rather than being hardcoded per screen, so overriding `theme()` restyles
