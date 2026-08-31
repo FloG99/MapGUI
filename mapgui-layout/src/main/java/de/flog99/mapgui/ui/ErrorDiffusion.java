@@ -34,6 +34,14 @@ final class ErrorDiffusion implements Quantizer {
      */
     private final int total;
 
+    /**
+     * Each neighbour's share of the error, in {@link #SCALE} units, worked out once.
+     *
+     * <p>{@code weight[i] * SCALE / total} is fixed for the life of the kernel, and {@link #spread} is the
+     * innermost loop of the whole path - once per neighbour per pixel - so it is not the place to divide.
+     */
+    private final int[] share;
+
     /** How many rows below the current one the kernel reaches, which is how many error rows have to be kept. */
     private final int reach;
 
@@ -53,6 +61,9 @@ final class ErrorDiffusion implements Quantizer {
         this.dy = kernel[1];
         this.weight = kernel[2];
         this.total = kernel[3][0];
+
+        this.share = new int[weight.length];
+        for (int i = 0; i < weight.length; i++) this.share[i] = weight[i] * SCALE / total;
 
         int deepest = 0;
         for (int down : dy) deepest = Math.max(deepest, down);
@@ -137,10 +148,10 @@ final class ErrorDiffusion implements Quantizer {
             if (toX < 0 || toX >= width || toY >= height) continue;
 
             int channel = (toY % rows) * width * 3 + toX * 3;
-            int share = weight[i] * SCALE / total;
-            error[channel] += red * share;
-            error[channel + 1] += green * share;
-            error[channel + 2] += blue * share;
+            int part = share[i];
+            error[channel] += red * part;
+            error[channel + 1] += green * part;
+            error[channel + 2] += blue * part;
         }
     }
 

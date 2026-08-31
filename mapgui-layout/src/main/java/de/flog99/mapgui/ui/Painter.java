@@ -121,11 +121,27 @@ public final class Painter {
      * <p>An error diffusion mode is accepted here and stood in for by {@link Dither#ORDERED_FINE} for
      * everything except {@link #image}, which is the only thing on this path with a whole rect of colors to
      * diffuse over. See {@link Quantizer#perPixel()}.
+     *
+     * <p><b>Pop it in a {@code finally}.</b> A painter outlives any one frame, and unlike a clip - which every
+     * container pushes again on the next pass - a mode left pushed is never overwritten by anything. So a
+     * callback that throws between the two would dither the rest of that frame and every frame after it, and
+     * inflate the packet for all of them. {@link #resetDither()} is what the frame entry point calls to make
+     * that survivable rather than permanent.
      */
     public Dither pushDither(Dither mode) {
         Dither previous = dither;
         dither = mode == null ? Dither.NONE : mode;
         return previous;
+    }
+
+    /**
+     * Drops back to no dithering, for whoever owns the frame rather than a node inside it.
+     *
+     * <p>A painter is built once per session and reused for every frame, so this is how a mode that escaped its
+     * {@code finally} costs one frame instead of the rest of the session.
+     */
+    public void resetDither() {
+        dither = Dither.NONE;
     }
 
     public void popDither(Dither previous) {
@@ -194,7 +210,16 @@ public final class Painter {
     /** The fill's own mode if it has one, otherwise the scope's - see {@link Fill#dither()}. */
     private Palette paletteFor(Fill fill) {
         Dither asked = fill.dither();
-        return quantizerFor(asked == null ? dither : asked).perPixel();
+        Dither wanted = asked == null ? dither : asked;
+
+        // A fill nobody has an opinion about still dithers if it varies, which is what every fill did before
+        // there were modes to choose from: the old rule was "not a flat color means dither it". Only a flat one
+        // snaps by default. To band a varying fill on purpose, say so on the fill - fill.dither(Dither.NONE) -
+        // rather than by scoping the painter, since a scope is what an opinionless fill defers to.
+        if (asked == null && wanted == Dither.NONE && !(fill instanceof Fill.Solid)) {
+            wanted = Dither.ORDERED;
+        }
+        return quantizerFor(wanted).perPixel();
     }
 
     private Quantizer quantizerFor(Dither mode) {

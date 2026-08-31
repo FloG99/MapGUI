@@ -270,7 +270,7 @@ That freedom has a price and it is paid on the wire rather than in the frame, so
 
 Error diffusion needs every color up front, so it only runs where a whole rect is known: an image, and decoding. Asked for on a fill it stands in as `ORDERED_FINE` and says so through `Quantizer#diffuses()`.
 
-`Painter#pushDither(Dither)` sets a mode for everything drawn until `popDither(previous)`, the same idiom as `pushClip`. It reaches fills and images; a line, a glyph and a flat `fill(rect, color)` still snap, because dithering an anti-aliased glyph only speckles its edge.
+`Painter#pushDither(Dither)` sets a mode for everything drawn until `popDither(previous)`, the same idiom as `pushClip` - and pop it in a `finally`, because a painter outlives the frame and a mode left pushed is not overwritten by anything the way a clip is. It reaches fills and images; a line, a glyph and a flat `fill(rect, color)` still snap, because dithering an anti-aliased glyph only speckles its edge.
 
 For a fill with no endpoints at all - a rainbow, a sweep - use `fill(Fill)` with `phase(millis)`:
 

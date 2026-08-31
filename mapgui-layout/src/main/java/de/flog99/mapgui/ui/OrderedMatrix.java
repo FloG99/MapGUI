@@ -75,7 +75,9 @@ public final class OrderedMatrix {
             case ORDERED -> bayer4();
             case ORDERED_FINE -> bayer8();
             case BLUE_NOISE -> blueNoise();
-            default -> null;
+            // Enumerated rather than defaulted, for the same reason Dither#diffuses() has no default arm: a new
+            // ordered mode must fail to compile here instead of reaching DitheredPalette with a null tile.
+            case NONE, FLOYD_STEINBERG, ATKINSON, SIERRA_LITE -> null;
         };
     }
 

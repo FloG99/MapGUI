@@ -50,7 +50,7 @@ public final class GalleryDemo {
      * Straight out of the jar, so the demo needs no file installing and nothing downloading.
      *
      * <p>Dithered at decode rather than while painting, which is the only place an animation can be: by paint
-     * time its pixels are palette indices. Atkinson because the clip is photographic - see {@link Dither}.
+     * time its pixels are palette indices. Floyd-Steinberg because the clip is photographic - see {@link Dither}.
      */
     private VideoPlayer loadVideo(JavaPlugin plugin) {
         try (InputStream source = plugin.getResource("bunny_sample_squared.gif")) {

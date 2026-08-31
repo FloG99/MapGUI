@@ -150,6 +150,28 @@ class PainterDitherTest {
         assertEquals(SIZE * SIZE, after.count(WHITE), "popping should have put the painter back as it was");
     }
 
+    /**
+     * A fill this interface did not write - a caller's own lambda - dithers without having to ask for it.
+     *
+     * <p>The rule before there were modes was "not a flat color means dither it", and it has to keep holding:
+     * driving the choice off {@link Fill#dither()} alone snaps every caller-supplied fill, because a gradient is
+     * the only implementation that overrides it. That took the dithering off the rainbow fill this repository
+     * ships in {@code GalleryScreen} and documents in {@code docs/widgets.md}, whose whole point is that it
+     * leans on dithering.
+     */
+    @Test
+    void aCallerSuppliedFillDithersWithoutAsking() {
+        Buffer buffer = new Buffer();
+        Painter painter = painterOn(buffer);
+
+        // A lambda rather than Fill.solid, so it is not the flat case, and it names no mode.
+        paint(painter, (x, y, bounds) -> GRAY);
+
+        assertTrue(buffer.count(BLACK) > 0 && buffer.count(WHITE) > 0,
+                "a caller's fill should dither by default rather than band"
+        );
+    }
+
     /** A fill that asked for banding keeps it inside a scope that dithers everything else. */
     @Test
     void aFillThatAsksForNoneStaysBandedInADitheredScope() {

@@ -60,8 +60,9 @@ public final class GifFrames implements Frames {
      * node that draws this would be a no-op: the pixels stopped being colors at decode. Which is the better
      * deal anyway, since it is applied once per frame rather than once per frame per viewer per repaint.
      *
-     * <p>Choose an error diffusion mode if any: {@link Dither#ATKINSON} for a photographic
-     * clip, {@link Dither#NONE} for flat artwork that the palette can nearly say already.
+     * <p>Choose an error diffusion mode if any: {@link Dither#FLOYD_STEINBERG} for a photographic clip, which
+     * measures as the most faithful of the three, {@link Dither#NONE} for flat artwork that the palette can
+     * nearly say already.
      * An <i>ordered</i> mode is available but rarely what you want here, because a player scales frames after
      * this point and resampling a periodic tile beats against itself as moire.
      */
