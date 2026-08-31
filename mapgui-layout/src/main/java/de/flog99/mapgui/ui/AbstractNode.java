@@ -54,13 +54,16 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
 
     // ---- sizing ----
 
+    // A mode change carries the bounds over, so .maxWidth(80).fill() and .fill().maxWidth(80) mean the
+    // same thing. Order-dependent styling would be a trap in a chain this long.
+
     public S width(int pixels) {
-        this.width = Sizing.fixed(pixels);
+        this.width = Sizing.fixed(pixels).bounded(width.min(), width.max());
         return self();
     }
 
     public S height(int pixels) {
-        this.height = Sizing.fixed(pixels);
+        this.height = Sizing.fixed(pixels).bounded(height.min(), height.max());
         return self();
     }
 
@@ -74,18 +77,69 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
     }
 
     public S fill(int weight) {
-        this.width = Sizing.fill(weight);
-        this.height = Sizing.fill(weight);
+        this.width = Sizing.fill(weight).bounded(width.min(), width.max());
+        this.height = Sizing.fill(weight).bounded(height.min(), height.max());
         return self();
     }
 
     public S fillWidth() {
-        this.width = Sizing.fill(1);
+        this.width = Sizing.fill(1).bounded(width.min(), width.max());
         return self();
     }
 
     public S fillHeight() {
-        this.height = Sizing.fill(1);
+        this.height = Sizing.fill(1).bounded(height.min(), height.max());
+        return self();
+    }
+
+    /**
+     * Smallest width this node will resolve to, whatever its sizing mode works out.
+     *
+     * <p>A minimum is allowed to overflow the space on offer. Something has to give when a node cannot
+     * have what it asks for, and a control with a minimum is saying it would rather be clipped than
+     * squeezed down to unusable.
+     */
+    public S minWidth(int pixels) {
+        this.width = width.withMin(pixels);
+        return self();
+    }
+
+    /**
+     * Largest width this node will resolve to, whatever its sizing mode works out - including
+     * {@link #width(int)}, which a maximum beats.
+     *
+     * <p>This is the pairing the three sizing modes cannot express on their own. {@code fill().maxWidth(80)}
+     * is a content column that stops growing on a wide wall instead of stretching across it, and the space it
+     * gives up goes back to its fill siblings rather than off the edge of the row.
+     */
+    public S maxWidth(int pixels) {
+        this.width = width.withMax(pixels);
+        return self();
+    }
+
+    public S minHeight(int pixels) {
+        this.height = height.withMin(pixels);
+        return self();
+    }
+
+    /**
+     * Largest height this node will resolve to.
+     *
+     * <p>On a {@link Scroll} this is what gives a list "grow until it does not fit, then scroll", rather
+     * than a height that has to be decided before anyone knows how many rows there are.
+     */
+    public S maxHeight(int pixels) {
+        this.height = height.withMax(pixels);
+        return self();
+    }
+
+    public S widthBetween(int minimum, int maximum) {
+        this.width = width.bounded(minimum, maximum);
+        return self();
+    }
+
+    public S heightBetween(int minimum, int maximum) {
+        this.height = height.bounded(minimum, maximum);
         return self();
     }
 
@@ -461,10 +515,11 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
 
     @Override
     public final Measured measure(LayoutContext context, int availableWidth, int availableHeight) {
-        // A fixed size has to reach the content, or text would wrap against the parent's width
-        // and then be squeezed into a narrower box.
-        int limitWidth = width.mode() == Sizing.Mode.FIXED ? width.value() : availableWidth;
-        int limitHeight = height.mode() == Sizing.Mode.FIXED ? height.value() : availableHeight;
+        // The content is measured against the size this node will really resolve to, not the parent's:
+        // a fixed size has to reach the content, or text would wrap against the parent's width and then be
+        // squeezed into a narrower box - and a maximum does the same thing in reverse.
+        int limitWidth = limit(width, availableWidth);
+        int limitHeight = limit(height, availableHeight);
 
         int contentWidth = Math.max(0, limitWidth - padding.horizontal());
         int contentHeight = Math.max(0, limitHeight - padding.vertical());
@@ -476,11 +531,17 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
         );
     }
 
+    /** The size this node cannot get past, which is what its content is measured against. */
+    private static int limit(Sizing sizing, int available) {
+        return sizing.clamp(sizing.mode() == Sizing.Mode.FIXED ? sizing.value() : available);
+    }
+
     private static int resolve(Sizing sizing, int natural, int available) {
-        return switch (sizing.mode()) {
+        int resolved = switch (sizing.mode()) {
             case HUG, FILL -> Math.min(natural, available);
             case FIXED -> sizing.value();
         };
+        return sizing.clamp(resolved);
     }
 
     @Override

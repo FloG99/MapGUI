@@ -21,6 +21,15 @@ Three ways a node decides its size, and that is the whole model:
 `gap`, `padding`, `align` and `justify` do what they look like. `align(Align.STRETCH)` on a column makes its
 children as wide as the widest, which is usually what you want for a stack of buttons.
 
+`minWidth`, `maxWidth`, `minHeight`, `maxHeight` and the `widthBetween` / `heightBetween` pair bound whatever the
+mode works out, an exact size included - `width(200).maxWidth(120)` is 120. Two pairings are worth knowing:
+
+- `fill().maxWidth(80)` is a content column that stops growing on a wide wall instead of stretching across it, and
+  the space it gives up goes to its `fill()` siblings rather than off the edge of the row. With
+  `justify(Justify.CENTER)` on the row around it, that is a centered column of any width you like.
+- `maxHeight` on a `Scroll` is a list that grows until it does not fit and only then scrolls, rather than a height
+  that has to be decided before anyone knows how many rows there are.
+
 `Gap(width, height)` is empty space of a fixed size, for holding a slot open when what goes in it is not there -
 a control a server has turned off, an icon that has not loaded. `hidden(true)` takes the space with it, so a row
 of three controls becomes a row of two and everything shifts.

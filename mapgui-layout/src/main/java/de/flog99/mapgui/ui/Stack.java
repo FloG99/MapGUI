@@ -24,8 +24,9 @@ public final class Stack extends AbstractContainer<Stack> {
     protected void arrangeContent(LayoutContext context, Rect content) {
         for (Node kid : visibleChildren()) {
             Measured measured = kid.measure(context, content.width(), content.height());
-            int width = kid.widthSizing().isFill() ? content.width() : Math.min(measured.width(), content.width());
-            int height = kid.heightSizing().isFill() ? content.height() : Math.min(measured.height(), content.height());
+            // Clamped rather than simply taken, or a fill child's maxWidth would be ignored here alone.
+            int width = kid.widthSizing().isFill() ? kid.widthSizing().clamp(content.width()) : Math.min(measured.width(), content.width());
+            int height = kid.heightSizing().isFill() ? kid.heightSizing().clamp(content.height()) : Math.min(measured.height(), content.height());
 
             int x = content.x() + across(content.width() - width, kid.placeX());
             int y = content.y() + down(content.height() - height, kid.placeY());
