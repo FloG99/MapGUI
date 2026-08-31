@@ -7,6 +7,7 @@ import de.flog99.mapgui.WallDisplay;
 import de.flog99.mapgui.WallLayout;
 import de.flog99.mapgui.plugin.Coordinates;
 import de.flog99.mapgui.plugin.InputRouter;
+import de.flog99.mapgui.plugin.video.MediaSources;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -65,12 +66,13 @@ public final class WallManager {
 
     /** Takes a way to start a wall rather than the whole of {@link MapGui}, which is all it ever used it for. */
     public WallManager(Plugin plugin, Supplier<WallDisplay.Builder> walls, InputRouter router,
-                       GuiCatalog screens, int fps, int range, int videoSize, boolean prerender, Map<String, String> streams) {
+                       GuiCatalog screens, MediaSources media, int fps, int range, int videoSize,
+                       boolean prerender, Map<String, String> streams) {
         this.plugin = plugin;
         this.walls = walls;
         this.router = router;
         this.store = new WallStore(plugin);
-        this.contents = new WallContents(screens, new VideoLibrary(plugin, videoSize, prerender, streams));
+        this.contents = new WallContents(screens, new VideoLibrary(plugin, media, videoSize, prerender, streams));
         this.fps = fps;
         this.range = range;
     }

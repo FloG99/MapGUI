@@ -117,7 +117,7 @@ media:
 ```
 
 `/mapgui wall place lobby-cam` then puts it up. A name is a shortcut for the command rather than a list of what
-is allowed - a plugin holding `MediaService` may play any url it
+is allowed - a plugin holding [`MediaService`](#playing-a-url-your-plugin-was-handed) may play any url it
 likes. One connection and one decode serve however many walls show it.
 
 > The section used to be called `video:`. If your `config.yml` still says `video.ffmpeg`, MapGUI renames it for
@@ -133,14 +133,92 @@ MapGui.get().wall().at(block, face).size(2, 2).content(WallContent.live(source))
 ```
 
 `WallContent.live` takes a `LiveSource`, which is the interface in `mapgui-api`. MapGUI's own FFmpeg
-implementation of it lives in the plugin rather than the API, so it is not something your plugin can name at
-compile time - a file or a stream in `config.yml` is how you reach that one, and `LiveSource` is there for a
-frame source of your own: a capture card, a render, another plugin's output.
+implementation lives in the plugin rather than the API, so you never name it: `MediaService`
+[hands you one for any url](#playing-a-url-your-plugin-was-handed), and `LiveSource` stays open for a frame
+source of your own - a capture card, a render, another plugin's output.
 
 That is what makes a two hour film possible where a GIF of it would not fit in memory, and it is why nothing
 waits: FFmpeg scales inside the decoder, quantizing is a table lookup per pixel, and a stall in the stream
 leaves the last frame up rather than the server. Close the source when you are done with it - it owns a thread
 and, for a stream, a connection.
+
+## Playing a url your plugin was handed
+
+`MapGui.get().media()` is the way to play something that is in no config file - which is what a
+`/stream <url>` command needs:
+
+```java
+MediaService media = MapGui.get().media();
+
+// Live. Starts immediately, and keeps itself connected.
+wall.content(WallContent.live(media.stream(url)));
+
+// A clip to show more than once. Downloaded once, then it is a file forever.
+media.download(url, percent -> bar.set(percent))
+     .thenAccept(frames -> wall.content(WallContent.video(new VideoPlayer(frames))));
+```
+
+**Any url is accepted, page urls included.** A plugin calling MapGUI is code already running on the server - it
+can read files and open sockets without asking us - so refusing its url argument would protect nobody. What
+that means for you is that **permission-gating a url a player typed is your job**, not MapGUI's. What MapGUI
+owes you in return is a failure with a reason rather than an exception, and caps that hold whatever url arrives.
+
+**Failure is an end, not an exception.** `stream` always returns a source; one that could not be opened is
+simply not running, with `error()` saying why - and "FFmpeg is not loaded" is one of those reasons, because a
+server owner may have turned it off. Handle an end, not a guarantee.
+
+### Stream, or download
+
+Both, and the difference matters:
+
+| | Stream from source | Download, then play |
+|---|---|---|
+| Live content - Twitch, an rtsp camera | **the only option** | impossible, it is ongoing |
+| Starts | immediately | when the download finishes |
+| Url expiry | handled for you, see below | **never** - once local it is a file |
+| Source going down, rate limits | breaks playback | irrelevant after the first fetch |
+| Seeking | poor to impossible | proper |
+| Disk | none | the file, cached and shared |
+| Showing it again | fetched again | fetched once, played forever |
+| Memory | one frame | every frame, one byte per pixel |
+
+So: **live means stream; a clip you will show more than once means download.** A lobby trailer wants
+downloading - no expiry, no re-resolution and no dependency on YouTube being reachable at the moment somebody
+walks past. Something watched once wants streaming.
+
+A download is cached by the hash of its url, so the second call writes nothing and every wall showing it shares
+one file. `media.download.max-file-mb`, `max-total-mb` and `max-frames` are what stop that from being a way to
+fill a disk or the heap; past any of them the future completes with a message naming the cap.
+
+## YouTube and Twitch
+
+A YouTube or Twitch link is a *page*, not media, and `yt-dlp` is what turns one into the other. It is off:
+
+```yaml
+media:
+  ffmpeg: true
+  resolve-page-urls: true
+```
+
+Turning it on fetches yt-dlp and a small JavaScript runtime into `plugins/MapGUI/tools/` and **runs them** as
+child processes, keeping yt-dlp updated because YouTube rejects old releases outright. Nothing on the machine is
+used or installed to, and deleting that folder undoes all of it. `canResolvePageUrls()` is how a plugin can say
+why before trying, and the startup log says what each tool resolved to - which is the first thing worth knowing
+about a 403.
+
+**Signed urls expire.** A resolved YouTube url is good for hours, not for a night, so MapGUI reads the deadline
+off the url and reconnects a couple of minutes before it, keeping the old connection's picture up until the new
+one has one of its own. There is nothing to do about it from a plugin, and it is why a wall left up overnight
+keeps playing.
+
+Worth knowing before it is reported as a bug:
+
+- **YouTube and Twitch both restrict access from outside their own players.** Whether that is acceptable is the
+  operator's decision, which is why this is off by default and says so in `config.yml`.
+- **Live HLS is 10 to 30 seconds behind.** Fine for a wall, and not something MapGUI can shorten.
+- **A datacenter IP may be blocked or rate-limited**, YouTube especially. Resolution can simply fail on a rented
+  box; the wall keeps its last frame and the reason is logged once.
+- **Bandwidth is unchanged.** A 1080p source still becomes a canvas of 128-pixel maps.
 
 ### What it does not change
 

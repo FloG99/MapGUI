@@ -2,7 +2,9 @@ package de.flog99.mapgui;
 
 import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.map.MapPrinter;
+import de.flog99.mapgui.media.MediaService;
 import de.flog99.mapgui.prompt.PromptRegistry;
+import org.jetbrains.annotations.ApiStatus;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -151,6 +153,16 @@ public interface MapGui {
      * offering it - see {@code docs/camera.md}.
      */
     Camera camera();
+
+    /**
+     * Plays a url your plugin was handed - a file, a stream, a YouTube or Twitch page.
+     *
+     * <p>The way to put media on a wall that is not named in {@code config.yml}, which is what a
+     * {@code /stream <url>} command needs. Read {@link MediaService} first: whether to stream or to download is a
+     * real choice, and permission-gating a url a player typed is the calling plugin's job rather than MapGUI's.
+     */
+    @ApiStatus.Experimental
+    MediaService media();
 
     /**
      * Prints pixels onto real, placeable maps, for a picture that hangs in an item frame and stays there.

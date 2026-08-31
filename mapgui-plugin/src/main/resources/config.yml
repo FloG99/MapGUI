@@ -380,5 +380,11 @@ media:
     # Biggest single file, in MB.
     max-file-mb: 256
 
-    # Everything in the cache together, in MB. The oldest files go first when a new one needs the room.
+    # Everything in the cache together, in MB. The least recently used files go first when a new one needs
+    # the room.
     max-total-mb: 2048
+
+    # The most frames one clip may be held as. A download is sampled down to walls.fps, since a wall cannot
+    # show more, so 1200 is two minutes at 10 fps - about 78 MB of heap at walls.video-size 256. A longer
+    # clip is refused rather than quietly cut short: stream it instead, which holds one frame at a time.
+    max-frames: 1200

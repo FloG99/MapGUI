@@ -14,6 +14,10 @@ import de.flog99.mapgui.plugin.camera.ServerPacks;
 import de.flog99.mapgui.plugin.map.MapPrinterService;
 import de.flog99.mapgui.plugin.prompt.AnvilPrompt;
 import de.flog99.mapgui.plugin.prompt.DialogPrompt;
+import de.flog99.mapgui.plugin.video.MediaCache;
+import de.flog99.mapgui.plugin.video.MediaSources;
+import de.flog99.mapgui.plugin.video.StreamResolver;
+import de.flog99.mapgui.plugin.video.Toolchain;
 import de.flog99.mapgui.plugin.video.VideoNatives;
 import de.flog99.mapgui.plugin.wall.WallListeners;
 import de.flog99.mapgui.plugin.wall.WallManager;
@@ -42,6 +46,8 @@ public final class MapGuiPlugin extends JavaPlugin {
     private CameraFeeds feeds;
     private ServerPacks serverPacks;
     private MapPrinterService printer;
+    private Toolchain tools;
+    private MediaSources media;
     private HandItems handItems;
     private HeldTriggers heldTriggers;
     private CommandSurface surface;
@@ -91,8 +97,9 @@ public final class MapGuiPlugin extends JavaPlugin {
 
         printer = new MapPrinterService(this, backend.savedMapPixels());
         announceMedia();
+        media = mediaSources();
 
-        walls = new WallManager(this, wallRegistry::builder, router, screens, config.wallFps(), config.wallRange(), config.wallVideoSize(), config.wallPrerender(), config.streams());
+        walls = new WallManager(this, wallRegistry::builder, router, screens, media, config.wallFps(), config.wallRange(), config.wallVideoSize(), config.wallPrerender(), config.streams());
         sessions = new SessionManager(this, wallRegistry);
         handItems = new HandItems(this);
         heldTriggers = new HeldTriggers(this);
@@ -161,6 +168,26 @@ public final class MapGuiPlugin extends JavaPlugin {
             getLogger().warning("Could not update config.yml (" + e.getMessage() + "). Settings under their old"
                     + " names are still read, so nothing has stopped working.");
         }
+    }
+
+    /**
+     * Everything that turns a url into pixels, built from what config.yml decided.
+     *
+     * <p>The toolchain is warmed on a worker rather than here: resolving it starts processes and may download,
+     * both of which would be minutes of a server not starting. Warming it at all is what puts the line saying
+     * what was obtained in the startup log instead of inside somebody's first play - the first question about a
+     * 403 is which runtime, if any, the plugin actually got.
+     */
+    private MediaSources mediaSources() {
+        tools = new Toolchain(getDataFolder().toPath(), getLogger());
+        StreamResolver resolver = new StreamResolver(tools, getLogger(), config.resolvePageUrls());
+        MediaCache cache = new MediaCache(getDataFolder().toPath().resolve("cache"),
+                config.downloadMaxFileMb(), config.downloadMaxTotalMb());
+
+        if (config.resolvePageUrls()) {
+            getServer().getScheduler().runTaskAsynchronously(this, tools::warm);
+        }
+        return new MediaSources(this, resolver, cache, config.wallVideoSize(), config.wallFps(), config.downloadMaxFrames());
     }
 
     /**
@@ -271,6 +298,11 @@ public final class MapGuiPlugin extends JavaPlugin {
 
     public CameraAssetStore cameraAssets() {
         return cameraAssets;
+    }
+
+    /** The one piece of new public surface in phase 6, handed out through {@link MapGui#media()}. */
+    public MediaSources media() {
+        return media;
     }
 
     MapPrinterService printer() {

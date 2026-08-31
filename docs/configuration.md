@@ -166,6 +166,8 @@ a ceiling rather than a default. See [animation](animation.md#frame-limits).
 | `plugins/MapGUI/videos/` | drop GIFs, videos and pictures here to make them placeable |
 | `plugins/MapGUI/walls.yml` | where placed walls are recorded. Written on every change, not on shutdown |
 | `plugins/MapGUI/assets/` | resource packs the camera draws with, which outrank any a plugin supplies. See [camera](camera.md#supplying-them-yourself) |
+| `plugins/MapGUI/tools/` | yt-dlp and its JavaScript runtime, only on a server with `media.resolve-page-urls` on. Delete it to undo that entirely |
+| `plugins/MapGUI/cache/media/` | clips downloaded through `MediaService`, named by the hash of their url. Safe to delete; they come back when asked for |
 
 `walls.yml` holds only a position, a size and a content name. A wall whose content is missing - a deleted GIF,
 a plugin that is not loaded - stays in the file and simply does not come up, and returns when its content
