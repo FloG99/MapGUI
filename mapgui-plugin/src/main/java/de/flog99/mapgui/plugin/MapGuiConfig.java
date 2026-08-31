@@ -31,7 +31,10 @@ public record MapGuiConfig(
         int wallRange,
         int wallVideoSize,
         boolean wallPrerender,
-        boolean videoFfmpeg,
+        boolean mediaFfmpeg,
+        boolean resolvePageUrls,
+        int downloadMaxFileMb,
+        int downloadMaxTotalMb,
         Map<String, String> streams,
         boolean cameraDownload,
         List<String> cameraPacks,
@@ -60,7 +63,10 @@ public record MapGuiConfig(
                 // One map's worth is the floor - below that a wall could only ever be upscaled.
                 Math.max(128, config.getInt("walls.video-size", 256)),
                 config.getBoolean("walls.prerender", true),
-                config.getBoolean("video.ffmpeg", false),
+                config.getBoolean(preferred(config, "media.ffmpeg", "video.ffmpeg"), false),
+                config.getBoolean("media.resolve-page-urls", false),
+                Math.max(1, config.getInt("media.download.max-file-mb", 256)),
+                Math.max(1, config.getInt("media.download.max-total-mb", 2048)),
                 streams(config),
                 config.getBoolean("camera.assets.download", true),
                 List.copyOf(config.getStringList("camera.assets.packs")),
@@ -142,11 +148,13 @@ public record MapGuiConfig(
     /**
      * Named live streams, so placing one is the same gesture as placing a file.
      *
-     * <p>Configured rather than typed at the command, deliberately: a url an operator can hand to the server
-     * is a url the server will connect to, and that is a decision for the person with access to config.yml.
+     * <p>A shortcut for {@code /mapgui wall place <name>} and nothing more. It is <b>not</b> an allowlist: a
+     * plugin holding {@link de.flog99.mapgui.media.MediaService} may play any url it likes, because a plugin on
+     * this server can already open a socket without asking us. What a name buys is not having to type a url into
+     * a command, and one connection and one decode however many walls show it.
      */
     private static Map<String, String> streams(FileConfiguration config) {
-        ConfigurationSection section = config.getConfigurationSection("video.streams");
+        ConfigurationSection section = config.getConfigurationSection(preferred(config, "media.streams", "video.streams"));
         if (section == null) return Map.of();
 
         Map<String, String> streams = new LinkedHashMap<>();
@@ -157,6 +165,21 @@ public record MapGuiConfig(
             }
         }
         return Map.copyOf(streams);
+    }
+
+    /**
+     * The new name of a setting, or the old one while a file still only has that.
+     *
+     * <p>{@link ConfigMigration} rewrites the file, so this is the second line of defence rather than the
+     * mechanism: a config.yml on a read-only mount cannot be migrated, and an admin's setting quietly ceasing
+     * to take effect is exactly what the rename must not cause.
+     *
+     * <p>{@link org.bukkit.configuration.ConfigurationSection#isSet} rather than {@code contains}, deliberately:
+     * the jar's own config.yml is registered as the defaults, so the new key is always <i>present</i> and only
+     * {@code isSet} distinguishes what the admin's file actually holds.
+     */
+    private static String preferred(FileConfiguration config, String now, String before) {
+        return config.isSet(now) || !config.isSet(before) ? now : before;
     }
 
     private static int clampFps(int value) {

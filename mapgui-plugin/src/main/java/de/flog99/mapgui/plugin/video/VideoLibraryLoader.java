@@ -18,11 +18,16 @@ import java.util.List;
  *
  * <p>This is the same bargain the camera makes with textures, and for the same reasons: the thing is large,
  * most servers do not want it, and downloading it silently on everyone's behalf would be rude. So it is off
- * until {@code video.ffmpeg} is turned on, and then it is fetched once and cached by the server like any
+ * until {@code media.ffmpeg} is turned on, and then it is fetched once and cached by the server like any
  * other plugin library.
  *
  * <p>Read straight off disk rather than through the plugin's config, because a loader runs before there is a
  * plugin to ask. A missing or unreadable file reads as off, which is the safe way round.
+ *
+ * <p><b>Which is also why this reads both names.</b> The setting used to be {@code video.ffmpeg}, and
+ * {@code ConfigMigration} renames it - but that runs inside the plugin, and this runs before the plugin exists.
+ * The first start after an upgrade therefore still sees the old file, so the old key has to work here or FFmpeg
+ * would silently not be fetched exactly once, on the start where nothing has explained itself yet.
  *
  * <p>Only this platform's natives are listed. The artifact everyone reaches for first bundles every operating
  * system and architecture, which is over a gigabyte to play one video on one machine.
@@ -66,6 +71,9 @@ public final class VideoLibraryLoader implements PluginLoader {
         File config = new File(dataDirectory, "config.yml");
         if (!config.isFile()) return false;
 
-        return YamlConfiguration.loadConfiguration(config).getBoolean("video.ffmpeg", false);
+        YamlConfiguration loaded = YamlConfiguration.loadConfiguration(config);
+        // The new name wins where both are set, so an admin editing the file after a migration gets what they
+        // typed rather than whatever the migration left behind.
+        return loaded.getBoolean("media.ffmpeg", loaded.getBoolean("video.ffmpeg", false));
     }
 }

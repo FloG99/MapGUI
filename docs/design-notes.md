@@ -105,7 +105,7 @@ that it reads a High profile header and decodes anyway instead of refusing. A de
 taken five minutes to rule out instead of an evening.
 
 So there is no pure-Java route, and MapGUI now takes the other one: bytedeco's FFmpeg, pulled through Paper's
-library loader when `video.ffmpeg` is turned on. Off by default and downloaded per platform on demand, so a
+library loader when `media.ffmpeg` is turned on. Off by default and downloaded per platform on demand, so a
 server that only wanted a menu still has no runtime dependencies and GIF still works with none.
 
 The earlier reasoning against it was right about *format* and wrong about *scope*. The map palette is ~250

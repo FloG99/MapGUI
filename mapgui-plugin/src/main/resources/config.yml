@@ -1,3 +1,8 @@
+# Which set of settings this file was written for. MapGUI keeps it up to date and moves anything it
+# renames, so an old file keeps working - there is nothing here to edit by hand.
+
+config-version: 1
+
 prompts:
   # How text input is asked for. "dialog" is a native Minecraft dialog and needs no
   # inventory tricks; "anvil" renames an item.
@@ -324,8 +329,9 @@ walls:
   # pay for is what is up - not everything you have ever tried. Takes effect on restart.
   video-size: 256
 
-video:
-  # Play mp4 and live streams as well as GIFs, using FFmpeg.
+media:
+  # Play mp4 and live streams as well as GIFs, using FFmpeg - and read the image formats ImageIO cannot,
+  # which is WebP, AVIF and HEIC.
   #
   # Off, and turning it on downloads about 80 MB of native libraries on the next start - only the build for
   # this operating system and processor, once, cached by the server alongside every other plugin library.
@@ -335,15 +341,44 @@ video:
   # With this on, any file in plugins/MapGUI/videos that FFmpeg can open - .mp4, .mkv, .webm, .mov and so
   # on - can be placed with /mapgui wall place, the same as a GIF. The difference is that a GIF is decoded
   # into memory once and a video is decoded as it plays, which is what makes a two hour film possible.
+  #
+  # PNG, JPEG, BMP and GIF never need this: ImageIO reads them and always has.
   ffmpeg: false
 
-  # Live streams, by a name you choose. Anything FFmpeg can open: rtmp, rtsp, hls, a plain http url.
+  # Turn a page url - a YouTube or Twitch link - into a media url this server can play.
   #
-  # Named here rather than typed into the command on purpose - a url an operator types is a url this server
-  # connects to, so it is a decision for whoever has access to this file. Placed exactly like a video:
-  # /mapgui wall place lobby-cam
+  # Off, and separate from ffmpeg above because it is a different kind of decision: turning it on fetches
+  # yt-dlp and a small JavaScript runtime into plugins/MapGUI/tools/ and RUNS them, and keeps yt-dlp
+  # updated because YouTube rejects old releases outright. Everything lives in that folder and leaves with
+  # the plugin; nothing on this machine is used or installed to.
+  #
+  # Needed only for page urls. Files, direct media urls and rtsp/rtmp/hls all work without it.
+  #
+  # YouTube and Twitch both restrict access from outside their own players. Whether that is acceptable is
+  # the operator's call, which is why this is off and says so here.
+  resolve-page-urls: false
+
+  # Shortcuts for /mapgui wall place <name>. Anything FFmpeg can open: rtmp, rtsp, hls, a plain http url,
+  # and with resolve-page-urls on, a page url too.
+  #
+  # NOT an allowlist. A plugin using MapGUI's MediaService may play any url it likes - it could open the
+  # socket itself without asking us - so what a name buys is not typing a url into a command. A /stream
+  # <url> command that players can run is that plugin's decision to gate by permission.
   #
   # One connection and one decode per name however many walls show it. Needs ffmpeg above.
   streams: {}
     # lobby-cam: rtsp://10.0.0.5:554/stream1
     # bbb: https://example.com/big_buck_bunny.mp4
+    # big-screen: https://www.youtube.com/watch?v=aqz-KE-bpKQ
+
+  # What MediaService#download may put in plugins/MapGUI/cache/media, which is where a clip fetched once and
+  # played many times lives. A download refuses rather than truncating, and says which cap it hit.
+  #
+  # Live means stream; a clip you will show more than once means download - once it is local there is no
+  # expiry, no re-resolution and no dependency on the source being up when somebody walks past.
+  download:
+    # Biggest single file, in MB.
+    max-file-mb: 256
+
+    # Everything in the cache together, in MB. The oldest files go first when a new one needs the room.
+    max-total-mb: 2048

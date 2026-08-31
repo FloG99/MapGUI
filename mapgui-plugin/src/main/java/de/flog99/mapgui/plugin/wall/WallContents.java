@@ -73,7 +73,7 @@ final class WallContents {
         }
         if (videos.needsFfmpeg() && !VideoNatives.available()) {
             lines.add(Component.text("    Video files and streams need ", NamedTextColor.DARK_GRAY)
-                    .append(Component.text("video.ffmpeg: true", NamedTextColor.GRAY))
+                    .append(Component.text("media.ffmpeg: true", NamedTextColor.GRAY))
                     .append(Component.text(" in config.yml and a restart.", NamedTextColor.DARK_GRAY)));
         }
         return lines;

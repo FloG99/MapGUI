@@ -75,7 +75,7 @@ server that only wanted a menu.
 So it is asked for instead. Turn it on:
 
 ```yaml
-video:
+media:
   ffmpeg: true
 ```
 
@@ -86,15 +86,18 @@ in `plugins/MapGUI/videos` that FFmpeg can open sits next to the GIFs in `/mapgu
 Live streams are named in config rather than typed into the command:
 
 ```yaml
-video:
+media:
   ffmpeg: true
   streams:
     lobby-cam: rtsp://10.0.0.5:554/stream1
 ```
 
-`/mapgui wall place lobby-cam` then puts it up. Named rather than typed on purpose: a url an operator hands to
-the server is a url the server connects to, so it is a decision for whoever has access to `config.yml`. One
-connection and one decode serve however many walls show it.
+`/mapgui wall place lobby-cam` then puts it up. A name is a shortcut for the command rather than a list of what
+is allowed - a plugin holding `MediaService` may play any url it
+likes. One connection and one decode serve however many walls show it.
+
+> The section used to be called `video:`. If your `config.yml` still says `video.ffmpeg`, MapGUI renames it for
+> you on the next start and says so in the log; `walls.video-size` is unaffected.
 
 ### The difference it makes
 
