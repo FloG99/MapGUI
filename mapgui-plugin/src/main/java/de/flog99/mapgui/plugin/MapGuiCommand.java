@@ -11,6 +11,7 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 
 import java.util.ArrayList;
@@ -119,6 +120,10 @@ final class MapGuiCommand {
      * <p>Walls are counted up against saved rather than just up, because the gap is the whole point: a wall
      * that is saved and not showing means its content is missing, which is the one thing here worth chasing.
      *
+     * <p>The backend always earns its line. A server MapGUI has no module for fails to enable and says so, but a
+     * successful load says nothing about <i>which</i> version's internals won - and that is the first thing worth
+     * knowing when a report names a Minecraft version.
+     *
      * <p>The camera earns a line only when it is failing. Captures belong to whichever plugin asks for them, so a
      * working one is that plugin's business - but a failing one is invisible everywhere else, since from outside it
      * looks exactly like a camera nothing is using.
@@ -139,6 +144,12 @@ final class MapGuiCommand {
                         line = line.append(Component.text("  - see /mapgui wall list", NamedTextColor.DARK_GRAY));
                     }
                     context.getSource().getSender().sendMessage(line);
+
+                    String version = Bukkit.getMinecraftVersion();
+                    context.getSource().getSender().sendMessage(Component.text("Backend  ", NamedTextColor.GOLD)
+                            .append(Component.text(Backends.family(version) + " family, server " + version + "  ", NamedTextColor.WHITE))
+                            .append(Component.text(plugin.backend().getClass().getName(), NamedTextColor.DARK_GRAY))
+                    );
 
                     Component camera = CameraReport.trouble(plugin.camera().stats());
                     if (camera != null) {

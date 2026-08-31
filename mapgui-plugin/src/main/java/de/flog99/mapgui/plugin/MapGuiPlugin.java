@@ -215,6 +215,11 @@ public final class MapGuiPlugin extends JavaPlugin {
         return screens;
     }
 
+    /** Which version's internals won, which is the first thing to ask when a report names a Minecraft version. */
+    ServerBackend backend() {
+        return backend;
+    }
+
     RotationController rotation() {
         return rotation;
     }
