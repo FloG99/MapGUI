@@ -56,6 +56,26 @@ to each other, one streamed and one prerendered, measured about 3 Mbit/s against
 - **Frames between steps of a loop limit.** The clock is quantized rather than the paints skipped, so a
   looping value is *identical* between steps - identical pixels, no dirty rectangle, nothing sent.
 
+## Which colour a colour becomes
+
+`colors.matching` picks the formula, and neither answer is wrong - the palette is a couple of hundred entries
+and everything rounds to one of them, so this only decides which way it rounds.
+
+Measured over 20,000 colours above the dark range, scored in CIELAB, which neither formula uses:
+
+| | mean dE | on greys | on saturated colour | worst case |
+|---|---|---|---|---|
+| `vanilla` | 17.98 | **2.49** | 18.78 | 69.4 |
+| `perceptual` | **17.32** | 2.54 | **18.04** | **63.3** |
+
+So perceptual is about 4% closer overall, 4% closer on saturated colour with its worst case a fifth better, and
+2% further on greys. `docs/images/colour-matching.png` is the two drawing the same ramps: the greys are
+indistinguishable, and the saturated ramps are visibly smoother - vanilla puts stray magenta through a purple
+ramp and goes olive through red-to-yellow.
+
+Vanilla is the default because it is what every existing map already looks like. A server whose walls are mostly
+photographs - cameras, video, terrain - is the case for changing it.
+
 ## Video holds still when nothing is happening
 
 `media.steady` is on by default, and it is why a video of a static shot settles instead of shimmering. Real

@@ -1,5 +1,6 @@
 package de.flog99.mapgui;
 
+import de.flog99.mapgui.ui.Oklab;
 import de.flog99.mapgui.ui.Palette;
 import de.flog99.mapgui.ui.PaletteLut;
 import org.bukkit.map.MapPalette;
@@ -23,6 +24,43 @@ public final class MapColors implements Palette {
 
     public static final MapColors INSTANCE = new MapColors();
 
+    /**
+     * Which formula decides the nearest entry to a colour.
+     *
+     * <p>Measured rather than argued: {@code PerceptualMatcherAbTest} scores both in CIELAB, which neither uses.
+     * Neither wins outright, which is why this is a choice and not a fix - the palette is sparse enough that
+     * which formula picks between two entries moves the result less than the sparseness does.
+     */
+    public enum Matching {
+
+        /**
+         * Vanilla's own weighting: green counted four times, blue let off lightly. Better on greys, which is
+         * what menus, panels and text are made of, and what most screens are mostly made of.
+         */
+        VANILLA,
+
+        /**
+         * Nearest in {@link Oklab}, a space built so that equal distances look equally different.
+         *
+         * <p>Measured against vanilla over the bright range: 3.9% closer on saturated colour and a fifth closer
+         * at its worst case, 2.1% further on grey. So it suits a server whose maps are mostly photographs -
+         * camera captures, video walls, terrain - and not one whose maps are mostly menus.
+         *
+         * <p>The dark range is unaffected either way: below 64 a finer table with its own rule already applies,
+         * for a reason that is about crowding rather than about metrics. See {@code PaletteLut}.
+         */
+        PERCEPTUAL
+    }
+
+    private static volatile Matching matching = Matching.VANILLA;
+
+    /**
+     * Whether the table has been filled, held out here rather than inside the holder.
+     *
+     * <p>Asking the holder would build it, which is the one thing a check for "has it been built" must not do.
+     */
+    private static volatile boolean tableBuilt;
+
     private static final Color UNDEFINED = new Color(0, 0, 0);
 
     private final Color[] toColor = new Color[256];
@@ -31,10 +69,35 @@ public final class MapColors implements Palette {
     private MapColors() {
     }
 
+    /**
+     * Which formula fills the table.
+     *
+     * <p>Read once, when the table is built, so this has to be set before anything draws - which for the plugin
+     * means before {@link #warmUp()}. Setting it afterwards changes nothing and says so, rather than appearing to
+     * work and leaving half the server on one formula.
+     */
+    public static void matching(Matching wanted) {
+        if (wanted == null || wanted == matching) return;
+        if (tableBuilt) {
+            throw new IllegalStateException("The colour table is already built, so " + wanted
+                    + " would not take effect - set the matching before anything draws");
+        }
+        matching = wanted;
+    }
+
+    public static Matching matching() {
+        return matching;
+    }
+
     /** Built when something first asks for a color, which is well after {@link #INSTANCE} exists. */
     private static final class Table {
 
-        static final PaletteLut LUT = new PaletteLut(new Matcher());
+        static final PaletteLut LUT = build();
+
+        private static PaletteLut build() {
+            tableBuilt = true;
+            return new PaletteLut(matching == Matching.PERCEPTUAL ? new Perceptual() : new Matcher());
+        }
     }
 
     /** Bukkit's own matching, used only to fill the table. */
@@ -43,6 +106,44 @@ public final class MapColors implements Palette {
         @Override
         public byte index(Color color) {
             return MapPalette.matchColor(new Color(color.getRed(), color.getGreen(), color.getBlue()));
+        }
+
+        @Override
+        public Color color(byte index) {
+            return INSTANCE.color(index);
+        }
+
+        @Override
+        public byte[] entries() {
+            return INSTANCE.entries();
+        }
+    }
+
+    /**
+     * The same job in {@link Oklab}, walking the palette rather than asking Bukkit.
+     *
+     * <p>Only ever used to fill the table, so the walk costs 32768 searches once and nothing per pixel after -
+     * exactly what the vanilla matcher costs, since that walks the palette too.
+     */
+    private static final class Perceptual implements Palette {
+
+        @Override
+        public byte index(Color color) {
+            Oklab.Lab wanted = Oklab.of(color);
+            byte found = 0;
+            double closest = Double.MAX_VALUE;
+
+            for (byte entry : INSTANCE.entries()) {
+                Color candidate = INSTANCE.color(entry);
+                if (candidate == null) continue;
+
+                double at = Oklab.difference(wanted, Oklab.of(candidate));
+                if (at < closest) {
+                    closest = at;
+                    found = entry;
+                }
+            }
+            return found;
         }
 
         @Override

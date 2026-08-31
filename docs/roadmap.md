@@ -50,16 +50,16 @@ Seven modes shipped; these are the places that cannot yet ask for one, or that w
 - **`ORDERED_FINE` as a gradient's own default.** `Fill.gradient` answers `ORDERED`, the 4x4 tile it has always
   used. The 8x8 is a finer texture across the large smooth areas a gradient tends to be. Measure before changing
   it: a finer pattern compresses worse, and the map packet's own compression is the budget.
-- **A perceptual metric in the matcher - measured, and not worth it as a straight swap.** `PerceptualMatcherAbTest`
-  pits vanilla's weighting, plain RGB and Oklab against each other over the bright range, scored in CIELAB so the
-  referee is none of the three. Oklab is 3.7% better on average, and the average hides which way each half moved:
-  it is 3.9% better on saturated colour with its worst case a fifth better, and **2.1% worse on grey** - which is
-  what a menu is made of. Plain RGB loses to vanilla outright, and extending the dark table's rule upward cost 7%.
+- **A perceptual metric in the matcher - measured, and shipped as a choice rather than a default.**
+  `colors.matching: perceptual` matches in Oklab instead of vanilla's weighting. It is 3.9% closer on saturated
+  colour with its worst case a fifth better, and 2.1% further on greys, scored in CIELAB so the referee is
+  neither contender. Not a default, because greys are what menus are made of and because it would change every
+  pixel of every existing map.
 
-  So the entries are far enough apart that which formula picks between them matters less than the sparseness
-  does, and the one clear improvement is on the content a UI has least of. If it is picked up again, the thing to
-  try is splitting by chroma the way the dark table already does rather than swapping the metric - and to measure
-  it, since that is what turned this entry from a good idea into a no.
+  What is left of the entry: **split by chroma rather than choosing one formula for everything**, the way the
+  dark table already splits by it, so saturated colour gets Oklab and grey keeps vanilla. Worth measuring before
+  believing - plain RGB looked obviously right too and lost to vanilla outright, and extending the dark table's
+  own rule upward cost 7% over the range.
 
 ## Rendering
 
