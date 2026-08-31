@@ -129,4 +129,43 @@ class StreamResolverTest {
         // A file, an rtsp camera, an HLS playlist: no deadline, so a refresh would drop frames on purpose.
         assertEquals(Instant.MAX, ResolvingSource.refreshAt(null));
     }
+
+    /**
+     * The size handed to a decoder is a bound, not a shape.
+     *
+     * <p>Squashing here cannot be undone later: LivePlayer letterboxes whatever it is given, so a picture that
+     * arrives already distorted is letterboxed faithfully distorted. A portrait video on a landscape wall is
+     * how anybody notices.
+     */
+    @Test
+    void aPortraitVideoKeepsItsProportionsInsideASquareBox() {
+        Pixels.Size fitted = Pixels.fit(1080, 1920, 256, 256);
+
+        assertEquals(144, fitted.width());
+        assertEquals(256, fitted.height());
+    }
+
+    @Test
+    void aLandscapeVideoKeepsItsProportionsToo() {
+        Pixels.Size fitted = Pixels.fit(1920, 1080, 256, 256);
+
+        assertEquals(256, fitted.width());
+        assertEquals(144, fitted.height());
+    }
+
+    @Test
+    void somethingSmallerThanTheBoxIsLeftAlone() {
+        Pixels.Size fitted = Pixels.fit(64, 48, 256, 256);
+
+        assertEquals(64, fitted.width(), "enlarging here only costs memory - the wall scales when it draws");
+        assertEquals(48, fitted.height());
+    }
+
+    @Test
+    void aSourceThatNeverSaidItsSizeFallsBackToTheBox() {
+        Pixels.Size fitted = Pixels.fit(0, 0, 200, 120);
+
+        assertEquals(200, fitted.width());
+        assertEquals(120, fitted.height());
+    }
 }

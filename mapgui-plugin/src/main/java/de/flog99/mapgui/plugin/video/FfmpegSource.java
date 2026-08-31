@@ -21,9 +21,15 @@ import java.awt.image.DataBufferByte;
  * scaling to the size the wall wants. What crosses back is one finished array of palette indices per frame,
  * published whole so a painting main thread either sees the last picture or this one and never half of each.
  *
- * <p>Scaling is FFmpeg's, not ours: the grabber is told the size up front, so a 1080p stream is scaled down
- * inside the decoder and no full-size image is ever built. Quantizing is a table lookup per pixel, which is
- * the only reason it is affordable at all.
+ * <p>Scaling is FFmpeg's, not ours: the grabber is told the size, so a 1080p stream is scaled down inside the
+ * decoder and no full-size image is ever built. Quantizing is a table lookup per pixel, which is the only
+ * reason it is affordable at all.
+ *
+ * <p><b>The size asked for is a box, not a shape.</b> What is decoded is the largest picture with the source's
+ * own proportions that fits inside it, so a portrait video stays portrait. Squashing it here cannot be undone
+ * later: {@link de.flog99.mapgui.media.LivePlayer} letterboxes whatever it is given, and a picture already
+ * distorted is letterboxed faithfully distorted. It is never enlarged either - a small video drawn on a big
+ * wall is scaled once, when it is drawn, rather than carried around at a size it does not have.
  */
 public final class FfmpegSource implements LiveSource {
 
@@ -34,10 +40,21 @@ public final class FfmpegSource implements LiveSource {
     }
 
     private final String source;
-    private final int width;
-    private final int height;
+    private final int boxWidth;
+    private final int boxHeight;
     private final boolean loop;
     private final Thread thread;
+
+    /**
+     * What is actually being decoded, which is known only once the source has been opened and its proportions
+     * read. The box until then, so anything asking early is told something usable rather than nothing.
+     *
+     * <p>Read with {@link #frame()} by whoever is painting, so they have to agree: a size that did not match
+     * the pixels beside it would be read off the end of the array. Written before the first frame is published
+     * and never again, since one connection decodes at one size for its whole life.
+     */
+    private volatile int width;
+    private volatile int height;
 
     /** Replaced whole, never written into, which is what makes reading it from another thread safe. */
     private volatile byte @Nullable [] frame;
@@ -48,13 +65,16 @@ public final class FfmpegSource implements LiveSource {
 
     /**
      * @param source what FFmpeg should open - a file path or a url
-     * @param width  the size to decode to, which should be the size it will be drawn at
+     * @param width  the widest to decode to, which should be about the size it will be drawn at. A bound rather
+     *               than a shape: what comes out keeps the source's proportions inside it
      * @param loop   start again at the end, which is what a file wants and a stream cannot do
      */
     public FfmpegSource(String source, int width, int height, boolean loop) {
         this.source = source;
-        this.width = width;
-        this.height = height;
+        this.boxWidth = Math.max(1, width);
+        this.boxHeight = Math.max(1, height);
+        this.width = this.boxWidth;
+        this.height = this.boxHeight;
         this.loop = loop;
 
         this.thread = new Thread(this::decode, "MapGUI-video");
@@ -98,12 +118,18 @@ public final class FfmpegSource implements LiveSource {
         try (FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(source);
              Java2DFrameConverter converter = new Java2DFrameConverter()) {
 
-            // Scaled by the decoder, so nothing full size is ever allocated.
-            grabber.setImageWidth(width);
-            grabber.setImageHeight(height);
             // Anything but TCP loses packets on a busy server and shows it as smeared frames.
             grabber.setOption("rtsp_transport", "tcp");
             grabber.start();
+
+            // Started first, because the proportions to keep are the source's and nothing knows them until it
+            // is open. Set after start rather than before, which the decoder honours from the next frame on -
+            // and is the only order that can take the source's own shape into account.
+            Pixels.Size fitted = Pixels.fit(grabber.getImageWidth(), grabber.getImageHeight(), boxWidth, boxHeight);
+            grabber.setImageWidth(fitted.width());
+            grabber.setImageHeight(fitted.height());
+            width = fitted.width();
+            height = fitted.height();
 
             int[] argb = new int[width * height];
             long frameMs = Math.max(1, Math.round(1000 / Math.max(1, grabber.getFrameRate())));
