@@ -182,23 +182,49 @@ public final class WallDisplay {
         if (closed) return;
 
         List<Player> nearby = audience.watching();
-        if (channel != null) {
-            // Reported even when nobody is here, so a member with no viewers of its own does not look like a
-            // member that has gone - and so the drawing wall knows the whole audience rather than its share.
-            channel.reportViewers(now, nearby.stream().map(Player::getUniqueId).toList());
-            if (!channel.isDrawing(this)) return;
-        }
-        // Everyone any wall in the channel wants, since a viewer at the far wall needs these ids too and has no
-        // other way to be sent them. Its own audience when there is no channel.
-        List<Player> watching = channel == null ? nearby : online(channel.viewers());
-        if (watching.isEmpty()) return;
+        // Before anything else, and before the channel work, because a prerendered wall sends no pixels at all -
+        // it repoints frames at copies the client already holds. The builder refuses to combine the two.
         if (loop != null) {
             playLoop(audience, now);
             return;
         }
-        List<WallView> allViews = views();
+        // A wall on its own with nobody near it has nothing to do. One in a channel still might: the wall the
+        // viewers are standing at may not be the one drawing for them.
+        boolean drawing = channel == null || channel.isDrawing(this);
+        if (nearby.isEmpty() && channel == null) return;
 
-        for (WallView view : allViews) view.paint(now, intervalMs);
+        List<WallView> allViews = views();
+        // Painted before anybody is judged behind, because being behind is about the frame they are missing -
+        // asking whether the surface is dirty before painting it asks about the frame before that one.
+        if (drawing) {
+            for (WallView view : allViews) view.paint(now, intervalMs);
+        }
+
+        // Whether a viewer can have this wall on screen is this wall's own question, and it has to be answered
+        // before the audience is pooled: a viewer facing the far television is not looking at this one, so the
+        // wall that happens to be drawing must not decide on their behalf that they need nothing.
+        List<Player> streaming = new ArrayList<>();
+        for (Player player : nearby) {
+            if (sight != null && !sight.streaming(player, now, interactive && cursors.isAiming(player))) {
+                // Marked behind on this wall, since this is the wall that would owe them the picture. A channel
+                // member that is not drawing owes nobody anything, and its own set is never read.
+                if (drawing && viewOf(player).surface().isDirty()) behind.add(player.getUniqueId());
+                continue;
+            }
+            streaming.add(player);
+        }
+
+        if (channel != null) {
+            // Reported even when this wall has nobody, so a member with no viewers of its own is not mistaken
+            // for one that has gone.
+            channel.reportViewers(now, streaming.stream().map(Player::getUniqueId).toList());
+            if (!drawing) return;
+        }
+        // Everyone any wall in the channel wants, since a viewer at the far wall needs these ids too and has no
+        // other way to be sent them. This wall's own audience when there is no channel.
+        List<Player> watching = channel == null ? streaming : online(channel.viewers());
+        // Nothing is cleared on the way out: what was painted is still owed to whoever turns up next tick.
+        if (watching.isEmpty()) return;
 
         // Everyone watching a shared wall is sent the same bytes, so they are cut out of the surface once.
         TileRegions frame = new TileRegions();
@@ -208,16 +234,10 @@ public final class WallDisplay {
             UUID id = player.getUniqueId();
             boolean dirty = view.surface().isDirty();
 
-            // Not a packet for somebody who cannot have the wall on screen. They stay a viewer - their maps,
-            // their frames and their own screen are all left alone - so this is a pause and not an eviction,
-            // and coming back costs one frame where being evicted would cost a teardown as well.
-            if (sight != null && !sight.streaming(player, now, interactive && cursors.isAiming(player))) {
-                if (dirty) {
-                    behind.add(id);
-                }
-                continue;
-            }
-            boolean whole = behind.remove(id);
+            // The whole picture for anybody this wall was not sending to a moment ago: they have just come into
+            // range, come back from being culled, or - on a channel - only just been picked up by any wall at
+            // all. What changed since the last frame is not something they can use.
+            boolean whole = behind.remove(id) | (channel != null && !channel.wasSentTo(id));
 
             // One frame is one packet per map that changed, and a wall that goes up in pieces tears.
             services.transport().bundled(player, () -> {
@@ -233,6 +253,7 @@ public final class WallDisplay {
         }
 
         for (WallView view : allViews) view.surface().clearDirty();
+        if (channel != null) channel.sentTo(watching.stream().map(Player::getUniqueId).toList());
     }
 
     /** A prerendered wall: everything on arrival, and a nudge per frame after that. */
@@ -1136,6 +1157,9 @@ public final class WallDisplay {
             if (world == null || layout == null) throw new IllegalStateException("A wall needs at(..)");
             if (prerenderSteps > 0 && (sharedScreen != null || screenPerPlayer != null)) {
                 throw new IllegalStateException("A menu cannot be prerendered - it has to answer clicks. Use content(..) for a wall that only plays something.");
+            }
+            if (channel != null && prerenderSteps > 0) {
+                throw new IllegalStateException("A prerendered wall cannot share a channel yet - it places whole copies of itself in each client and plays them by repointing frames, which is a second way of sending nothing and has not been measured against this one. Pick one.");
             }
             if (channel != null && (sharedScreen != null || screenPerPlayer != null)) {
                 throw new IllegalStateException("A menu cannot share a channel - it answers clicks and reads who is looking, so its picture is its own. Use content(..) for a wall that only plays something.");
