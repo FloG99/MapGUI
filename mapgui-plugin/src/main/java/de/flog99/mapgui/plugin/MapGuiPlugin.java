@@ -249,6 +249,12 @@ public final class MapGuiPlugin extends JavaPlugin {
         // The feeds are not rebuilt with it: they look this method up each tick, so an open viewfinder carries on
         // through a reload against the new service rather than quietly freezing.
         camera = new CameraService(this, cameraAssets, serverPacks, backend, wallRegistry, feeds, config.cameraTuning());
+
+        // A fresh toolchain with it, which is the only way a server that could not reach github.com when it
+        // started ever tries again without a restart - resolution is settled once per instance, failures
+        // included, so that a server with no network does not attempt a download on every play. Walls already
+        // up keep the service they were opened with, and so does anything still playing.
+        media = mediaSources();
     }
 
     MapGuiConfig config() {

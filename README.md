@@ -159,7 +159,7 @@ audience is the one thing here that costs real bandwidth.
 | [Widgets and styling](docs/widgets.md) | the widget set, themes, borders, corners, long text, text input |
 | [Carrying a GUI](docs/hand.md) | popup, real item, pinned slot or offhand, and who has the mouse |
 | [Animation](docs/animation.md) | easing, looping effects, frame limits |
-| [Video](docs/video.md) | GIF playback, fit modes, and optional MP4 and live streams |
+| [Video](docs/video.md) | GIF playback, fit modes, still pictures, and optional MP4, live streams and page urls |
 | [Camera](docs/camera.md) | capturing the world onto a map, and where the textures come from |
 | [Walls](docs/walls.md) | video walls, menus on walls, shared state, the placement catalog |
 | [Events](docs/events.md) | the Bukkit events MapGUI raises, and refusing a wall or a click |
