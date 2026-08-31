@@ -102,11 +102,26 @@ class StreamResolverTest {
         assertTrue(Duration.between(Instant.now(), refresh).toSeconds() >= 8 * 60);
     }
 
+    /**
+     * "In the future" is not enough, which is what the earlier version of this test asked for: three seconds from
+     * now is in the future, and it is also a yt-dlp process and a fresh connection every three seconds, per wall,
+     * for as long as the wall is up.
+     */
     @Test
-    void aVeryShortLeaseStillRefreshesInTheFutureRatherThanInALoop() {
+    void aVeryShortLeaseIsFlooredRatherThanChased() {
         Instant refresh = ResolvingSource.refreshAt(Instant.now().plus(Duration.ofSeconds(30)));
 
-        assertTrue(refresh.isAfter(Instant.now()));
+        assertTrue(Duration.between(Instant.now(), refresh).toSeconds() >= 55,
+                "a lease this machine's clock thinks is nearly spent is a clock to distrust, not a deadline");
+    }
+
+    @Test
+    void anExpiryAlreadyPastIsAlsoFloored() {
+        // A clock running ahead is how this arrives: the url's own deadline looks spent the moment it resolves.
+        Instant refresh = ResolvingSource.refreshAt(Instant.now().minus(Duration.ofHours(1)));
+
+        assertTrue(Duration.between(Instant.now(), refresh).toSeconds() >= 55,
+                "refreshing immediately on a past expiry is an unbounded resolve loop");
     }
 
     @Test
