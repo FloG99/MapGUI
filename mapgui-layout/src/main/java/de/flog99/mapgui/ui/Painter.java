@@ -2,7 +2,9 @@ package de.flog99.mapgui.ui;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Draws shapes, images and text onto a {@link Surface}.
@@ -20,8 +22,16 @@ public final class Painter {
     /** Set only by {@link #pushClip(Shape)}, so an ordinary rect clip costs one null check a pixel. */
     private Shape clipShape;
 
-    /** Built on first use, since a screen with no gradients never needs it. */
-    private Palette dithered;
+    /**
+     * One quantizer per mode, built on first use: a screen with no gradients never needs any of them, and one
+     * with a dithered gradient in every row needs exactly one. The blend memo inside an ordered palette is the
+     * reason this is a cache rather than a fresh decorator per call - thrown away per box, it would search the
+     * palette twice for every color of every gradient, every frame.
+     */
+    private final Map<Dither, Quantizer> quantizers = new EnumMap<>(Dither.class);
+
+    /** What {@link #pushDither} is currently scoped to. */
+    private Dither dither = Dither.NONE;
     /** One full row of an image being blitted, held so {@link #image} allocates nothing per call. */
     private int[] pixelRow;
 
@@ -94,6 +104,34 @@ public final class Painter {
     public record Clip(Rect rect, Shape shape) {
     }
 
+    /** The mode anything drawn now is quantized with, unless what is being drawn asks for its own. */
+    public Dither dither() {
+        return dither;
+    }
+
+    /**
+     * Draws with a dither mode from here on, returning the previous one for restoring. Mirrors
+     * {@link #pushClip(Rect)}.
+     *
+     * <p>What it reaches: fills, and images. Not the single-color primitives - a line, a glyph, a flat
+     * {@link #fill(Rect, Color)} - because dithering an anti-aliased glyph speckles its edge, and a flat area
+     * that does want it can say so with {@code Fill.solid(color).dither(mode)}. A {@link Fill} that names its
+     * own mode wins over this, per {@link Fill#dither()}.
+     *
+     * <p>An error diffusion mode is accepted here and stood in for by {@link Dither#ORDERED_FINE} for
+     * everything except {@link #image}, which is the only thing on this path with a whole rect of colors to
+     * diffuse over. See {@link Quantizer#perPixel()}.
+     */
+    public Dither pushDither(Dither mode) {
+        Dither previous = dither;
+        dither = mode == null ? Dither.NONE : mode;
+        return previous;
+    }
+
+    public void popDither(Dither previous) {
+        dither = previous == null ? Dither.NONE : previous;
+    }
+
     private boolean clipped(int x, int y) {
         return !clip.contains(x, y) || (clipShape != null && !clipShape.contains(x, y));
     }
@@ -153,13 +191,19 @@ public final class Painter {
         return 0xFF000000 | red << 16 | green << 8 | blue;
     }
 
-    /** Gradients dither; flat colors snap, since dithering a solid button would just add noise. */
+    /** The fill's own mode if it has one, otherwise the scope's - see {@link Fill#dither()}. */
     private Palette paletteFor(Fill fill) {
-        if (fill.uniform()) return palette;
-        if (dithered == null) {
-            dithered = new DitheredPalette(palette);
+        Dither asked = fill.dither();
+        return quantizerFor(asked == null ? dither : asked).perPixel();
+    }
+
+    private Quantizer quantizerFor(Dither mode) {
+        Quantizer found = quantizers.get(mode);
+        if (found == null) {
+            found = Quantizer.of(palette, mode);
+            quantizers.put(mode, found);
         }
-        return dithered;
+        return found;
     }
 
     private static Color blend(Color under, Color over, float weight) {
@@ -560,17 +604,80 @@ public final class Painter {
         }
     }
 
+    /**
+     * Draws an image, quantized with the current mode.
+     *
+     * <p>The one place on the paint path where an error diffusion mode is honest rather than stood in for: a
+     * whole rect of colors is available here, which is what diffusion needs. That path costs an
+     * {@code int[width * height]} for the frame plus a {@code byte[]} of the same length, so it is taken only
+     * when the mode actually diffuses - an ordered mode still goes a row at a time, allocating nothing.
+     */
     public void image(int x, int y, BufferedImage image) {
         if (image == null) return;
 
+        if (dither.diffuses()) {
+            diffuse(x, y, image);
+            return;
+        }
+
+        Palette with = quantizerFor(dither).perPixel();
         int width = image.getWidth();
         if (pixelRow == null || pixelRow.length < width) {
             pixelRow = new int[width];
         }
         for (int j = 0; j < image.getHeight(); j++) {
             image.getRGB(0, j, width, 1, pixelRow, 0, width);
-            for (int i = 0; i < width; i++) pixel(x + i, y + j, pixelRow[i], palette);
+            for (int i = 0; i < width; i++) pixel(x + i, y + j, pixelRow[i], with);
         }
+    }
+
+    /**
+     * The region path: every pixel decided at once, so each one's leftover error can reach the pixels after it.
+     *
+     * <p>Translucency has to be resolved <b>before</b> diffusing rather than while drawing, which is the only
+     * subtle part. A diffused pixel is chosen from its neighbors' leftovers, so there is no later moment at
+     * which it could still be blended with what is underneath - by then it is an index. So anything part-covered
+     * is composited against the surface first, reading pixels this call has not written yet.
+     *
+     * <p>Fully transparent pixels stay out of it in both directions and are not drawn at all, which is what
+     * stops a halo forming round them. See {@link Quantizer#TRANSPARENT}.
+     */
+    private void diffuse(int x, int y, BufferedImage image) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int[] argb = image.getRGB(0, 0, width, height, null, 0, width);
+
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
+                int at = j * width + i;
+                int alpha = argb[at] >>> 24;
+                if (alpha == 0 || alpha == 255) continue;
+
+                argb[at] = blend(under(x + i, y + j), argb[at], alpha);
+            }
+        }
+
+        byte[] indices = new byte[argb.length];
+        quantizerFor(dither).quantize(argb, width, height, indices);
+
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
+                int at = j * width + i;
+                // The source alpha rather than the index: index 0 is transparent in the map palette, but this
+                // painter does not get to assume that of whatever palette it was handed.
+                if ((argb[at] >>> 24) == 0) continue;
+
+                pixel(x + i, y + j, indices[at]);
+            }
+        }
+    }
+
+    /** What is already on the surface at a point, as packed opaque RGB. Black off the edge, which nothing draws. */
+    private int under(int x, int y) {
+        if (!surface.inBounds(x, y)) return 0xFF000000;
+
+        Color color = palette.color(surface.get(x, y));
+        return color == null ? 0xFF000000 : color.getRGB();
     }
 
     // ---- text ----
