@@ -22,6 +22,31 @@ final class Pixels {
     record Shrunk(int width, int height, int[] argb) {
     }
 
+    /** A size, in pixels. */
+    record Size(int width, int height) {
+    }
+
+    /**
+     * The largest picture with the source's proportions that fits inside the box, never enlarged.
+     *
+     * <p>Shared by the two places that have to make something match a box, and the reason both keep the shape:
+     * squashing cannot be undone afterwards. {@link de.flog99.mapgui.media.LivePlayer} letterboxes whatever it
+     * is handed, so a picture that arrives already distorted is letterboxed faithfully distorted.
+     *
+     * <p>Enlarging is not this method's job either. A small video on a big wall is scaled once, when it is
+     * drawn, rather than carried around at a size it does not have.
+     *
+     * <p>A source that never said how big it is falls back to the box. Being wrong about the shape of
+     * something that did not describe itself costs a stretch; refusing it would cost the picture.
+     */
+    static Size fit(int sourceWidth, int sourceHeight, int boxWidth, int boxHeight) {
+        if (sourceWidth <= 0 || sourceHeight <= 0) return new Size(boxWidth, boxHeight);
+
+        double scale = Math.min(1.0, Math.min(boxWidth / (double) sourceWidth, boxHeight / (double) sourceHeight));
+        return new Size(Math.max(1, (int) Math.round(sourceWidth * scale)),
+                Math.max(1, (int) Math.round(sourceHeight * scale)));
+    }
+
     /**
      * Fits {@code image} inside a {@code maxSize} box, keeping its shape, and never enlarges it.
      *
@@ -29,9 +54,9 @@ final class Pixels {
      * see-through pixel composites onto black and arrives as black.
      */
     static Shrunk shrink(BufferedImage image, int maxSize) {
-        double scale = Math.min(1.0, maxSize / (double) Math.max(image.getWidth(), image.getHeight()));
-        int width = Math.max(1, (int) Math.round(image.getWidth() * scale));
-        int height = Math.max(1, (int) Math.round(image.getHeight() * scale));
+        Size size = fit(image.getWidth(), image.getHeight(), maxSize, maxSize);
+        int width = size.width();
+        int height = size.height();
 
         BufferedImage kept = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D graphics = kept.createGraphics();

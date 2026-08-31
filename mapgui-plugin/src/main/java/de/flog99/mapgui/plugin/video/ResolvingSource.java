@@ -61,9 +61,19 @@ public final class ResolvingSource implements LiveSource {
     private static final long MAX_BACKOFF_MS = 60_000;
 
     private final String source;
-    private final int width;
-    private final int height;
     private final boolean loop;
+
+    /**
+     * The size being handed out, which has to match the pixels {@link #frame()} returns or they would be read
+     * off the end of the array.
+     *
+     * <p>The box asked for until a connection has produced a picture, and that connection's own size after -
+     * it decodes inside the box keeping the source's proportions, so a portrait video is not squashed. Every
+     * later connection is then given <i>that</i> as its box, which it already fits exactly, so the size is
+     * settled once and a re-resolve cannot change it underneath whoever is painting.
+     */
+    private volatile int width;
+    private volatile int height;
 
     @Nullable
     private final StreamResolver resolver;
@@ -187,6 +197,7 @@ public final class ResolvingSource implements LiveSource {
 
                 byte[] latest = playing.playing().frame();
                 if (latest != null) {
+                    adopt(playing.playing());
                     last = latest;
                     // A connection that has delivered a picture has proved the url and the network, so the next
                     // drop is a drop rather than a mistake, and is worth retrying from scratch.
@@ -267,9 +278,23 @@ public final class ResolvingSource implements LiveSource {
             return;
         }
 
+        adopt(next.playing());
         last = first;
         current = next;
         playing.playing().close();
+    }
+
+    /**
+     * Takes on the size a connection is actually decoding at, before any of its pixels are handed out.
+     *
+     * <p>Only the first one changes anything. After that every connection is opened with this as its box and
+     * fits it exactly, which is what keeps the size stable across a re-resolve.
+     */
+    private void adopt(LiveSource from) {
+        if (from.width() > 0 && from.height() > 0) {
+            width = from.width();
+            height = from.height();
+        }
     }
 
     /**
