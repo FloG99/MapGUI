@@ -505,6 +505,9 @@ public abstract class Screen {
 
     @ApiStatus.Internal
     public final void paint(Painter painter) {
+        // The painter is reused for every frame of this session, so a dither mode a Draw callback left pushed
+        // last frame - by throwing between push and pop - stops here instead of following the session about.
+        painter.resetDither();
         if (root != null) {
             root.paint(painter);
         }

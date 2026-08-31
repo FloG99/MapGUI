@@ -27,7 +27,7 @@ left to work on. That is the better arrangement anyway - it is applied once per 
 frame per viewer per repaint.
 
 ```java
-GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE, Dither.ATKINSON))
+GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE, Dither.FLOYD_STEINBERG))
 ```
 
 `Dither.NONE` is the default and is right for flat artwork the palette can nearly say already. For anything
