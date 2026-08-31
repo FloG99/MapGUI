@@ -18,17 +18,42 @@ see [design notes](design-notes.md) for the reasoning behind the closed ones.
   list reorders: without keys, node identity shifts and things animate to the wrong place.
 - **Springs.** Easing with a fixed duration cannot express "keep up with a moving target" as well as a spring
   does. Worth it only if scroll chasing ever feels wrong.
-- **Perceptual color interpolation.** Color animation interpolates in RGB and snaps to a single palette entry,
-  so an eased color can pass through a visibly different hue - green to yellow was measured passing through
-  teal. Gradients no longer suffer from this because they dither; routing animated colors through the same
-  dithering, or interpolating in a perceptual space, would fix the rest.
-- **Error-diffusion dithering.** The ordered 4x4 pattern is cheap and stable, which is what a UI wants.
-  Floyd-Steinberg would look better on photographs and stills - but not obviously on *video*, where stability
-  turns out to be a bandwidth concern rather than an aesthetic one.
+- **Perceptual color interpolation.** Color animation interpolates in RGB and snaps to a single palette entry, so
+  an eased color can pass through a visibly different hue - green to yellow was measured passing through teal.
+  Gradients and anything decoded now dither, which is what fixed those; an *animated* color is the case left,
+  and routing it through a `Quantizer` or interpolating in a perceptual space would close it.
+- **Text centered by its ink, not its line box.** A loaded face measures `ascent + descent` and AWT puts all the
+  internal leading above the glyph: Georgia at 9px is 11 tall with its ink in rows 3 to 10. The map's own font is
+  almost entirely ink, so the two centre differently in the same container and a TrueType label sits visibly low
+  next to map text. Typographically the line box is right, which is why this is a question rather than a bug -
+  centring on the ink would fix the optics and break the baseline alignment of two labels at different sizes.
+- **`Bitmap` could scale rather than only crop.** A column with no room left takes it out of whatever will give,
+  and an image gives by losing its bottom rows silently. Cropping is the right default for pixel art at map
+  resolution, but a node that has been squeezed has no way to say "shrink me instead" - and a caller-supplied
+  font is enough to squeeze one. Related to nine-slice, which wants the same arithmetic.
 - **Focus.** There is no keyboard, so focus barely exists - but a "selected row" concept would help
   keyboard-free navigation with the scroll wheel.
 - **Golden-image tests.** The layout module has no Bukkit dependency, so screens can be rendered to PNG in tests
   and diffed. Would catch visual regressions the geometry assertions miss.
+
+## Dithering
+
+Seven modes shipped; these are the places that cannot yet ask for one, or that would pick a better default.
+
+- **Error diffusion on a vector fill.** A `Surface` holds palette bytes and the painter matches each pixel as it
+  draws it, so a mode that hands its error to pixels not yet drawn has nowhere to put it. Asked for on a fill it
+  stands in `ORDERED_FINE` and says so through `Quantizer#diffuses()`. An honest version needs a scratch `int[]`
+  per node rect, which is real memory for a case nobody has asked for yet.
+- **A camera capture through a `Quantizer`.** Every other decode path takes one now; `mapgui-camera` still
+  matches with `MapColors` directly. A capture is a photograph, which is exactly the content error diffusion is
+  worth having on - and it is one place, off the paint path, applied once per shot. Undithered stays the default.
+- **`ORDERED_FINE` as a gradient's own default.** `Fill.gradient` answers `ORDERED`, the 4x4 tile it has always
+  used. The 8x8 is a finer texture across the large smooth areas a gradient tends to be. Measure before changing
+  it: a finer pattern compresses worse, and the map packet's own compression is the budget.
+- **A perceptual metric in the matcher.** Distance is weighted for greys - green counted four times, blue let off
+  lightly - and plain everywhere else, with a second finer table below 64 because eight-to-a-cell sent dark
+  colors red. A perceptual space would attack the cause rather than the symptom, and might make the dark table
+  removable. It came from measurement, so re-measure rather than assume. Highest regression risk on this page.
 
 ## Rendering
 
@@ -52,6 +77,11 @@ see [design notes](design-notes.md) for the reasoning behind the closed ones.
 
 - **Temporal quantization.** See "ordered dithering fights the dirty rectangle". Probably the single highest
   value change for video.
+- **Shared content channels.** `WallLoop` already paints one clip and flips several maps at it *within* one wall.
+  Across walls it is a registry keyed on content identity and tile size: the first wall's map ids become the
+  channel's, and every later wall costs a mount packet and no pixels. Six televisions playing one clip go from
+  six times the egress to one. Per-viewer content cannot share a channel, the way `prerender` already cannot,
+  and cursors keep working either way because a marker is a decoration rather than a pixel.
 - **Seeking, and a position a plugin can set.** A `LiveSource` plays from where it opened. A film on a wall
   wants a scrub bar, which means asking the decoder for a timestamp rather than for the next frame.
 
