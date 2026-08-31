@@ -55,6 +55,15 @@ public final class Ui {
         return new Scroll().children(children);
     }
 
+    /** A row that wraps when it runs out of width. With {@link Flow#columns(int)} it is a grid instead. */
+    public static Flow Flow(Node... children) {
+        return new Flow().children(children);
+    }
+
+    public static Flow Flow(Collection<? extends Node> children) {
+        return new Flow().children(children);
+    }
+
     public static Label Text(String text) {
         return new Label(() -> text);
     }

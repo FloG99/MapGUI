@@ -5,7 +5,6 @@ see [design notes](design-notes.md) for the reasoning behind the closed ones.
 
 ## Layout
 
-- **Grid container.** Rows and columns get you a long way, but inventory-style layouts want a real grid.
 - **Rich text spans.** One `Label` is one color. Multi-colored runs currently mean several labels, which the
   layout engine handles but reads poorly.
 - **Multi-line captions.** A map cursor caption is one short line under the pointer. Anything longer wants
