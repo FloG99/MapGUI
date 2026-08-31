@@ -49,6 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
+import de.flog99.mapgui.ui.Quantizer;
 
 /**
  * The camera as a plugin sees it: capture in a tick, trace off-thread, hand back pixels.
@@ -421,7 +422,10 @@ public final class CameraService implements Camera {
             try {
                 ready.tracer().render(world, view, entities, wide, tall, argb);
                 traced = System.nanoTime();
-                ready.palette().quantize(argb, indices);
+                // Through a Quantizer rather than straight at the palette, because a capture is a photograph
+                // and this is the one place its dithering can be set: it holds the whole rect, which is what an
+                // error diffusion mode needs, and it is off the paint path so the cost is paid once per shot.
+                Quantizer.of(ready.palette(), tuning.dither()).quantize(argb, wide, tall, indices);
                 blank(indices, view.wanted());
             } catch (RuntimeException e) {
                 // With the stack, because without it this is unactionable. A capture failing is always a bug in here

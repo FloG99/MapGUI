@@ -17,9 +17,13 @@ Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it ne
 
   The entry already shown is kept unless the new one is closer to the colour wanted by more than a threshold, which is measured against the palette: an entry's nearest neighbour is a median of 186 away in squared RGB, so the threshold sits below that. Comparing the two entries to each other instead - which looks equivalent - holds a pixel a full quantization step behind and accumulates over a pan, at seven times the error of not holding at all by the thirtieth frame.
 
-- **`colors.matching: vanilla | perceptual`.** Which formula picks the nearest palette entry. `perceptual` matches in Oklab and is closer than vanilla on both halves: 3.9% on saturated colour with its worst case a fifth better, and 13% at the tail on greys, scored in CIELAB so the referee is neither. `docs/images/colour-matching.png` draws the two over the same ramps.
+- **Colours are matched perceptually now, which changes how every map looks.** Not by much and not for the worse - measured in CIELAB, which neither formula uses, the new matcher is 3.9% closer on saturated colour with its worst case a fifth better, and 13% closer at the tail on greys - but a map drawn before this and one drawn after will differ. `docs/images/colour-matching.png` draws the two over the same ramps. `colors.matching: vanilla` puts it back for a server that would rather nothing moved.
 
-  Vanilla stays the default because switching moves every pixel of every map that already exists. Read once at startup, so it needs a restart rather than a reload - and choosing after anything has drawn is refused rather than half-applied.
+  Read once at startup, so it needs a restart rather than a reload, and choosing after anything has drawn is refused rather than half-applied.
+
+- **`camera.dither`.** A capture is a photograph, and decoding is the one place its dithering can be set - it holds the whole rect, which is what an error diffusion mode needs, and it is off the paint path so the cost is paid once per shot rather than once per viewer per repaint. `NONE` by default, which is what captures have always looked like: a live viewfinder pays for a dither pattern in bandwidth the same way a video wall does, though a still photographed once does not.
+
+- **`Image(..).shrinkToFit()`.** A picture given less room than it wants draws smaller instead of losing the part that does not fit. Cropping stays the default, because artwork at map resolution is drawn at the size it was made for - but it is a poor way to run out of room, and a column with nothing left takes it from whatever will give. A caller stating a bigger font is enough to cause that.
 
 - **New keys.** `media.resolve-page-urls` turns page-url resolution on, off by default, because it downloads and runs a program. `media.download.max-file-mb`, `max-total-mb` and `max-frames` bound what a download may cost. `media.dither` is how everything decoded is matched to the palette - a video, a still, a downloaded clip - and defaults to `NONE` like every other dithering default.
 

@@ -678,6 +678,48 @@ public final class Painter {
     }
 
     /**
+     * The same picture drawn to fill {@code into}, resampled if it does not already.
+     *
+     * <p>Nearest neighbour, matching everything else that resizes here. A map is a couple of hundred pixels
+     * across and its palette is sparse: smoothing between two source pixels invents a colour that then has to be
+     * rounded to an entry that may be neither of them, which is how a resize turns a clean edge into a smear.
+     *
+     * <p>The same size as the source is the same work as {@link #image(int, int, BufferedImage)} plus a
+     * multiplication per pixel, so this is for when the size actually differs.
+     */
+    public void image(Rect into, BufferedImage image) {
+        if (image == null || into.width() <= 0 || into.height() <= 0) return;
+        if (into.width() == image.getWidth() && into.height() == image.getHeight()) {
+            image(into.x(), into.y(), image);
+            return;
+        }
+
+        int width = image.getWidth();
+        int height = image.getHeight();
+        if (width <= 0 || height <= 0) return;
+
+        Palette with = quantizerFor(dither).perPixel();
+        if (pixelRow == null || pixelRow.length < width) {
+            pixelRow = new int[width];
+        }
+
+        int lastRow = -1;
+        for (int y = 0; y < into.height(); y++) {
+            // Which source row this destination row lands on, taken from the middle of the destination pixel so
+            // the picture is not biased upward as it shrinks.
+            int row = Math.min(height - 1, (int) ((y + 0.5) * height / into.height()));
+            if (row != lastRow) {
+                image.getRGB(0, row, width, 1, pixelRow, 0, width);
+                lastRow = row;
+            }
+            for (int x = 0; x < into.width(); x++) {
+                int column = Math.min(width - 1, (int) ((x + 0.5) * width / into.width()));
+                pixel(into.x() + x, into.y() + y, pixelRow[column], with);
+            }
+        }
+    }
+
+    /**
      * The region path: every pixel decided at once, so each one's leftover error can reach the pixels after it.
      *
      * <p>Translucency has to be resolved <b>before</b> diffusing rather than while drawing, which is the only

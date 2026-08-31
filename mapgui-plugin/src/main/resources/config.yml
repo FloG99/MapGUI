@@ -8,17 +8,15 @@ colors:
   # palette has a couple of hundred entries and everything is rounded to one of them, so this only decides
   # which way it rounds.
   #
-  #   vanilla     What Minecraft itself uses, and what every map you already have looks like.
   #   perceptual  Nearest in Oklab, a space built so that equal distances look equally different. Measurably
   #               closer on both halves - about 4% on saturated colour and 13% at the tail on greys - and
-  #               visibly smoother on a colour ramp. Most worth it on a server whose maps are photographs:
-  #               camera captures, video walls, terrain.
-  #
-  # Vanilla is the default only because changing it moves every pixel of every map that already exists.
+  #               visibly smoother on a colour ramp. The default.
+  #   vanilla     What Minecraft itself uses, and what maps drawn before this looked like. Here for a server
+  #               that would rather nothing moved, since switching does move every pixel of every map.
   #
   # See docs/images/colour-matching.png for the two side by side, and docs/performance.md for the numbers.
   # Read once at startup, so changing it needs a restart rather than a reload.
-  matching: vanilla
+  matching: perceptual
 
 prompts:
   # How text input is asked for. "dialog" is a native Minecraft dialog and needs no
@@ -141,6 +139,14 @@ camera:
   # How far a capture traces, in blocks. Capped by the server's view distance whatever this says: beyond
   # that the chunks are not loaded, so there is nothing to trace and the ray draws sky.
   max-distance: 96
+
+  # How a capture is matched to the map palette - the same modes as media.dither.
+  #
+  # A capture is a photograph, so an error diffusion mode is worth trying: FLOYD_STEINBERG first. NONE is the
+  # default because it is what captures have always looked like, and because a live viewfinder pays for
+  # dithering in bandwidth the same way a video wall does - a dither pattern compresses poorly, and a live
+  # capture is sent as often as a video. For a still that is photographed once, it costs nothing.
+  dither: NONE
 
   # How far off black an unlit block is drawn, from 0 to 0.5.
   #

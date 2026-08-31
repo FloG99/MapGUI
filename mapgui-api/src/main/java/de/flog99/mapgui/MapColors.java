@@ -28,12 +28,17 @@ public final class MapColors implements Palette {
      * Which formula decides the nearest entry to a colour.
      *
      * <p>Measured rather than argued: {@code PerceptualMatcherAbTest} scores both in CIELAB, which neither uses.
-     * Perceptual wins on both halves, so this is a choice only because switching moves every pixel of every map
-     * that already exists - which is not something an upgrade should do quietly.
+     * Perceptual wins on both halves and is the default. Vanilla is kept for a server that would rather its maps
+     * kept looking exactly as they did, since switching does move every pixel of every one that already exists.
      */
     public enum Matching {
 
-        /** Vanilla's own weighting: green counted four times, blue let off lightly. What every map already looks like. */
+        /**
+         * Vanilla's own weighting: green counted four times, blue let off lightly.
+         *
+         * <p>Measurably worse on both halves, and here for one reason: it is what maps drawn before this looked
+         * like. A server that would rather nothing moved can ask for it.
+         */
         VANILLA,
 
         /**
@@ -49,7 +54,7 @@ public final class MapColors implements Palette {
         PERCEPTUAL
     }
 
-    private static volatile Matching matching = Matching.VANILLA;
+    private static volatile Matching matching = Matching.PERCEPTUAL;
 
     /**
      * Whether the table has been filled, held out here rather than inside the holder.

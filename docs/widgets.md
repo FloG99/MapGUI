@@ -172,8 +172,8 @@ usually wants `false` or it reads as blur.
 screen laid out against the map's own eight pixel font gets six pixels taller per line under a fourteen pixel
 one - which on a 128 pixel canvas is enough to overrun it. A column with no room left takes the space out of
 whatever will give it, and an image gives by being *cropped*: `Bitmap` never scales, so the picture is quietly
-lost rather than shrunk. If your screen honours a caller's font, either put the growing part in a `Scroll` or
-pin what must not shrink with `minHeight`.
+lost rather than shrunk. If your screen honours a caller's font, put the growing part in a `Scroll`, pin what must not shrink with
+`minHeight`, or give the picture `Image(..).shrinkToFit()` so it gets smaller instead of losing its bottom rows.
 
 Load a font once and hand back the same instance - a font caches a rasterized glyph per character, so building
 one per call rasterizes the alphabet again every frame.

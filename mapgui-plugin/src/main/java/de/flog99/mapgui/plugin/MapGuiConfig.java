@@ -101,6 +101,7 @@ public record MapGuiConfig(
                 canopy(config),
                 // Clamped rather than refused: it is a look, and the far end of it is only ever a flat grey picture.
                 (float) Math.clamp(config.getDouble("camera.shadow-lift", RayCaster.SHADOW_LIFT), 0, 0.5),
+                mode(config, "camera.dither"),
                 reuse(config),
                 limits(config)
         );
@@ -200,13 +201,13 @@ public record MapGuiConfig(
      * reason a bad dither mode does: a typo in one setting should not stop a server starting.
      */
     private static MapColors.Matching matching(FileConfiguration config) {
-        String name = config.getString("colors.matching", "vanilla");
+        String name = config.getString("colors.matching", "perceptual");
         try {
             return MapColors.Matching.valueOf(name.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException | NullPointerException e) {
             Bukkit.getLogger().warning("colors.matching is set to \"" + name + "\", which is not one of "
-                    + Arrays.toString(MapColors.Matching.values()) + ". Using VANILLA.");
-            return MapColors.Matching.VANILLA;
+                    + Arrays.toString(MapColors.Matching.values()) + ". Using PERCEPTUAL.");
+            return MapColors.Matching.PERCEPTUAL;
         }
     }
 
@@ -217,11 +218,16 @@ public record MapGuiConfig(
      * load: a typo in one setting should not stop a server, and undithered is what it did before anyway.
      */
     private static Dither dither(FileConfiguration config) {
-        String name = config.getString("media.dither", "NONE");
+        return mode(config, "media.dither");
+    }
+
+    /** A dither mode by name, from wherever it is written down. */
+    private static Dither mode(FileConfiguration config, String key) {
+        String name = config.getString(key, "NONE");
         try {
             return Dither.valueOf(name.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException | NullPointerException e) {
-            Bukkit.getLogger().warning("media.dither is set to \"" + name + "\", which is not a mode. Using NONE."
+            Bukkit.getLogger().warning(key + " is set to \"" + name + "\", which is not a mode. Using NONE."
                     + " The modes are " + Arrays.toString(Dither.values()) + ".");
             return Dither.NONE;
         }
