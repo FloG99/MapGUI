@@ -162,6 +162,7 @@ audience is the one thing here that costs real bandwidth.
 | [Video](docs/video.md) | GIF playback, fit modes, and optional MP4 and live streams |
 | [Camera](docs/camera.md) | capturing the world onto a map, and where the textures come from |
 | [Walls](docs/walls.md) | video walls, menus on walls, shared state, the placement catalog |
+| [Events](docs/events.md) | the Bukkit events MapGUI raises, and refusing a wall or a click |
 | [Performance](docs/performance.md) | what costs bandwidth, and how to find out what is costing it |
 | [Configuration](docs/configuration.md) | `config.yml`, commands, permissions |
 | [Headless preview](docs/preview.md) | save-and-look development without a server |

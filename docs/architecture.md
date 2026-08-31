@@ -126,6 +126,11 @@ Everything a screen touches is main thread. Two exceptions, both narrow:
 - Prompt providers complete on **whatever thread answered**, which need not be the main one, so `promptText`
   always hops back before running your callback.
 
+The events in `de.flog99.mapgui.event` are raised on the main thread and nowhere else - see
+[events](events.md). Both gestures read off the connection already hop, so each is raised after its own hop
+rather than where the packet was read. A Bukkit event raised on the network thread would be a bug in every
+listener that touches the world, so it is a rule and not a preference.
+
 ## Coordinate spaces
 
 Worth knowing which one you are in, because there are four and they are easy to confuse.
