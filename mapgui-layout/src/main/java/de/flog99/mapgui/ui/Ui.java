@@ -133,6 +133,11 @@ public final class Ui {
         return new Spinner();
     }
 
+    /** A bar that fills, for waiting on something that can. Segmented for pips, or indeterminate for a sweep. */
+    public static Progress Progress() {
+        return new Progress();
+    }
+
     public static Panel Divider(Color color) {
         return Row().fillWidth().height(1).background(color);
     }
