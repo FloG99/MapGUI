@@ -7,7 +7,7 @@ import de.flog99.mapgui.media.Frames;
 import de.flog99.mapgui.media.GifFrames;
 import de.flog99.mapgui.media.LiveSource;
 import de.flog99.mapgui.media.VideoPlayer;
-import de.flog99.mapgui.plugin.video.FfmpegSource;
+import de.flog99.mapgui.plugin.video.MediaSources;
 import de.flog99.mapgui.plugin.video.StillImage;
 import de.flog99.mapgui.plugin.video.VideoNatives;
 import de.flog99.mapgui.ui.Quantizer;
@@ -55,6 +55,7 @@ final class VideoLibrary {
     private static final Set<String> DECODER_STILLS = Set.of(".webp", ".avif", ".heic", ".heif", ".jxl");
 
     private final Plugin plugin;
+    private final MediaSources media;
     private final int size;
     private final boolean prerender;
     private final Map<String, String> streams;
@@ -71,8 +72,9 @@ final class VideoLibrary {
      */
     private final Map<String, String> unplayable = new HashMap<>();
 
-    VideoLibrary(Plugin plugin, int size, boolean prerender, Map<String, String> streams) {
+    VideoLibrary(Plugin plugin, MediaSources media, int size, boolean prerender, Map<String, String> streams) {
         this.plugin = plugin;
+        this.media = media;
         this.size = size;
         this.prerender = prerender;
         this.streams = streams;
@@ -225,6 +227,10 @@ final class VideoLibrary {
      *
      * <p>Shared rather than one each because a stream is a connection to somewhere else: three walls showing
      * the same camera should be one connection and one decode, not three.
+     *
+     * <p>Opened through {@link MediaSources} rather than by constructing a decoder here, which is what lets a
+     * named stream be a YouTube or Twitch page url as readily as an rtsp one: the resolving and the reconnecting
+     * before a signed url lapses are the same for a name in config.yml as for a url a plugin passed in.
      */
     @Nullable
     private WallContent live(String name, String source, boolean loop) {
@@ -238,7 +244,12 @@ final class VideoLibrary {
         }
 
         // Square, because the wall it lands on is not known yet and the player letterboxes whatever it gets.
-        LiveSource started = new FfmpegSource(source, size, size, loop);
+        LiveSource started = media.open(source, size, loop);
+        if (!started.running() && started.error() != null) {
+            unplayable.put(name, started.error());
+            plugin.getSLF4JLogger().warn("{} will not play: {}", name, started.error());
+            return null;
+        }
         playing.put(name, started);
         return WallContent.live(started);
     }

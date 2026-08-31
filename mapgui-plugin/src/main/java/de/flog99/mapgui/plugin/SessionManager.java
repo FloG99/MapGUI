@@ -12,6 +12,7 @@ import de.flog99.mapgui.Session;
 import de.flog99.mapgui.WallDisplay;
 import de.flog99.mapgui.event.MapGuiScreenOpenEvent;
 import de.flog99.mapgui.map.MapPrinter;
+import de.flog99.mapgui.media.MediaService;
 import de.flog99.mapgui.prompt.PromptRegistry;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -189,6 +190,11 @@ final class SessionManager implements MapGui {
     @Override
     public Camera camera() {
         return plugin.camera();
+    }
+
+    @Override
+    public MediaService media() {
+        return plugin.media();
     }
 
     @Override
