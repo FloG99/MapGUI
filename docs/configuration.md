@@ -54,8 +54,13 @@ Placing is ended by right-click or Q rather than a command, since the preview is
 ## config.yml
 
 The core of it is below. Two sections are large enough to live with the feature they configure - `camera:` in
-[camera](camera.md#what-to-watch) and `video:` in [video](video.md#mp4-and-live-streams) - and the file itself
+[camera](camera.md#what-to-watch) and `media:` in [video](video.md#mp4-and-live-streams) - and the file itself
 carries the same notes as comments, so an admin who never opens these docs is not missing anything.
+
+`config-version` at the top of the file is MapGUI's, not yours. It is how a file written for an older version is
+recognised: settings that have been renamed are moved for you on the next start, your comments and everything
+else are left as they are, and one line in the log says what changed. Nothing is lost by upgrading and there is
+nothing to edit.
 
 ```yaml
 commands:
@@ -158,7 +163,7 @@ a ceiling rather than a default. See [animation](animation.md#frame-limits).
 | | |
 |---|---|
 | `plugins/MapGUI/config.yml` | the above |
-| `plugins/MapGUI/videos/` | drop GIFs here to make them placeable |
+| `plugins/MapGUI/videos/` | drop GIFs, videos and pictures here to make them placeable |
 | `plugins/MapGUI/walls.yml` | where placed walls are recorded. Written on every change, not on shutdown |
 | `plugins/MapGUI/assets/` | resource packs the camera draws with, which outrank any a plugin supplies. See [camera](camera.md#supplying-them-yourself) |
 

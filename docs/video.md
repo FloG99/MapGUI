@@ -66,6 +66,30 @@ rather than painted black - so give the node a background and the letterbox matc
 
 `Fit.COVER` crops to fill. `Fit.STRETCH` distorts.
 
+## Still pictures
+
+A picture is an animation of one frame, so it goes through the same machinery and needs no separate anything:
+
+```java
+MapGui.get().wall().at(block, face).size(2, 2).content(WallContent.video(picture)).open();
+```
+
+Dropped into `plugins/MapGUI/videos` it is placeable by name like everything else, and it is the cheapest thing
+a wall can show - one frame, sent once, never sent again.
+
+| Format | Needs |
+|---|---|
+| PNG, including alpha | nothing |
+| JPEG, BMP, WBMP | nothing |
+| GIF, animated or not | nothing |
+| **WebP, AVIF, HEIC** | `media.ffmpeg` |
+| **animated WebP, APNG** | `media.ffmpeg`, and they play as animations |
+
+`ImageIO` is asked first and always, which is why the first three rows work on a server that has never turned
+anything on. FFmpeg is asked only about what `ImageIO` refused, and a file neither can read says so, naming
+`media.ffmpeg` as the fix - needing a video decoder to draw a picture is surprising enough that the error should
+not leave you guessing.
+
 ## MP4, and live streams
 
 GIF is what works out of the box, and it stays the default for the reason it always was: Java SE ships no
