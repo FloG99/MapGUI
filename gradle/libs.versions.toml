@@ -1,7 +1,13 @@
 [versions]
 java = "25"
 minecraft = "26.2"
+# The oldest server MapGUI runs on, which is what paper-plugin.yml's api-version has to say. Not the version
+# above: that is what this is built and tested against.
+minecraftMin = "26.1"
+# One dev bundle per NMS module, newest first, each pinned because each module is compiled against that
+# version's own server jar and nothing else can be.
 paper = "26.2.build.112-stable"
+paper261 = "26.1.2.build.74-stable"
 junit = "6.1.3"
 # FFmpeg playback. compileOnly here and downloaded at runtime by VideoLibraryLoader, so these two must
 # stay in step with the constants in VideoNatives. The FFmpeg version is the one that JavaCV release ships.

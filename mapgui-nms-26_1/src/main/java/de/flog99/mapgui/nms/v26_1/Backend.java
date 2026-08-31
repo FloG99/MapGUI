@@ -1,0 +1,56 @@
+package de.flog99.mapgui.nms.v26_1;
+
+import de.flog99.mapgui.HandRaiser;
+import de.flog99.mapgui.MapTransport;
+import de.flog99.mapgui.PacketInput;
+import de.flog99.mapgui.RotationController;
+import de.flog99.mapgui.ServerBackend;
+import de.flog99.mapgui.camera.EntityDetails;
+import de.flog99.mapgui.map.SavedMapPixels;
+
+/**
+ * Minecraft 26.1.
+ *
+ * <p>Found by name, so this class and its package are what the version table points at. Everything it hands
+ * back is built here and kept, since a transport counts the bytes it has sent and an input holds the listeners
+ * it has installed.
+ */
+public final class Backend implements ServerBackend {
+
+    private final NmsMapTransport transport = new NmsMapTransport();
+    private final NmsPacketInput input = new NmsPacketInput();
+    private final NmsRotationController rotation = new NmsRotationController();
+    private final NmsHandRaiser handRaiser = new NmsHandRaiser();
+    private final NmsSavedMapPixels savedMapPixels = new NmsSavedMapPixels();
+    private final NmsEntityDetails entityDetails = new NmsEntityDetails();
+
+    @Override
+    public MapTransport transport() {
+        return transport;
+    }
+
+    @Override
+    public PacketInput input() {
+        return input;
+    }
+
+    @Override
+    public RotationController rotation() {
+        return rotation;
+    }
+
+    @Override
+    public HandRaiser handRaiser() {
+        return handRaiser;
+    }
+
+    @Override
+    public SavedMapPixels savedMapPixels() {
+        return savedMapPixels;
+    }
+
+    @Override
+    public EntityDetails entityDetails() {
+        return entityDetails;
+    }
+}

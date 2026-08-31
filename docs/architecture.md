@@ -7,7 +7,7 @@
 | `mapgui-layout` | the node tree, DSL and layout engine. **No Bukkit dependency**, so it unit tests without a server | inside `mapgui-api` |
 | `mapgui-api` | what you compile against: `Screen`, `Session`, `WallDisplay`, `Marker`, prompts | yes |
 | `mapgui-camera` | the renderer behind a capture: ray traversal, block models, entity meshes, resource pack reading | no, shaded into `MapGUI.jar` |
-| `mapgui-nms-26_2` | the things with no API equivalent, for one Minecraft version. One module per version, and the only ones that touch server internals | no |
+| `mapgui-nms-26_2`, `mapgui-nms-26_1` | the things with no API equivalent, for one Minecraft version. One module per version, and the only ones that touch server internals | no |
 | `mapgui-plugin` | the runtime: sessions, input, walls, commands, prompt providers | no, it *is* the plugin |
 | `mapgui-preview` | renders a screen to a browser or a PNG with no server running | no |
 
@@ -51,7 +51,7 @@ in `walls.yml`.
 
 ## Why the NMS modules, and how to add a version
 
-Four things have no API equivalent, and they are the whole of `mapgui-nms-26_2`. Each is an interface in
+Four things have no API equivalent, and they are the whole of an NMS module. Each is an interface in
 `mapgui-api` - `MapTransport`, `PacketInput`, `RotationController`, `SavedMapPixels` - and `ServerBackend`
 hands over one of each:
 
@@ -77,13 +77,19 @@ nothing else can be. Nothing imports one: `Backends` looks up a class name at st
 server reports, so several can sit in the same jar with only the right one ever loaded. Adding a version is
 therefore mechanical, and nothing above the interfaces has to know it happened:
 
-1. Copy `mapgui-nms-26_2` to `mapgui-nms-<version>` and point its dev bundle at the new Paper.
-2. Fix whatever the compiler objects to.
-3. Add it to `settings.gradle.kts`, and to the plugin's `runtimeOnly` and `shadowJar` lists.
-4. Add the family and the backend's class name to the table in `Backends`.
+1. Add a version key for the new dev bundle in `gradle/libs.versions.toml`. Each module pins its own, since
+   each is compiled against that version's own server jar.
+2. Copy `mapgui-nms-26_2` to `mapgui-nms-<version>` and point its dev bundle at the new key.
+3. Fix whatever the compiler objects to.
+4. Add it to `settings.gradle.kts`, and to the plugin's `runtimeOnly` and `shadowJar` lists.
+5. Add the family and the backend's class name to the table in `Backends`.
 
 Versions are matched by family, so `26.2.1` runs on the module built for `26.2`. A server MapGUI has no
 backend for fails to enable and says which versions it knows, rather than half-working.
+
+`api-version` in `paper-plugin.yml` is templated from `libs.versions.minecraftMin`, the **oldest** module's
+version rather than the newest. Paper refuses to load a plugin on a server older than that line says, so
+naming the build version would lock out every older server the backends do cover.
 
 ## Input, and why some of it is read off the connection
 

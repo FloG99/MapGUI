@@ -12,7 +12,7 @@ can join your server can use it.
 [![Build](https://github.com/FloG99/MapGUI/actions/workflows/build.yml/badge.svg)](https://github.com/FloG99/MapGUI/actions/workflows/build.yml)
 [![License: LGPL-3.0](https://img.shields.io/badge/license-LGPL--3.0-blue.svg)](LICENSE)
 
-**Paper 26.2 · Java 25 · no runtime dependencies**
+**Paper 26.1 or 26.2 · Java 25 · no runtime dependencies**
 
 <img width="645" height="453" alt="382400600-716980a6-71e2-4a04-b79b-cdd2d637fde3" src="https://github.com/user-attachments/assets/1051ab81-83a8-4568-ae55-88d8a01e7fca" />
 
@@ -76,7 +76,7 @@ MapGui.get().open(player, new CounterScreen());
 
 ## Try the quick demo
 
-**Paper 26.2 and Java 25 are both required** - an older Java will not load it at all.
+**Paper 26.1 or newer and Java 25 are both required** - an older Java will not load it at all.
 
 1. Two jars from the [latest release](https://github.com/FloG99/MapGUI/releases/latest), both straight into
    `plugins/`:

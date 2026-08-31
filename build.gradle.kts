@@ -55,7 +55,10 @@ subprojects {
         filteringCharset = "UTF-8"
         val props = mapOf(
             "version" to project.version,
-            "apiVersion" to rootProject.libs.versions.minecraft.get(),
+            // The lowest version MapGUI supports, not the one it is built against: api-version is the floor
+            // Paper refuses to load below, so naming the build version would lock out every older server the
+            // backend modules do cover.
+            "apiVersion" to rootProject.libs.versions.minecraftMin.get(),
         )
         inputs.properties(props)
         filesMatching(listOf("paper-plugin.yml", "plugin.yml")) {
