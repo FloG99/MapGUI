@@ -362,6 +362,35 @@ class LayoutTest {
         assertEquals(100, child.bounds().x());
     }
 
+    /**
+     * The three space modes have to differ, or there is no reason to pick one. Two 20px children in 128
+     * leave 88 over: between keeps it all inside, evenly makes the edges match the middle, and around gives
+     * each child the same space on both sides, which is half an inner gap at an edge.
+     */
+    @Test
+    void theSpaceModesDifferAtTheEdges() {
+        Panel firstBetween = Row().width(20);
+        Panel secondBetween = Row().width(20);
+        layout(Row(firstBetween, secondBetween).justify(Justify.SPACE_BETWEEN));
+
+        assertEquals(0, firstBetween.bounds().x());
+        assertEquals(108, secondBetween.bounds().x());
+
+        Panel firstEvenly = Row().width(20);
+        Panel secondEvenly = Row().width(20);
+        layout(Row(firstEvenly, secondEvenly).justify(Justify.SPACE_EVENLY));
+
+        assertEquals(29, firstEvenly.bounds().x(), "88 in three equal parts");
+        assertEquals(78, secondEvenly.bounds().x());
+
+        Panel firstAround = Row().width(20);
+        Panel secondAround = Row().width(20);
+        layout(Row(firstAround, secondAround).justify(Justify.SPACE_AROUND));
+
+        assertEquals(22, firstAround.bounds().x(), "half of the 44 that sits between them");
+        assertEquals(86, secondAround.bounds().x());
+    }
+
     /** A gap keeps its slot open where a hidden node takes the space with it. */
     @Test
     void aGapHoldsItsSpaceWhereAHiddenNodeGivesItUp() {

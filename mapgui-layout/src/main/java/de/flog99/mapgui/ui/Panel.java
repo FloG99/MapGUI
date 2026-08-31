@@ -233,17 +233,8 @@ public final class Panel extends AbstractContainer<Panel> {
         for (int main : mains) used += main;
         int free = Math.max(0, contentMain - used);
 
-        int offset = switch (justify) {
-            case START, SPACE_BETWEEN -> 0;
-            case CENTER -> free / 2;
-            case END -> free;
-            case SPACE_AROUND -> free / (count + 1);
-        };
-        int extraGap = switch (justify) {
-            case SPACE_BETWEEN -> count > 1 ? free / (count - 1) : 0;
-            case SPACE_AROUND -> free / (count + 1);
-            default -> 0;
-        };
+        int offset = justify.offset(free, count);
+        int extraGap = justify.extraGap(free, count);
 
         for (int i = 0; i < count; i++) {
             Node kid = kids.get(i);
