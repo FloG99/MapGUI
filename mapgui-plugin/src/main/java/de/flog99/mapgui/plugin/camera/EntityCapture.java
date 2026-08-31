@@ -495,9 +495,15 @@ final class EntityCapture {
         ));
     }
 
-    /** Whether this is a sulfur cube with something inside it, which is drawn in place of its inner shell. */
+    /**
+     * Whether this is a sulfur cube with something inside it, which is drawn in place of its inner shell.
+     *
+     * <p>By name rather than {@code EntityType.SULFUR_CUBE}, because that constant arrived in 26.2 and MapGUI
+     * compiles against the oldest Paper it supports. A constant the server does not have is a
+     * {@code NoSuchFieldError} that no backend module can shield.
+     */
     private static boolean holding(Entity entity) {
-        if (entity.getType() != EntityType.SULFUR_CUBE || !(entity instanceof LivingEntity living)) return false;
+        if (!entity.getType().name().equals("SULFUR_CUBE") || !(entity instanceof LivingEntity living)) return false;
 
         EntityEquipment worn = living.getEquipment();
         ItemStack inside = worn == null ? null : worn.getItem(EquipmentSlot.BODY);

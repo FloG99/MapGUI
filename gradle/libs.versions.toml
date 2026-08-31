@@ -14,14 +14,18 @@ junit = "6.1.3"
 javacv = "1.5.14"
 ffmpeg = "8.1.2-1.5.14"
 annotations = "26.1.0"
-# Matched to what Paper 26.2 puts on the runtime classpath, since that is what this actually runs against.
-gson = "2.14.0"
+# Matched to what the oldest supported Paper puts on the runtime classpath, since the server supplies this and
+# a method added in a later gson would be a NoSuchMethodError there.
+gson = "2.13.2"
 paperweight = "2.0.0-beta.21"
 runpaper = "3.1.0"
 shadow = "9.6.1"
 
 [libraries]
-paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+# The oldest supported dev bundle deliberately, not the newest. Everything above the backend modules compiles
+# against the floor, so an API added in 26.2 cannot slip in and become a NoSuchMethodError on a 26.1 server -
+# which is the one failure no backend module can shield.
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper261" }
 # Only for mapgui-camera, which has no Bukkit dependency and so cannot pick this up from paper-api the way
 # every other module does. compileOnly there too: the server puts it on the runtime classpath either way.
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
