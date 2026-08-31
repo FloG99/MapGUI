@@ -56,6 +56,9 @@ final class WallChannel {
     private final Set<UUID> gathering = new HashSet<>();
     private long gatheringFor = Long.MIN_VALUE;
 
+    /** Who the drawing wall sent to last, so somebody new gets the whole picture rather than a difference. */
+    private final Set<UUID> sent = new HashSet<>();
+
     private WallChannel(String name, int cols, int rows) {
         this.name = name;
         this.cols = cols;
@@ -129,6 +132,23 @@ final class WallChannel {
             gatheringFor = tick;
         }
         gathering.addAll(watching);
+    }
+
+    /**
+     * Whether this viewer had the picture sent to them last time round.
+     *
+     * <p>Somebody who did not needs the whole of it rather than what has changed since - they have just come
+     * into range of one of the walls, or come back from being culled by all of them, and either way the frame
+     * their client is holding is not one to compute a difference against.
+     */
+    boolean wasSentTo(UUID viewer) {
+        return sent.contains(viewer);
+    }
+
+    /** Records who the drawing wall has just sent to, for the next tick to compare against. */
+    void sentTo(java.util.Collection<UUID> viewers) {
+        sent.clear();
+        sent.addAll(viewers);
     }
 
     /** Whether this viewer is wanted by any wall in the channel, and so has to be sent to. */
