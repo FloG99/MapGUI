@@ -2,9 +2,10 @@
 
 A grid of maps hung on blocks, showing one picture - a video, a mural, or a menu you can use.
 
-None of it is real. The item frames exist only on clients: invisible, so a grid reads as one picture, and
-glowing, so it stays lit at night. There is no frame to break, no map inside it, and nothing left behind by
-a restart.
+None of it is real. The item frames exist only on clients: invisible by default, so a grid reads as one
+picture, and glowing, so it stays lit at night. Both are choices rather than facts - see
+[how the frames look](#how-the-frames-look). There is no frame to break, no map inside it, and nothing left
+behind by a restart.
 
 ## Video walls, without writing anything
 
@@ -153,6 +154,60 @@ public Click activateOn() {
 ```
 
 A screen that has never heard of it behaves exactly as it always did.
+
+### How far away it can be used
+
+A wall can be pointed at from 64 blocks by default, which is generous because a scoreboard across a stadium
+is a real thing to build. `reach` narrows it:
+
+```java
+.reach(6)          // arm's length, so somebody across the room aiming past it takes nobody's clicks
+```
+
+Only about pointing. Who is a viewer at all is `range`, and a reach beyond that only lets somebody aim at a
+wall they are being sent no pixels for.
+
+### Who sees it, and who may work it
+
+Two predicates rather than two booleans, so a permission check is the whole of it:
+
+```java
+MapGui.get().wall()
+        .at(block, face)
+        .screenForEveryone(new DeparturesBoard())
+        .visibleTo(player -> true)
+        .controlledBy(player -> player.hasPermission("station.staff"))
+        .open();
+```
+
+- **`visibleTo`** decides who is a viewer. Failing it is the same as standing too far away: no frames, no
+  pixels, no cursor, and nothing in their client to give the wall away. Somebody who stops passing it has the
+  wall taken away exactly as walking out of range does, and a per-player screen of theirs closes with it.
+- **`controlledBy`** decides who may work the menu on it. Somebody who fails it gets no cursor and their
+  clicks are not taken - which also means their right-click reaches the world as usual, rather than being
+  swallowed by a menu they cannot use.
+
+Both are asked once a tick for every player in range, so keep them to a permission or a lookup and not a
+database.
+
+### How the frames look
+
+Three cosmetics, all free: the frames are packets rather than entities, so each is a bit in the metadata that
+already goes out when a viewer arrives.
+
+```java
+.glowing(false)      // lit by the block behind it rather than drawn at full brightness
+.invisible(false)    // show the frame's own model, for something meant to look framed
+.itemRotation(2)     // turn the picture, in eighths of a full turn
+```
+
+`glowing` is on by default and is what keeps a wall readable at night; turn it off for a painting or a mural,
+which should belong to the room it hangs in - a glowing frame is a rectangle of daylight in a dark hall, and
+its outline gives the grid away. `invisible` is on by default and is the reason nine maps read as one image.
+
+`itemRotation` turns the picture and nothing else. Where the wall is, which way it faces and where a click
+lands are all untouched, so unlike rotating the frame itself this cannot put the cursor somewhere the player
+is not pointing - but a quarter turn on a wall that is not square shows the picture across the short side.
 
 ### Reaching the edges
 
