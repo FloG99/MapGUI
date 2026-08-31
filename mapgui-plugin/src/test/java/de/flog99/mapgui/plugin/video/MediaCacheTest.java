@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -13,6 +14,7 @@ import java.time.temporal.ChronoUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -121,5 +123,25 @@ class MediaCacheTest {
         Files.write(file, new byte[bytes]);
         Files.setLastModifiedTime(file, FileTime.from(Instant.now().minus(daysAgo, ChronoUnit.DAYS)));
         return file;
+    }
+
+    /**
+     * A clip that is playing is the one a least-recently-used sweep reaches last, and on Windows it is also the
+     * one that cannot be deleted. Skipping it has to be the answer, since the alternative is every download
+     * failing with an AccessDeniedException for as long as a wall is showing something.
+     */
+    @Test
+    void skipsAClipItCannotDeleteRatherThanFailing() throws IOException {
+        Path directory = folder.resolve("media");
+        Files.createDirectories(directory);
+        Path held = directory.resolve("held.mp4");
+        Files.write(held, new byte[32 * KB]);
+
+        MediaCache cache = new MediaCache(folder, 1, 1);
+        try (InputStream open = Files.newInputStream(held)) {
+            // Open on every platform; only Windows actually refuses the delete, which is the case this is for.
+            assertTrue(cache.makeRoom(16L * KB), "there is room for this whether or not the held clip could go");
+            assertNotNull(open);
+        }
     }
 }
