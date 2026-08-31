@@ -3,10 +3,12 @@ package de.flog99.mapgui.plugin.wall;
 import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.WallContent;
 import de.flog99.mapgui.WallDisplay;
+import de.flog99.mapgui.media.Frames;
 import de.flog99.mapgui.media.GifFrames;
 import de.flog99.mapgui.media.LiveSource;
 import de.flog99.mapgui.media.VideoPlayer;
 import de.flog99.mapgui.plugin.video.FfmpegSource;
+import de.flog99.mapgui.plugin.video.StillImage;
 import de.flog99.mapgui.plugin.video.VideoNatives;
 import de.flog99.mapgui.ui.Quantizer;
 import org.bukkit.plugin.Plugin;
@@ -29,10 +31,14 @@ import java.util.function.Consumer;
  * The media a server owner has put in {@code plugins/MapGUI/videos}, plus the streams they have named in
  * config.yml.
  *
- * <p>Two kinds, and the difference is where the pixels live. A GIF is decoded once into memory and shared by
- * every wall showing it, at one size whatever the wall's - decoding per wall would mean about a second of work
- * on every step of a resize, so the player scales it instead. Everything else is handed to FFmpeg and arrives
- * a frame at a time, because a film or a stream is not something to hold all of.
+ * <p>Two kinds, and the difference is where the pixels live. A GIF or a still is decoded once into memory and
+ * shared by every wall showing it, at one size whatever the wall's - decoding per wall would mean about a second
+ * of work on every step of a resize, so the player scales it instead. Everything else is handed to FFmpeg and
+ * arrives a frame at a time, because a film or a stream is not something to hold all of.
+ *
+ * <p>Stills are listed here rather than somewhere of their own because a picture on a wall is the cheapest thing
+ * this plugin can put up: one frame, sent once and never again. PNG and JPEG need nothing; WebP, AVIF and HEIC
+ * need FFmpeg, which {@link StillImage} explains rather than leaving as a blank wall.
  */
 final class VideoLibrary {
 
@@ -41,6 +47,12 @@ final class VideoLibrary {
 
     /** What FFmpeg is asked to open. Not a whitelist of what it can do, just of what is worth listing. */
     private static final Set<String> PLAYABLE = Set.of(".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".ts", ".flv");
+
+    /** Stills ImageIO reads on any JVM, so they play with media.ffmpeg off exactly as they always have. */
+    private static final Set<String> PLAIN_STILLS = Set.of(".png", ".jpg", ".jpeg", ".bmp", ".wbmp");
+
+    /** Stills only FFmpeg reads. Animated WebP and APNG arrive through here as animations, which is a bonus. */
+    private static final Set<String> DECODER_STILLS = Set.of(".webp", ".avif", ".heic", ".heif", ".jxl");
 
     private final Plugin plugin;
     private final int size;
@@ -86,12 +98,21 @@ final class VideoLibrary {
         if (!streams.isEmpty()) return true;
 
         for (String name : names()) {
-            if (kindOf(name) == Kind.PLAYED) return true;
+            Kind kind = kindOf(name);
+            if (kind == Kind.PLAYED || kind == Kind.DECODER_STILL) return true;
         }
         return false;
     }
 
-    private enum Kind { DECODED, PLAYED }
+    /** What kind of thing a name is, for a listing - so a picture is not offered as a video. */
+    String describe(String name) {
+        if (streams.containsKey(name)) return "stream";
+
+        Kind kind = kindOf(name);
+        return kind == Kind.PLAIN_STILL || kind == Kind.DECODER_STILL ? "image" : "video";
+    }
+
+    private enum Kind { DECODED, PLAYED, PLAIN_STILL, DECODER_STILL }
 
     @Nullable
     private Kind kindOf(String name) {
@@ -100,6 +121,12 @@ final class VideoLibrary {
 
         for (String extension : PLAYABLE) {
             if (lower.endsWith(extension)) return Kind.PLAYED;
+        }
+        for (String extension : PLAIN_STILLS) {
+            if (lower.endsWith(extension)) return Kind.PLAIN_STILL;
+        }
+        for (String extension : DECODER_STILLS) {
+            if (lower.endsWith(extension)) return Kind.DECODER_STILL;
         }
         return null;
     }
@@ -151,16 +178,39 @@ final class VideoLibrary {
             return null;
         }
 
-        return kind == Kind.DECODED ? gif(name, file) : live(name, file.getAbsolutePath(), true);
+        return switch (kind) {
+            case DECODED -> held(name, () -> gif(file));
+            case PLAIN_STILL, DECODER_STILL -> held(name, () -> StillImage.read(file.toPath(), size));
+            case PLAYED -> live(name, file.getAbsolutePath(), true);
+        };
     }
 
+    private Frames gif(File file) throws IOException {
+        try (InputStream source = Files.newInputStream(file.toPath())) {
+            return GifFrames.read(source, Quantizer.of(MapColors.INSTANCE), size);
+        }
+    }
+
+    /** Anything decoded once and kept: a GIF, a still, an animated WebP. */
+    @FunctionalInterface
+    private interface Decoder {
+
+        Frames decode() throws IOException;
+    }
+
+    /**
+     * Decodes once and holds the result, since every wall showing it wants the same pixels.
+     *
+     * <p>One reason for a failure and one log line whatever the format, because an admin's question is the same
+     * either way: the wall is blank and they want to know what to do about it.
+     */
     @Nullable
-    private WallContent gif(String name, File file) {
+    private WallContent held(String name, Decoder decoder) {
         VideoPlayer cached = decoded.get(name);
         if (cached != null) return WallContent.video(cached);
 
-        try (InputStream source = Files.newInputStream(file.toPath())) {
-            VideoPlayer video = new VideoPlayer(GifFrames.read(source, Quantizer.of(MapColors.INSTANCE), size));
+        try {
+            VideoPlayer video = new VideoPlayer(decoder.decode());
             decoded.put(name, video);
             return WallContent.video(video);
         } catch (IOException e) {

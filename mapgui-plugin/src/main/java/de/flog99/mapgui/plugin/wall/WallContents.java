@@ -69,10 +69,10 @@ final class WallContents {
         List<String> files = videos.names();
         if (!files.isEmpty()) {
             lines.add(heading("Media", "plugins/MapGUI/videos"));
-            for (String name : files) lines.add(line(name, "video"));
+            for (String name : files) lines.add(line(name, videos.describe(name)));
         }
         if (videos.needsFfmpeg() && !VideoNatives.available()) {
-            lines.add(Component.text("    Video files and streams need ", NamedTextColor.DARK_GRAY)
+            lines.add(Component.text("    Video files, streams and WebP need ", NamedTextColor.DARK_GRAY)
                     .append(Component.text("media.ffmpeg: true", NamedTextColor.GRAY))
                     .append(Component.text(" in config.yml and a restart.", NamedTextColor.DARK_GRAY)));
         }
