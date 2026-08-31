@@ -358,6 +358,23 @@ media:
   # the operator's call, which is why this is off and says so here.
   resolve-page-urls: false
 
+  # How anything decoded here is matched to the map palette: a video, a still, a downloaded clip.
+  #
+  #   NONE             Nearest colour. No pattern, but a gradient or a photograph bands into stripes.
+  #   ORDERED          A 4x4 pattern. What a gradient has always used.
+  #   ORDERED_FINE     An 8x8 pattern, finer across large smooth areas.
+  #   BLUE_NOISE       No visible grid, and the worst of the lot to compress. For stills, not for video.
+  #   FLOYD_STEINBERG  Error diffusion, the most faithful. The one to try first on anything photographic.
+  #   ATKINSON         Error diffusion that throws a quarter of the error away. Reach for it if the above worms.
+  #   SIERRA_LITE      Error diffusion, cheaper and coarser.
+  #
+  # Applied once per frame as it is decoded, not once per viewer per repaint, so the cost is paid once however
+  # many walls show it. It does cost bandwidth: a dither pattern is poor material for the map packet's own
+  # compression, and video already sends the most bytes of anything here - see docs/performance.md.
+  #
+  # This is the default. A plugin calling MediaService may name a mode per stream and override it.
+  dither: NONE
+
   # Shortcuts for /mapgui wall place <name>. Anything FFmpeg can open: rtmp, rtsp, hls, a plain http url,
   # and with resolve-page-urls on, a page url too.
   #

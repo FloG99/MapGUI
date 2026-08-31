@@ -4,6 +4,7 @@ import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.media.Frames;
 import de.flog99.mapgui.media.LiveSource;
 import de.flog99.mapgui.media.MediaService;
+import de.flog99.mapgui.ui.Dither;
 import de.flog99.mapgui.ui.Quantizer;
 import org.bukkit.plugin.Plugin;
 
@@ -40,22 +41,32 @@ public final class MediaSources implements MediaService {
     private final int fps;
     private final int maxFrames;
 
+    /** What {@code media.dither} says, used by anything that does not name a mode of its own. */
+    private final Dither dither;
+
     /** Bukkit's own pool, so a download is not a thread this plugin has to remember to stop. */
     private final Executor async;
 
-    public MediaSources(Plugin plugin, StreamResolver resolver, MediaCache cache, int size, int fps, int maxFrames) {
+    public MediaSources(Plugin plugin, StreamResolver resolver, MediaCache cache, int size, int fps, int maxFrames,
+                        Dither dither) {
         this.log = plugin.getLogger();
         this.resolver = resolver;
         this.cache = cache;
         this.size = size;
         this.fps = fps;
         this.maxFrames = maxFrames;
+        this.dither = dither;
         this.async = task -> plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
     }
 
     @Override
     public LiveSource stream(String source) {
-        return open(source, size, !live(source));
+        return stream(source, dither);
+    }
+
+    @Override
+    public LiveSource stream(String source, Dither mode) {
+        return open(source, size, !live(source), mode);
     }
 
     /**
@@ -64,6 +75,11 @@ public final class MediaSources implements MediaService {
      * @param loop start again at the end. A file wants it, a live stream cannot do it
      */
     public LiveSource open(String source, int decodeSize, boolean loop) {
+        return open(source, decodeSize, loop, dither);
+    }
+
+    /** The same, dithered how the caller asked rather than how {@code media.dither} says. */
+    public LiveSource open(String source, int decodeSize, boolean loop, Dither mode) {
         if (source == null || source.isBlank()) return new FailedSource("there is no source to play");
         if (!VideoNatives.available()) {
             return new FailedSource("FFmpeg is not loaded - set media.ffmpeg: true in config.yml and restart."
@@ -76,11 +92,17 @@ public final class MediaSources implements MediaService {
                     + " media.resolve-page-urls is off in config.yml. A direct media url, a file or an rtsp"
                     + " stream plays without it.");
         }
-        return new ResolvingSource(source, decodeSize, decodeSize, loop, resolver.available() ? resolver : null, log);
+        return new ResolvingSource(source, decodeSize, decodeSize, loop, quantizer(mode),
+                resolver.available() ? resolver : null, log);
     }
 
     @Override
     public CompletableFuture<Frames> download(String source, IntConsumer progress) {
+        return download(source, dither, progress);
+    }
+
+    @Override
+    public CompletableFuture<Frames> download(String source, Dither mode, IntConsumer progress) {
         if (source == null || source.isBlank()) return failed("there is no source to download");
         if (!VideoNatives.available()) {
             return failed("FFmpeg is not loaded - set media.ffmpeg: true in config.yml and restart");
@@ -92,7 +114,7 @@ public final class MediaSources implements MediaService {
                     + " media.resolve-page-urls is off in config.yml. A direct media url plays without it.");
         }
 
-        return CompletableFuture.supplyAsync(() -> fetchAndDecode(source, progress), async);
+        return CompletableFuture.supplyAsync(() -> fetchAndDecode(source, mode, progress), async);
     }
 
     @Override
@@ -110,7 +132,7 @@ public final class MediaSources implements MediaService {
      * nothing has to be downloaded. Worth it: the alternative is remembering that a page url maps to a file,
      * which is a second cache to keep true.
      */
-    private Frames fetchAndDecode(String source, IntConsumer progress) {
+    private Frames fetchAndDecode(String source, Dither mode, IntConsumer progress) {
         try {
             String url = source;
             if (StreamResolver.isPageUrl(source) && resolver.available()) {
@@ -121,7 +143,7 @@ public final class MediaSources implements MediaService {
             // an expiry, so keying on it would make every call a fresh download of a video already on disk.
             Path file = cache.fetch(source, url, percent -> progress.accept(percent * 90 / 100));
             progress.accept(90);
-            Frames frames = FfmpegFrames.clip(file, quantizer(), size, fps, maxFrames, percent -> progress.accept(90 + percent / 10));
+            Frames frames = FfmpegFrames.clip(file, quantizer(mode), size, fps, maxFrames, percent -> progress.accept(90 + percent / 10));
             progress.accept(100);
             return frames;
         } catch (IOException e) {
@@ -131,14 +153,20 @@ public final class MediaSources implements MediaService {
         }
     }
 
+    @Override
+    public Dither defaultDither() {
+        return dither;
+    }
+
     /**
      * What matches a decoded frame to the palette.
      *
-     * <p>Undithered, like every other default: a wall showing a photograph gains from Floyd-Steinberg, but that is
-     * a choice for whoever knows what is on the wall rather than one to make on everybody's behalf.
+     * <p>Undithered unless something asked otherwise, like every other default. A wall showing a photograph
+     * gains from Floyd-Steinberg, but which walls those are is known to the plugin putting them up and to the
+     * server owner, not to this.
      */
-    private static Quantizer quantizer() {
-        return Quantizer.of(MapColors.INSTANCE);
+    private static Quantizer quantizer(Dither mode) {
+        return Quantizer.of(MapColors.INSTANCE, mode);
     }
 
     private static CompletableFuture<Frames> failed(String reason) {

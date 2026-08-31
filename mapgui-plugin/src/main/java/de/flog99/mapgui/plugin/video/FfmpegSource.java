@@ -1,7 +1,8 @@
 package de.flog99.mapgui.plugin.video;
 
-import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.media.LiveSource;
+import de.flog99.mapgui.ui.Palette;
+import de.flog99.mapgui.ui.Quantizer;
 import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
@@ -40,6 +41,7 @@ public final class FfmpegSource implements LiveSource {
     }
 
     private final String source;
+    private final Quantizer quantizer;
     private final int boxWidth;
     private final int boxHeight;
     private final boolean loop;
@@ -68,9 +70,13 @@ public final class FfmpegSource implements LiveSource {
      * @param width  the widest to decode to, which should be about the size it will be drawn at. A bound rather
      *               than a shape: what comes out keeps the source's proportions inside it
      * @param loop   start again at the end, which is what a file wants and a stream cannot do
+     * @param quantizer what matches each frame to the palette, and so what decides its dithering. Applied once
+     *                  per frame here rather than once per frame per viewer per repaint, which is the whole
+     *                  reason decoding is where a mode is chosen
      */
-    public FfmpegSource(String source, int width, int height, boolean loop) {
+    public FfmpegSource(String source, int width, int height, boolean loop, Quantizer quantizer) {
         this.source = source;
+        this.quantizer = quantizer;
         this.boxWidth = Math.max(1, width);
         this.boxHeight = Math.max(1, height);
         this.width = this.boxWidth;
@@ -149,9 +155,11 @@ public final class FfmpegSource implements LiveSource {
                 if (image == null) continue;
 
                 byte[] indices = new byte[width * height];
-                if (!quantize(image, indices)) {
+                // A mode that hands its leftover error to pixels not yet drawn needs the whole frame at once,
+                // so the per-pixel shortcut is not available to it however the raster happens to be laid out.
+                if (quantizer.diffuses() || !quantize(image, indices, quantizer.perPixel(), width)) {
                     image.getRGB(0, 0, width, height, argb, 0, width);
-                    MapColors.INSTANCE.quantize(argb, indices);
+                    quantizer.quantize(argb, width, height, indices);
                 }
                 frame = indices;
 
@@ -184,17 +192,24 @@ public final class FfmpegSource implements LiveSource {
      *
      * <p>Anything else, including a padded scanline, falls through to the slow path rather than guessing.
      *
+     * <p>Only for a palette that answers pixel by pixel, which is every mode but the diffusing ones - those are
+     * handed the whole frame instead. An ordered mode still works here, since it is a function of the colour and
+     * where it sits, and both are known.
+     *
      * @return false if this image is not laid out the way it expects, in which case nothing was written
      */
-    private static boolean quantize(BufferedImage image, byte[] out) {
+    private static boolean quantize(BufferedImage image, byte[] out, Palette palette, int width) {
         if (image.getType() != BufferedImage.TYPE_3BYTE_BGR) return false;
 
         byte[] bgr = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
         if (bgr.length != out.length * 3) return false;
 
         for (int pixel = 0, at = 0; pixel < out.length; pixel++, at += 3) {
-            int rgb = (bgr[at + 2] & 0xFF) << 16 | (bgr[at + 1] & 0xFF) << 8 | (bgr[at] & 0xFF);
-            out[pixel] = MapColors.INSTANCE.index(rgb);
+            // Opaque in the top byte, not left at zero. This raster carries no alpha, and a dithering palette
+            // reads anything not fully opaque as translucent and drops to plain matching - so without this,
+            // asking a video for a dither mode would quietly do nothing at all.
+            int rgb = 0xFF000000 | (bgr[at + 2] & 0xFF) << 16 | (bgr[at + 1] & 0xFF) << 8 | (bgr[at] & 0xFF);
+            out[pixel] = palette.index(rgb, pixel % width, pixel / width);
         }
         return true;
     }

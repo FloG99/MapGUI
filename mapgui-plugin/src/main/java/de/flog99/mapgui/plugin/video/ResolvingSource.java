@@ -1,6 +1,7 @@
 package de.flog99.mapgui.plugin.video;
 
 import de.flog99.mapgui.media.LiveSource;
+import de.flog99.mapgui.ui.Quantizer;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -75,6 +76,8 @@ public final class ResolvingSource implements LiveSource {
     private volatile int width;
     private volatile int height;
 
+    private final Quantizer quantizer;
+
     @Nullable
     private final StreamResolver resolver;
     private final Logger log;
@@ -98,9 +101,10 @@ public final class ResolvingSource implements LiveSource {
      * @param resolver null to play {@code source} exactly as given, which is what a server with
      *                 {@code media.resolve-page-urls} off does
      */
-    public ResolvingSource(String source, int width, int height, boolean loop,
+    public ResolvingSource(String source, int width, int height, boolean loop, Quantizer quantizer,
                            @Nullable StreamResolver resolver, Logger log) {
         this.source = source;
+        this.quantizer = quantizer;
         this.width = width;
         this.height = height;
         this.loop = loop;
@@ -320,7 +324,7 @@ public final class ResolvingSource implements LiveSource {
         }
 
         try {
-            return new Attempt(new FfmpegSource(url, width, height, loop), refreshAt(expires));
+            return new Attempt(new FfmpegSource(url, width, height, loop, quantizer), refreshAt(expires));
         } catch (RuntimeException | LinkageError e) {
             // A native library that loaded far enough to be found and not far enough to run. Reported rather
             // than thrown out of a thread nobody is watching.

@@ -28,7 +28,14 @@ once per frame rather than once per frame per viewer per repaint.
 
 ```java
 GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE, Dither.FLOYD_STEINBERG))
+
+media.stream(url, Dither.FLOYD_STEINBERG)              // a video, live
+media.download(url, Dither.FLOYD_STEINBERG, progress)  // or downloaded
 ```
+
+`media.dither` in config.yml is the server's default, used by `stream(url)` and `download(url, progress)` when
+nothing names a mode; `media.defaultDither()` reads it back, so a screen offering the modes can show which one
+is already in force. A wall placed from `media.streams` has no caller to ask, so it takes the default too.
 
 `Dither.NONE` is the default and is right for flat artwork the palette can nearly say already. For anything
 photographic - which is most of what arrives as a JPEG or a WebP - an error diffusion mode is worth it, and `FLOYD_STEINBERG` is the one to try first: it is the most
