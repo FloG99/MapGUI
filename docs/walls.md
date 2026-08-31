@@ -374,3 +374,20 @@ For maps you place yourself - in real item frames, on your own furniture - `MapG
 packet layer. It sends pixels to any map id, whether the server allocated it or not. Take ids from
 `MapIds.next()` so they cannot collide with MapGUI's own, and note that nothing there is remembered for you:
 a viewer who reloads their chunks has to be sent it again.
+
+For a picture drawn once, `draw` is the whole of it:
+
+```java
+int mapId = MapIds.next();
+MapGui.get().draw(player, mapId, painter -> painter.image(0, 0, chart));
+```
+
+For anything more - several maps, a surface you keep and update - build the surface yourself and ask it for its
+painter, which comes with the map palette and the vanilla map font already in it:
+
+```java
+MapSurface surface = new MapSurface(128, 128);
+Painter painter = surface.painter();
+painter.image(0, 0, chart);
+MapGui.get().transport().sendMap(player, mapId, surface, List.of());
+```

@@ -5,7 +5,6 @@ import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.MapSurface;
-import de.flog99.mapgui.MapTextFont;
 import de.flog99.mapgui.Marker;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.Session;
@@ -192,7 +191,7 @@ final class PlayerSession implements Session {
         this.hand = hand;
         this.surface = new MapSurface(width(), height());
         this.canvas = new MapSurface(width(), height());
-        this.painter = new Painter(canvas, MapColors.INSTANCE, MapTextFont.INSTANCE);
+        this.painter = canvas.painter();
         // The first frame goes whole, because an id is not always new: one a screen pinned, or one stamped into a
         // carried item, still holds the last session's picture on the client, and only what changed since would
         // leave the rest of that standing.

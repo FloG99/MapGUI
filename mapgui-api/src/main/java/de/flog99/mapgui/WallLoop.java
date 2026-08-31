@@ -1,7 +1,6 @@
 package de.flog99.mapgui;
 
 import de.flog99.mapgui.media.Frames;
-import de.flog99.mapgui.ui.Painter;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
@@ -58,7 +57,7 @@ final class WallLoop {
             MapSurface surface = new MapSurface(layout.pixelWidth(), layout.pixelHeight());
             surface.fill(Frames.TRANSPARENT);
 
-            content.paint(new Painter(surface, MapColors.INSTANCE, MapTextFont.INSTANCE), surface.bounds(), i * periodMs / count);
+            content.paint(surface.painter(), surface.bounds(), i * periodMs / count);
             steps[i] = surface;
         }
         return new WallLoop(steps, (int) Math.max(1, periodMs / count));

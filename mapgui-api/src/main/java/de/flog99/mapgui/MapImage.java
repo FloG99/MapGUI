@@ -45,7 +45,8 @@ public final class MapImage {
     /** The same with a font of your own, for a screen that overrides {@link Screen#font()}. */
     public static BufferedImage of(Node tree, int width, int height, TextFont font) {
         MapSurface surface = new MapSurface(width, height);
-        Painter painter = new Painter(surface, MapColors.INSTANCE, font);
+        Painter painter = surface.painter();
+        painter.font(font);
 
         LayoutContext context = new LayoutContext(font);
         tree.measure(context, width, height);
