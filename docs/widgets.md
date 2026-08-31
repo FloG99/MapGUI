@@ -10,7 +10,7 @@ import static de.flog99.mapgui.ui.Ui.*;
 
 ## Layout
 
-Three ways a node decides its size, and that is the whole model:
+Three ways a node decides its size:
 
 | | |
 |---|---|
