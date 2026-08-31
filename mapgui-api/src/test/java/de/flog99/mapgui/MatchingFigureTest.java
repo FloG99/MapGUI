@@ -112,26 +112,20 @@ class MatchingFigureTest {
         }
     }
 
-    /** The same search in Oklab, which is what {@code Matching.PERCEPTUAL} fills its table with. */
+    /**
+     * The production matcher itself, not a copy of it.
+     *
+     * <p>A copy is what made this figure lie once already: the grey rule went into the real one and the figure
+     * kept drawing the old search, so the band it exists to show was still in the picture.
+     */
     private static final class OklabMatcher implements de.flog99.mapgui.ui.Palette {
+
+        private final de.flog99.mapgui.ui.PerceptualPalette real =
+                new de.flog99.mapgui.ui.PerceptualPalette(MapColors.INSTANCE);
 
         @Override
         public byte index(Color color) {
-            de.flog99.mapgui.ui.Oklab.Lab from = de.flog99.mapgui.ui.Oklab.of(color);
-            byte found = 0;
-            double closest = Double.MAX_VALUE;
-
-            for (byte entry : MapColors.INSTANCE.entries()) {
-                Color candidate = MapColors.INSTANCE.color(entry);
-                if (candidate == null) continue;
-
-                double at = de.flog99.mapgui.ui.Oklab.difference(from, de.flog99.mapgui.ui.Oklab.of(candidate));
-                if (at < closest) {
-                    closest = at;
-                    found = entry;
-                }
-            }
-            return found;
+            return real.index(color);
         }
 
         @Override
