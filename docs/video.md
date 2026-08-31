@@ -33,6 +33,10 @@ media.stream(url, Dither.FLOYD_STEINBERG)              // a video, live
 media.download(url, Dither.FLOYD_STEINBERG, progress)  // or downloaded
 ```
 
+`media.steady` is a separate thing and on by default: it stops a pixel flickering between two entries that look
+alike, which costs nothing to look at and is most of the bandwidth on a busy wall. See
+[performance.md](performance.md) for the measurements. Turn it off if a very slow fade looks like it is stepping.
+
 `media.dither` in config.yml is the server's default, used by `stream(url)` and `download(url, progress)` when
 nothing names a mode; `media.defaultDither()` reads it back, so a screen offering the modes can show which one
 is already in force. A wall placed from `media.streams` has no caller to ask, so it takes the default too.
