@@ -1,5 +1,6 @@
 package de.flog99.mapgui.media;
 
+import de.flog99.mapgui.ui.Dither;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.concurrent.CompletableFuture;
@@ -16,7 +17,8 @@ import java.util.function.IntConsumer;
  * MediaService media = MapGui.get().media();
  *
  * // Live. Starts immediately, and keeps itself connected.
- * LiveSource source = media.stream(url);
+ * LiveSource source = media.stream(url);                        // dithered how the server says
+ * LiveSource nicer = media.stream(url, Dither.FLOYD_STEINBERG); // or how you say
  * wall.content(WallContent.live(source));
  *
  * // A clip to show more than once. Downloaded once, then it is a file forever.
@@ -65,6 +67,20 @@ public interface MediaService {
     LiveSource stream(String source);
 
     /**
+     * The same, dithered how you say rather than how the server does.
+     *
+     * <p>Decoding is the only place an animation's dithering can be set - its frames are palette indices from
+     * that moment on - and it is also the cheapest, since it is applied once per frame rather than once per
+     * frame per viewer per repaint.
+     *
+     * <p>Worth setting for anything photographic, which most video is: {@code FLOYD_STEINBERG} first, and an
+     * error diffusion mode rather than an ordered one, because a player scales frames after they are decoded
+     * and resampling a periodic tile beats against itself as moire. {@code NONE} is the usual default and is
+     * right for flat artwork the palette can nearly say already.
+     */
+    LiveSource stream(String source, Dither dither);
+
+    /**
      * Downloads {@code source} once and decodes it into frames, off the main thread.
      *
      * <p>Cached by url, so the second call for the same url writes nothing and returns as fast as it can decode,
@@ -80,6 +96,9 @@ public interface MediaService {
      */
     CompletableFuture<Frames> download(String source, IntConsumer progress);
 
+    /** The same, dithered how you say rather than how the server does. See {@link #stream(String, Dither)}. */
+    CompletableFuture<Frames> download(String source, Dither dither, IntConsumer progress);
+
     /**
      * Whether a page url stands a chance on this server, so you can say why before trying.
      *
@@ -87,4 +106,12 @@ public interface MediaService {
      * has been tried and failed. Direct media urls, files and rtsp streams do not depend on it.
      */
     boolean canResolvePageUrls();
+
+    /**
+     * What {@code media.dither} says, which is what the calls that do not name a mode use.
+     *
+     * <p>The server owner's choice for content nobody named a mode for, so a screen offering the modes can show
+     * which one is already in force rather than guessing at it.
+     */
+    Dither defaultDither();
 }

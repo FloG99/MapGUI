@@ -1,5 +1,6 @@
 package de.flog99.mapgui.plugin;
 
+import de.flog99.mapgui.ui.Dither;
 import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.plugin.camera.CameraTuning;
 import de.flog99.mapgui.plugin.camera.ReuseWindow;
@@ -12,6 +13,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +38,7 @@ public record MapGuiConfig(
         int downloadMaxFileMb,
         int downloadMaxTotalMb,
         int downloadMaxFrames,
+        Dither mediaDither,
         Map<String, String> streams,
         boolean cameraDownload,
         List<String> cameraPacks,
@@ -69,6 +72,7 @@ public record MapGuiConfig(
                 Math.max(1, config.getInt("media.download.max-file-mb", 256)),
                 Math.max(1, config.getInt("media.download.max-total-mb", 2048)),
                 Math.max(1, config.getInt("media.download.max-frames", 1200)),
+                dither(config),
                 streams(config),
                 config.getBoolean("camera.assets.download", true),
                 List.copyOf(config.getStringList("camera.assets.packs")),
@@ -182,6 +186,23 @@ public record MapGuiConfig(
      */
     private static String preferred(FileConfiguration config, String now, String before) {
         return config.isSet(now) || !config.isSet(before) ? now : before;
+    }
+
+    /**
+     * The dither mode anything decoded gets unless whoever asked for it named one.
+     *
+     * <p>An unreadable name falls back to no dithering and says which names there are, rather than failing the
+     * load: a typo in one setting should not stop a server, and undithered is what it did before anyway.
+     */
+    private static Dither dither(FileConfiguration config) {
+        String name = config.getString("media.dither", "NONE");
+        try {
+            return Dither.valueOf(name.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            Bukkit.getLogger().warning("media.dither is set to \"" + name + "\", which is not a mode. Using NONE."
+                    + " The modes are " + Arrays.toString(Dither.values()) + ".");
+            return Dither.NONE;
+        }
     }
 
     private static int clampFps(int value) {
