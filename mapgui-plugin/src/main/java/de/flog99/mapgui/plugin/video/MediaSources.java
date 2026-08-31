@@ -1,8 +1,10 @@
 package de.flog99.mapgui.plugin.video;
 
+import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.media.Frames;
 import de.flog99.mapgui.media.LiveSource;
 import de.flog99.mapgui.media.MediaService;
+import de.flog99.mapgui.ui.Quantizer;
 import org.bukkit.plugin.Plugin;
 
 import java.io.IOException;
@@ -119,7 +121,7 @@ public final class MediaSources implements MediaService {
             // an expiry, so keying on it would make every call a fresh download of a video already on disk.
             Path file = cache.fetch(source, url, percent -> progress.accept(percent * 90 / 100));
             progress.accept(90);
-            Frames frames = FfmpegFrames.clip(file, size, fps, maxFrames, percent -> progress.accept(90 + percent / 10));
+            Frames frames = FfmpegFrames.clip(file, quantizer(), size, fps, maxFrames, percent -> progress.accept(90 + percent / 10));
             progress.accept(100);
             return frames;
         } catch (IOException e) {
@@ -127,6 +129,16 @@ public final class MediaSources implements MediaService {
             // completes exceptionally either way, and the message is what a caller reads.
             throw new CompletionException(new IOException(e.getMessage(), e));
         }
+    }
+
+    /**
+     * What matches a decoded frame to the palette.
+     *
+     * <p>Undithered, like every other default: a wall showing a photograph gains from Floyd-Steinberg, but that is
+     * a choice for whoever knows what is on the wall rather than one to make on everybody's behalf.
+     */
+    private static Quantizer quantizer() {
+        return Quantizer.of(MapColors.INSTANCE);
     }
 
     private static CompletableFuture<Frames> failed(String reason) {

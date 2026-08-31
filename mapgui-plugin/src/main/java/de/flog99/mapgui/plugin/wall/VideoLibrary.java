@@ -182,7 +182,7 @@ final class VideoLibrary {
 
         return switch (kind) {
             case DECODED -> held(name, () -> gif(file));
-            case PLAIN_STILL, DECODER_STILL -> held(name, () -> StillImage.read(file.toPath(), size));
+            case PLAIN_STILL, DECODER_STILL -> held(name, () -> StillImage.read(file.toPath(), Quantizer.of(MapColors.INSTANCE), size));
             case PLAYED -> live(name, file.getAbsolutePath(), true);
         };
     }
