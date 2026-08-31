@@ -157,30 +157,30 @@ public final class StreamResolver {
     /**
      * Runs yt-dlp and returns the first url it printed.
      *
-     * <p>No shell, and both pipes drained - stderr on a thread of its own, because a traceback long enough to
-     * fill the pipe buffer would otherwise deadlock against reading stdout.
+     * <p>No shell, and <b>both pipes drained on threads of their own</b> - not just stderr. A traceback long
+     * enough to fill a pipe buffer would deadlock a process whose other pipe nobody is reading, and reading
+     * either one on this thread would put a blocking read in front of the timeout: an unbounded wait for EOF
+     * cannot be interrupted, and a yt-dlp stalled on a socket never reaches it. The wait has to be
+     * {@link Process#waitFor(long, TimeUnit)}, and nothing may block before it.
      */
     private String run(List<String> command) throws IOException {
         Process process = new ProcessBuilder(command).start();
         try {
+            StringBuilder output = new StringBuilder();
             StringBuilder errors = new StringBuilder();
-            Thread draining = Thread.ofVirtual().start(() -> {
-                try {
-                    errors.append(read(process.getErrorStream()));
-                } catch (IOException ignored) {
-                    // Nothing to say about a pipe that closed early; the exit code is what decides.
-                }
-            });
+            Thread stdout = drain(process.getInputStream(), output);
+            Thread stderr = drain(process.getErrorStream(), errors);
 
-            String out = read(process.getInputStream());
             if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 throw new IOException("yt-dlp did not answer within " + TIMEOUT_SECONDS + " seconds");
             }
-            // After waitFor, so joining cannot outlast the process. Its write to errors is visible here.
-            draining.join();
+            // After waitFor, so neither join can outlast the process, and both writes are visible here. Killed
+            // above, the pipes are closed by the kill, so these return rather than hanging on a dead process.
+            stdout.join();
+            stderr.join();
 
-            String url = firstUrl(out);
+            String url = firstUrl(output.toString());
             if (process.exitValue() != 0 || url == null) {
                 String err = errors.toString();
                 throw new IOException("yt-dlp could not resolve it: " + (err.isBlank() ? "no reason given" : summarise(err)));
@@ -193,6 +193,17 @@ public final class StreamResolver {
         } finally {
             process.destroy();
         }
+    }
+
+    /** Reads one of the process's pipes to its end, on a thread, so nothing blocks the timeout. */
+    private static Thread drain(InputStream pipe, StringBuilder into) {
+        return Thread.ofVirtual().start(() -> {
+            try {
+                into.append(read(pipe));
+            } catch (IOException ignored) {
+                // Nothing to say about a pipe that closed early; the exit code is what decides.
+            }
+        });
     }
 
     @Nullable
