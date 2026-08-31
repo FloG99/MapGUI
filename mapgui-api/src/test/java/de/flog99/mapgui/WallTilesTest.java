@@ -33,7 +33,7 @@ class WallTilesTest {
     @Test
     void afreshViewerIsSentEveryMap() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         tiles.sendAll(VIEWER, surface(), new TileRegions());
 
@@ -45,7 +45,7 @@ class WallTilesTest {
     @Test
     void oppositeCornersSendTwoMapsRatherThanNine() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         MapSurface surface = surface();
         surface.set(1, 1, INK);
@@ -60,7 +60,7 @@ class WallTilesTest {
     @Test
     void aMapIsToldAboutItsOwnCornerNotTheWalls() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         MapSurface surface = surface();
         surface.set(300, 40, INK);
@@ -76,7 +76,7 @@ class WallTilesTest {
     @Test
     void nothingChangedSendsNothing() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         tiles.sendChanged(VIEWER, surface(), new TileRegions());
 
@@ -86,7 +86,7 @@ class WallTilesTest {
     @Test
     void oneFrameIsOneBundleHoweverManyMapsItTouches() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         MapSurface surface = surface();
         surface.markAllDirty();
@@ -100,7 +100,7 @@ class WallTilesTest {
     @Test
     void separateFramesAreSeparateBundles() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         MapSurface surface = surface();
         surface.markAllDirty();
@@ -122,7 +122,7 @@ class WallTilesTest {
     @Test
     void aPrerenderedLoopSendsEveryFrameOnceAndThenNoPixelsAtAll() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
         WallLoop loop = WallLoop.paint(WALL, bar(), 4, 1000);
 
         loop.start(VIEWER, tiles, 0, new TileRegions());
@@ -142,7 +142,7 @@ class WallTilesTest {
     @Test
     void aStepThatHasNotChangedSendsNothingAtAll() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
         WallLoop loop = WallLoop.paint(WALL, bar(), 4, 1000);
 
         loop.start(VIEWER, tiles, 0, new TileRegions());
@@ -157,7 +157,7 @@ class WallTilesTest {
     @Test
     void everyStepPointsAtItsOwnSetOfMapIds() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
         WallLoop loop = WallLoop.paint(WALL, bar(), 4, 1000);
 
         loop.start(VIEWER, tiles, 0, new TileRegions());
@@ -175,7 +175,7 @@ class WallTilesTest {
     @Test
     void everyViewerOfOneWallIsHandedTheSameBytes() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         MapSurface surface = surface();
         surface.markAllDirty();
@@ -191,7 +191,7 @@ class WallTilesTest {
     @Test
     void adifferentFrameIsCutOutAgain() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
 
         MapSurface surface = surface();
         surface.markAllDirty();
@@ -204,7 +204,7 @@ class WallTilesTest {
 
     @Test
     void aTransportThatCannotRepointSaysSoBeforeAnythingIsPainted() {
-        WallTiles tiles = new WallTiles(new FakeTransport().cannotRepoint(), null, WALL);
+        WallTiles tiles = new WallTiles(new FakeTransport().cannotRepoint(), null, WALL, FrameStyle.DEFAULT);
 
         assertFalse(tiles.canShowLayers(), "so the wall streams instead of prerendering");
     }
@@ -212,8 +212,8 @@ class WallTilesTest {
     @Test
     void stationaryMarkersAreSuppressedAfterTheFirstTransportSend() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
-        WallCursors cursors = new WallCursors(WALL, tiles, false, 0);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
+        WallCursors cursors = new WallCursors(WALL, tiles, false, 0, WallDisplay.DEFAULT_REACH);
 
         List<Marker> markers = List.of(new Marker(null, 1, 1, (byte) 8, null));
         cursors.send(FakePlayer.named("stationary"), List.of(), markers);
@@ -225,8 +225,8 @@ class WallTilesTest {
     @Test
     void markerClearIsSentWhenMarkersDisappear() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
-        WallCursors cursors = new WallCursors(WALL, tiles, false, 0);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
+        WallCursors cursors = new WallCursors(WALL, tiles, false, 0, WallDisplay.DEFAULT_REACH);
         var viewer = FakePlayer.named("clear");
 
         cursors.send(viewer, List.of(), List.of(new Marker(null, 1, 1, (byte) 8, null)));
@@ -238,8 +238,8 @@ class WallTilesTest {
     @Test
     void aMovingMarkerInsideOneTileSendsEachTick() {
         FakeTransport transport = new FakeTransport();
-        WallTiles tiles = new WallTiles(transport, null, WALL);
-        WallCursors cursors = new WallCursors(WALL, tiles, false, 0);
+        WallTiles tiles = new WallTiles(transport, null, WALL, FrameStyle.DEFAULT);
+        WallCursors cursors = new WallCursors(WALL, tiles, false, 0, WallDisplay.DEFAULT_REACH);
         var viewer = FakePlayer.named("mover");
 
         cursors.send(viewer, List.of(), List.of(new Marker(null, 1, 1, (byte) 8, null)));

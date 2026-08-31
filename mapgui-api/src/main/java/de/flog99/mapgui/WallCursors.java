@@ -22,13 +22,13 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class WallCursors {
 
-    /** How far a viewer can be and still point at the wall. They are already in range to see it. */
-    private static final int REACH = 64;
-
     private final WallLayout layout;
     private final WallTiles tiles;
     private final boolean showOthers;
     private final int margin;
+
+    /** How far a viewer can be and still point at the wall. They are already in range to see it. */
+    private final double reach;
 
     /**
      * Read from the network thread, which is why it is concurrent: whether a click belongs to this wall has
@@ -42,11 +42,12 @@ final class WallCursors {
     /** This tick's measurements, held between {@link #measure} and {@link #accept}. Main thread only. */
     private final Map<UUID, Crossing> candidates = new HashMap<>();
 
-    WallCursors(WallLayout layout, WallTiles tiles, boolean showOthers, int margin) {
+    WallCursors(WallLayout layout, WallTiles tiles, boolean showOthers, int margin, double reach) {
         this.layout = layout;
         this.tiles = tiles;
         this.showOthers = showOthers;
         this.margin = margin;
+        this.reach = reach;
     }
 
     @Nullable
@@ -109,7 +110,7 @@ final class WallCursors {
         if (depth <= 0 || approach >= 0) return null;
 
         double crossed = -depth / approach;
-        if (crossed > REACH) return null;
+        if (crossed > reach) return null;
 
         WallLayout.Aim aim = layout.aimedAt(
                 eye.getX() + direction.getX() * crossed,
@@ -139,7 +140,7 @@ final class WallCursors {
         double z = layout.pixelZ(aim);
 
         double distance = new Vector(x - eye.getX(), y - eye.getY(), z - eye.getZ()).length();
-        if (distance > REACH) return null;
+        if (distance > reach) return null;
         if (Sightlines.solid(eye, x, y, z)) return null;
 
         return new Crossing(distance, aim);

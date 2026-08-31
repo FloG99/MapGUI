@@ -46,8 +46,14 @@ public interface MapTransport {
         sends.run();
     }
 
-    /** Client-only item frames for a grid of maps, invisible so the grid reads as one picture. Nothing is sent until shown. */
-    MapMount framedMaps(World world, List<FramedMap> maps);
+    /**
+     * Client-only item frames for a grid of maps, styled so the grid reads as one picture. Nothing is sent
+     * until shown.
+     *
+     * @param style how the frames are drawn. {@link FrameStyle#DEFAULT} is invisible and glowing, which is
+     *        what a wall has always used
+     */
+    MapMount framedMaps(World world, List<FramedMap> maps, FrameStyle style);
 
     /**
      * Markers only, for a map whose picture has not changed. Coordinates are 0..127 within that one map.

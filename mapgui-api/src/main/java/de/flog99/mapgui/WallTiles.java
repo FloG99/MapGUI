@@ -28,7 +28,7 @@ final class WallTiles {
     private final MapMount mount;
     private final Bandwidth cost = new Bandwidth();
 
-    WallTiles(MapTransport transport, World world, WallLayout layout) {
+    WallTiles(MapTransport transport, World world, WallLayout layout, FrameStyle style) {
         this.transport = transport;
         this.layout = layout;
 
@@ -40,7 +40,7 @@ final class WallTiles {
                 maps.add(new FramedMap(mapId, layout.blockX(col, row), layout.blockY(col, row), layout.blockZ(col, row), layout.facing()));
             }
         }
-        this.mount = transport.framedMaps(world, maps);
+        this.mount = transport.framedMaps(world, maps, style);
     }
 
     /** Ids for one layer, minted the first time that layer is asked for. */

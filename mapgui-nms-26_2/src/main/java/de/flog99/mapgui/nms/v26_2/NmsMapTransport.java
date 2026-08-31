@@ -2,6 +2,7 @@ package de.flog99.mapgui.nms.v26_2;
 
 import de.flog99.mapgui.Bandwidth;
 import de.flog99.mapgui.CursorHotspot;
+import de.flog99.mapgui.FrameStyle;
 import de.flog99.mapgui.FramedMap;
 import de.flog99.mapgui.MapMount;
 import de.flog99.mapgui.MapSlots;
@@ -203,10 +204,10 @@ public final class NmsMapTransport implements MapTransport {
     }
 
     @Override
-    public MapMount framedMaps(World world, List<FramedMap> maps) {
+    public MapMount framedMaps(World world, List<FramedMap> maps, FrameStyle style) {
         ServerLevel level = ((CraftWorld) world).getHandle();
         List<ItemFrame> frames = new ArrayList<>(maps.size());
-        for (FramedMap map : maps) frames.add(frame(level, map));
+        for (FramedMap map : maps) frames.add(frame(level, map, style));
         return new Frames(this, frames);
     }
 
@@ -217,20 +218,23 @@ public final class NmsMapTransport implements MapTransport {
      * serialize itself rather than having field indices guessed at. Constructing it also takes a genuine
      * entity id off the server's counter, so unlike map ids there is nothing to invent.
      *
-     * <p>Glowing draws the map at full brightness, and invisibility hides only the frame's own model, so a
-     * grid reads as one picture and stays readable in the dark.
+     * <p>Glowing draws the map at full brightness, and invisibility hides only the frame's own model, so the
+     * default grid reads as one picture and stays readable in the dark. Glowing is the entity's own type
+     * rather than a flag, which is why it decides which class is built.
      */
-    private static ItemFrame frame(ServerLevel level, FramedMap map) {
+    private static ItemFrame frame(ServerLevel level, FramedMap map, FrameStyle style) {
         Direction facing = Direction.valueOf(map.facing().name());
         BlockPos pos = new BlockPos(map.blockX(), map.blockY(), map.blockZ()).relative(facing);
 
-        ItemFrame frame = new GlowItemFrame(level, pos, facing);
-        frame.setInvisible(true);
+        ItemFrame frame = style.glowing() ? new GlowItemFrame(level, pos, facing) : new ItemFrame(level, pos, facing);
+        frame.setInvisible(style.invisible());
 
         ItemStack item = new ItemStack(Items.FILLED_MAP);
         item.set(DataComponents.MAP_ID, new MapId(map.mapId()));
         // Neither flag set: no pickup sound, and no update that would reach into the level.
         frame.setItem(item, false, false);
+        // After the item, since an empty frame has nothing to turn and the client reads the two together.
+        frame.setRotation(style.itemRotation());
         return frame;
     }
 
