@@ -1,8 +1,8 @@
 package de.flog99.mapgui;
 
-import de.flog99.mapgui.ui.Oklab;
 import de.flog99.mapgui.ui.Palette;
 import de.flog99.mapgui.ui.PaletteLut;
+import de.flog99.mapgui.ui.PerceptualPalette;
 import org.bukkit.map.MapPalette;
 
 import java.awt.Color;
@@ -28,23 +28,20 @@ public final class MapColors implements Palette {
      * Which formula decides the nearest entry to a colour.
      *
      * <p>Measured rather than argued: {@code PerceptualMatcherAbTest} scores both in CIELAB, which neither uses.
-     * Neither wins outright, which is why this is a choice and not a fix - the palette is sparse enough that
-     * which formula picks between two entries moves the result less than the sparseness does.
+     * Perceptual wins on both halves, so this is a choice only because switching moves every pixel of every map
+     * that already exists - which is not something an upgrade should do quietly.
      */
     public enum Matching {
 
-        /**
-         * Vanilla's own weighting: green counted four times, blue let off lightly. Better on greys, which is
-         * what menus, panels and text are made of, and what most screens are mostly made of.
-         */
+        /** Vanilla's own weighting: green counted four times, blue let off lightly. What every map already looks like. */
         VANILLA,
 
         /**
-         * Nearest in {@link Oklab}, a space built so that equal distances look equally different.
+         * Nearest in a perceptual space - see {@link PerceptualPalette}, which is where the rule lives.
          *
-         * <p>Measured against vanilla over the bright range: 3.9% closer on saturated colour and a fifth closer
-         * at its worst case, 2.1% further on grey. So it suits a server whose maps are mostly photographs -
-         * camera captures, video walls, terrain - and not one whose maps are mostly menus.
+         * <p>Measured against vanilla over the bright range, scored in CIELAB so the referee is neither: 3.9%
+         * closer on saturated colour with its worst case a fifth better, and 13% closer at the tail on greys.
+         * Most worth having on a server whose maps are photographs - camera captures, video walls, terrain.
          *
          * <p>The dark range is unaffected either way: below 64 a finer table with its own rule already applies,
          * for a reason that is about crowding rather than about metrics. See {@code PaletteLut}.
@@ -96,7 +93,7 @@ public final class MapColors implements Palette {
 
         private static PaletteLut build() {
             tableBuilt = true;
-            return new PaletteLut(matching == Matching.PERCEPTUAL ? new Perceptual() : new Matcher());
+            return new PaletteLut(matching == Matching.PERCEPTUAL ? new PerceptualPalette(INSTANCE) : new Matcher());
         }
     }
 
@@ -106,44 +103,6 @@ public final class MapColors implements Palette {
         @Override
         public byte index(Color color) {
             return MapPalette.matchColor(new Color(color.getRed(), color.getGreen(), color.getBlue()));
-        }
-
-        @Override
-        public Color color(byte index) {
-            return INSTANCE.color(index);
-        }
-
-        @Override
-        public byte[] entries() {
-            return INSTANCE.entries();
-        }
-    }
-
-    /**
-     * The same job in {@link Oklab}, walking the palette rather than asking Bukkit.
-     *
-     * <p>Only ever used to fill the table, so the walk costs 32768 searches once and nothing per pixel after -
-     * exactly what the vanilla matcher costs, since that walks the palette too.
-     */
-    private static final class Perceptual implements Palette {
-
-        @Override
-        public byte index(Color color) {
-            Oklab.Lab wanted = Oklab.of(color);
-            byte found = 0;
-            double closest = Double.MAX_VALUE;
-
-            for (byte entry : INSTANCE.entries()) {
-                Color candidate = INSTANCE.color(entry);
-                if (candidate == null) continue;
-
-                double at = Oklab.difference(wanted, Oklab.of(candidate));
-                if (at < closest) {
-                    closest = at;
-                    found = entry;
-                }
-            }
-            return found;
         }
 
         @Override
