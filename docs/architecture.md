@@ -91,6 +91,12 @@ backend for fails to enable and says which versions it knows, rather than half-w
 version rather than the newest. Paper refuses to load a plugin on a server older than that line says, so
 naming the build version would lock out every older server the backends do cover.
 
+`libs.paper.api` is the oldest module's dev bundle for the same reason, and everything above the backends
+compiles against it. An API added in a newer version would be a `NoSuchMethodError` on the older server, which
+is the one failure no backend module can shield, so the floor is enforced by the compiler instead. Anything
+genuinely newer-only has to be reached reflectively, or moved down into the backends where each version has
+its own copy.
+
 ## Input, and why some of it is read off the connection
 
 Most input is an ordinary event. Two gestures are not, and both for the same reason: the server decides what
