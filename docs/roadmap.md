@@ -50,10 +50,16 @@ Seven modes shipped; these are the places that cannot yet ask for one, or that w
 - **`ORDERED_FINE` as a gradient's own default.** `Fill.gradient` answers `ORDERED`, the 4x4 tile it has always
   used. The 8x8 is a finer texture across the large smooth areas a gradient tends to be. Measure before changing
   it: a finer pattern compresses worse, and the map packet's own compression is the budget.
-- **A perceptual metric in the matcher.** Distance is weighted for greys - green counted four times, blue let off
-  lightly - and plain everywhere else, with a second finer table below 64 because eight-to-a-cell sent dark
-  colors red. A perceptual space would attack the cause rather than the symptom, and might make the dark table
-  removable. It came from measurement, so re-measure rather than assume. Highest regression risk on this page.
+- **A perceptual metric in the matcher - measured, and not worth it as a straight swap.** `PerceptualMatcherAbTest`
+  pits vanilla's weighting, plain RGB and Oklab against each other over the bright range, scored in CIELAB so the
+  referee is none of the three. Oklab is 3.7% better on average, and the average hides which way each half moved:
+  it is 3.9% better on saturated colour with its worst case a fifth better, and **2.1% worse on grey** - which is
+  what a menu is made of. Plain RGB loses to vanilla outright, and extending the dark table's rule upward cost 7%.
+
+  So the entries are far enough apart that which formula picks between them matters less than the sparseness
+  does, and the one clear improvement is on the content a UI has least of. If it is picked up again, the thing to
+  try is splitting by chroma the way the dark table already does rather than swapping the metric - and to measure
+  it, since that is what turned this entry from a good idea into a no.
 
 ## Rendering
 
@@ -75,8 +81,6 @@ Seven modes shipped; these are the places that cannot yet ask for one, or that w
 
 ## Video
 
-- **Temporal quantization.** See "ordered dithering fights the dirty rectangle". Probably the single highest
-  value change for video.
 - **Shared content channels.** `WallLoop` already paints one clip and flips several maps at it *within* one wall.
   Across walls it is a registry keyed on content identity and tile size: the first wall's map ids become the
   channel's, and every later wall costs a mount packet and no pixels. Six televisions playing one clip go from

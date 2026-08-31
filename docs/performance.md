@@ -56,6 +56,25 @@ to each other, one streamed and one prerendered, measured about 3 Mbit/s against
 - **Frames between steps of a loop limit.** The clock is quantized rather than the paints skipped, so a
   looping value is *identical* between steps - identical pixels, no dirty rectangle, nothing sent.
 
+## Video holds still when nothing is happening
+
+`media.steady` is on by default, and it is why a video of a static shot settles instead of shimmering. Real
+footage wobbles a little between frames, and rounded to this palette that wobble becomes a pixel flipping between
+two entries every frame - which is a change, so it is sent, so the changed part of the map becomes the whole map.
+
+Measured on noisy footage, in pixels that differed from the frame before, over thirty frames of 64x64:
+
+| | without | with |
+|---|---|---|
+| a still shot with sensor noise | 11,493 | **303** |
+| the same under Floyd-Steinberg | 33,896 | **889** |
+| a moving picture | 11,904 | 11,904 |
+
+So the noise stops being sent and the movement is untouched, at 2.9% more colour error. A held pixel is never
+more than a fixed amount further from its true colour than it would have been - the comparison is against the
+colour wanted rather than against the other entry, which is what stops it drifting further behind as a pan goes
+on. See `Steady`.
+
 ## What is not
 
 - `phase(...)` and `Text.scroll()` never settle. They send for as long as they are on screen.
