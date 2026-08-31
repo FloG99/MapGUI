@@ -21,6 +21,8 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.IOException;
+
 public final class MapGuiPlugin extends JavaPlugin {
 
     private MapGuiConfig config;
@@ -47,6 +49,7 @@ public final class MapGuiPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        migrateConfig();
         config = MapGuiConfig.from(getConfig());
         MapColors.warmUp();
 
@@ -87,7 +90,7 @@ public final class MapGuiPlugin extends JavaPlugin {
         serverPacks.start();
 
         printer = new MapPrinterService(this, backend.savedMapPixels());
-        announceVideo();
+        announceMedia();
 
         walls = new WallManager(this, wallRegistry::builder, router, screens, config.wallFps(), config.wallRange(), config.wallVideoSize(), config.wallPrerender(), config.streams());
         sessions = new SessionManager(this, wallRegistry);
@@ -139,20 +142,42 @@ public final class MapGuiPlugin extends JavaPlugin {
     }
 
     /**
-     * Says once whether video playback is actually there.
+     * Brings an older config.yml up to the current {@code config-version} before anything reads it.
+     *
+     * <p>Before {@link #getConfig()} is ever called, so nothing has to be re-read: {@link ConfigMigration}
+     * rewrites the file on disk, and the first load then sees the new keys.
+     */
+    private void migrateConfig() {
+        try {
+            ConfigMigration.Result migrated = ConfigMigration.apply(getDataFolder().toPath().resolve("config.yml"));
+            if (migrated == null) return;
+
+            String changes = migrated.changes().isEmpty() ? "nothing had to move" : String.join("; ", migrated.changes());
+            getLogger().info("config.yml was written for MapGUI config-version " + migrated.from() + " and is now "
+                    + ConfigMigration.CURRENT + ": " + changes + ".");
+        } catch (IOException | RuntimeException e) {
+            // Not fatal, and deliberately so: both readers of the renamed keys still accept the old ones, so a
+            // config.yml this cannot rewrite - read-only mount, no permission - keeps working exactly as it did.
+            getLogger().warning("Could not update config.yml (" + e.getMessage() + "). Settings under their old"
+                    + " names are still read, so nothing has stopped working.");
+        }
+    }
+
+    /**
+     * Says once whether media playback is actually there.
      *
      * <p>Worth a line because the answer is decided before this plugin exists - the loader fetches FFmpeg while
      * the server is still starting - so without it, an admin who turned the setting on has no way to tell
      * whether it worked until the first video refuses to play.
      */
-    private void announceVideo() {
-        if (!config.videoFfmpeg()) return;
+    private void announceMedia() {
+        if (!config.mediaFfmpeg()) return;
 
         if (VideoNatives.available()) {
-            getLogger().info("FFmpeg is loaded, so video files and streams can be played. Built for " + VideoNatives.platform() + ".");
+            getLogger().info("FFmpeg is loaded, so video files, streams and formats ImageIO cannot read can be played. Built for " + VideoNatives.platform() + ".");
             return;
         }
-        getLogger().warning("video.ffmpeg is on but FFmpeg did not load, so only GIFs will play. The download happens while the server starts - look for MavenLibraryResolver errors further up this log.");
+        getLogger().warning("media.ffmpeg is on but FFmpeg did not load, so only GIFs and the image formats ImageIO reads will play. The download happens while the server starts - look for MavenLibraryResolver errors further up this log.");
     }
 
     @Override

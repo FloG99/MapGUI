@@ -182,8 +182,8 @@ final class VideoLibrary {
         if (open != null && open.running()) return WallContent.live(open);
 
         if (!VideoNatives.available()) {
-            unplayable.put(name, "it needs FFmpeg - set video.ffmpeg: true in config.yml and restart");
-            plugin.getSLF4JLogger().warn("{} needs FFmpeg, which is not loaded. Set video.ffmpeg: true in config.yml and restart - MapGUI will download it once, for this platform only.", name);
+            unplayable.put(name, "it needs FFmpeg - set media.ffmpeg: true in config.yml and restart");
+            plugin.getSLF4JLogger().warn("{} needs FFmpeg, which is not loaded. Set media.ffmpeg: true in config.yml and restart - MapGUI will download it once, for this platform only.", name);
             return null;
         }
 

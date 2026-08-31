@@ -7,7 +7,7 @@ import java.util.Locale;
  *
  * <p>MapGUI does not ship FFmpeg. It is around 80 MB of native code per platform, most servers never play a
  * video, and the licence on a full build is not one to hand out casually. So it is downloaded on demand
- * instead: turning on {@code video.ffmpeg} makes the plugin loader fetch exactly the two jars this operating
+ * instead: turning on {@code media.ffmpeg} makes the plugin loader fetch exactly the two jars this operating
  * system and processor need, once, on the next start.
  *
  * <p>Shared with the loader, which runs before the plugin exists and so cannot ask it anything.
