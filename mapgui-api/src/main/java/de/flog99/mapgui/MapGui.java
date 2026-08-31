@@ -34,23 +34,34 @@ public interface MapGui {
     }
 
     /**
-     * Opens a screen, replacing whatever the player had open.
+     * Opens a screen, replacing whatever the player had open, presented the way the screen itself wants.
      *
      * @return the session, or null if a listener cancelled
      *         {@link de.flog99.mapgui.event.MapGuiScreenOpenEvent} - in which case nothing was opened and
      *         whatever the player already had is untouched
      */
     @Nullable
-    Session open(Player player, Screen screen);
+    default Session open(Player player, Screen screen) {
+        return open(player, screen, OpenOptions.of());
+    }
 
     /**
-     * The same, carried the way you say rather than the way the screen or the server would have it.
+     * The same, presented the way you say rather than the way the screen or the server would have it.
      *
-     * <p>Read {@link HandOptions} before reaching for this: the choice decides whether the player can move about
-     * and click on the world while the screen is up, not only where the map appears.
+     * <pre>{@code
+     * MapGui.get().open(player, screen, OpenOptions.of(HandOptions.pinned(8)).theme(Theme.LIGHT));
+     * }</pre>
+     *
+     * <p>Read {@link HandOptions} before stating a hand: the choice decides whether the player can move about and
+     * click on the world while the screen is up, not only where the map appears. The rest of {@link OpenOptions}
+     * is styling, and stays live - {@link Session#presentation(java.util.function.UnaryOperator)} changes it
+     * while the screen is open.
+     *
+     * @return the session, or null if a listener cancelled
+     *         {@link de.flog99.mapgui.event.MapGuiScreenOpenEvent}
      */
     @Nullable
-    Session open(Player player, Screen screen, HandOptions hand);
+    Session open(Player player, Screen screen, OpenOptions options);
 
     /**
      * A real map item that opens a registered GUI for whoever is holding it.

@@ -97,7 +97,7 @@ public final class DrawScreen extends Screen {
     }
 
     @Override
-    public Color background() {
+    public Color defaultBackground() {
         return new Color(28, 30, 38);
     }
 

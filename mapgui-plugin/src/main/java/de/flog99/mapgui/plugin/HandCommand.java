@@ -6,6 +6,7 @@ import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import de.flog99.mapgui.GuiCatalog;
+import de.flog99.mapgui.OpenOptions;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
@@ -139,7 +140,7 @@ final class HandCommand {
         }
 
         for (Player target : targets) {
-            sessions.from(target, entry.open().apply(target), null, entry.name());
+            sessions.from(target, entry.open().apply(target), OpenOptions.of(), entry.name());
         }
         sender.sendRichMessage(targets.size() == 1
                 ? "<green>Opened <white>" + name + "</white> for " + targets.getFirst().getName() + "."

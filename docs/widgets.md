@@ -134,13 +134,13 @@ afterwards it applies to whatever draws next, including text and images, which h
 
 The vanilla map font is the default and needs nothing. For anything else, `AwtFont` takes any font the JVM can
 load - a family the JVM already has, or a TrueType file shipped in your own jar - and rasterizes each glyph
-once. A screen picks its font by overriding `font()`:
+once. A screen picks its font by overriding `defaultFont()`:
 
 ```java
 private static final TextFont TITLE = AwtFont.named("SansSerif", Font.PLAIN, 16, true);
 
 @Override
-public TextFont font() {
+public TextFont defaultFont() {
     return TITLE;
 }
 ```
@@ -302,15 +302,29 @@ six pixels tall unless `height` says otherwise.
 
 ## Themes
 
-Colors come from a `Theme` rather than being hardcoded per screen, so overriding `theme()` restyles
+Colors come from a `Theme` rather than being hardcoded per screen, so a screen's `defaultTheme()` restyles
 everything below it:
 
 ```java
 @Override
-public Theme theme() {
+public Theme defaultTheme() {
     return Theme.DARK.withAccent(new Color(120, 90, 240));
 }
 ```
+
+`theme()` itself is **final**, and so are `font()`, `background()` and `fps()`. Each resolves what the caller
+asked for in `OpenOptions` first and the screen's own `defaultTheme()`, `defaultFont()`, `defaultBackground()`
+or `defaultFps()` second, so whoever opened a screen can restyle it and a screen cannot quietly opt out of
+being restyled:
+
+```java
+MapGui.get().open(player, screen, OpenOptions.of().theme(Theme.LIGHT));
+
+session.presentation(shown -> shown.theme(Theme.DARK));   // live, and invalidates for you
+```
+
+That is read on every `build()` rather than captured at open, which is what makes the second line work on a
+screen that is already up.
 
 ## Borders
 

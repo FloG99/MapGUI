@@ -94,7 +94,7 @@ public final class GalleryScreen extends Screen {
     }
 
     @Override
-    public Theme theme() {
+    public Theme defaultTheme() {
         return THEME;
     }
 

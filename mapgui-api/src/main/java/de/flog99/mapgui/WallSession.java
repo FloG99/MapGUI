@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 /**
  * One screen stack on a wall, and the {@link Session} it thinks it is running in.
@@ -42,6 +43,9 @@ final class WallSession implements Session {
     private int cursorY = -1;
     private final Set<UUID> prompting = new HashSet<>();
     private boolean dirty = true;
+
+    /** A wall is opened by an admin or a plugin rather than by a caller with an opinion, so it starts unstated. */
+    private OpenOptions presentation = OpenOptions.of();
 
     WallSession(WallServices services, WallLayout layout, Screen base, @Nullable Player owner) {
         this.services = services;
@@ -150,6 +154,23 @@ final class WallSession implements Session {
     @Override
     public void invalidate() {
         dirty = true;
+    }
+
+    @Override
+    public OpenOptions presentation() {
+        return presentation;
+    }
+
+    /**
+     * Restyles what is on the wall, for everyone looking at it on a shared one.
+     *
+     * <p>The pixels go to every viewer of a shared wall, so this is a change to the room rather than to one
+     * person's view of it - which is what a wall is.
+     */
+    @Override
+    public void presentation(UnaryOperator<OpenOptions> change) {
+        presentation = change.apply(presentation);
+        invalidate();
     }
 
     /** Per player rather than per wall: one person typing must not stop everyone else pressing buttons. */

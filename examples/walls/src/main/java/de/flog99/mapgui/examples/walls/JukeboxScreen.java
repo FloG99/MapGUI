@@ -53,7 +53,7 @@ public final class JukeboxScreen extends Screen {
     }
 
     @Override
-    public Color background() {
+    public Color defaultBackground() {
         return new Color(24, 22, 34);
     }
 

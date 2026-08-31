@@ -3,6 +3,7 @@ package de.flog99.mapgui.plugin;
 import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.MapGui;
 import de.flog99.mapgui.MapIds;
+import de.flog99.mapgui.OpenOptions;
 import de.flog99.mapgui.camera.Camera;
 import de.flog99.mapgui.MapTransport;
 import de.flog99.mapgui.Screen;
@@ -42,14 +43,8 @@ final class SessionManager implements MapGui {
 
     @Override
     @Nullable
-    public Session open(Player player, Screen screen) {
-        return from(player, screen, null, null);
-    }
-
-    @Override
-    @Nullable
-    public Session open(Player player, Screen screen, HandOptions hand) {
-        return from(player, screen, hand, null);
+    public Session open(Player player, Screen screen, OpenOptions options) {
+        return from(player, screen, options, null);
     }
 
     /**
@@ -59,12 +54,12 @@ final class SessionManager implements MapGui {
      * closed while its classes are still loaded - the next repaint of one would otherwise fail to find them.
      */
     @Nullable
-    Session from(Player player, Screen screen, @Nullable HandOptions hand, @Nullable String entry) {
-        HandOptions carried = carry(screen, hand);
+    Session from(Player player, Screen screen, OpenOptions options, @Nullable String entry) {
+        HandOptions carried = carry(screen, options.hand());
         // A pinned id where the screen asked for one, so a resource pack has something to recognise it by, and one
         // nobody else is drawing to otherwise.
         int mapId = carried.mapId() == HandOptions.ANY_MAP_ID ? MapIds.next() : carried.mapId();
-        return open(player, screen, carried, entry, mapId);
+        return open(player, screen, options.hand(carried), entry, mapId);
     }
 
     /**
@@ -76,19 +71,20 @@ final class SessionManager implements MapGui {
      */
     @Nullable
     Session openCarried(Player player, Screen screen, HandOptions hand, String entry, int mapId) {
-        return open(player, screen, hand.sane(), entry, mapId);
+        return open(player, screen, OpenOptions.of(hand.sane()), entry, mapId);
     }
 
     @Nullable
-    private Session open(Player player, Screen screen, HandOptions hand, @Nullable String entry, int mapId) {
+    private Session open(Player player, Screen screen, OpenOptions options, @Nullable String entry, int mapId) {
         // Before anything is closed, since a veto has to leave whatever the player already had open alone -
         // and before the session exists, so there is nothing to unwind and no close to report for a screen
         // that never opened.
         if (!MapGuiScreenOpenEvent.allows(player, screen, false)) return null;
 
+
         close(player, true);
 
-        PlayerSession session = new PlayerSession(plugin, player, display, screen, hand);
+        PlayerSession session = new PlayerSession(plugin, player, display, screen, options);
         session.openedFrom(entry);
         sessions.put(player.getUniqueId(), session);
         session.start(mapId);

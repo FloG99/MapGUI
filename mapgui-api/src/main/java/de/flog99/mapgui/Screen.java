@@ -89,23 +89,46 @@ public abstract class Screen {
         return false;
     }
 
-    /** Palette this screen builds against. Override to restyle without touching the layout. */
-    public Theme theme() {
+    /**
+     * How this screen was asked to be presented, and by whom: whatever its caller stated in {@link OpenOptions},
+     * with everything they left alone unstated.
+     *
+     * <p>Rarely worth reading directly - {@link #theme()} and the rest already resolve against it - but it is
+     * what a screen consults when it wants to know whether a decision was its own.
+     */
+    protected final OpenOptions presentation() {
+        return session == null ? OpenOptions.of() : session.presentation();
+    }
+
+    /**
+     * The palette this screen builds against.
+     *
+     * <p><b>Final on purpose.</b> Whoever opened the screen may restyle it, at open or while it is up, and an
+     * override here would quietly beat them - a screen that could not be restyled would look exactly like one
+     * that had not been. Override {@link #defaultTheme()} to state a preference that a caller can still overrule.
+     */
+    public final Theme theme() {
+        Theme asked = presentation().theme();
+        return asked != null ? asked : defaultTheme();
+    }
+
+    /** This screen's own palette, for when nobody who opened it said otherwise. Override to restyle. */
+    public Theme defaultTheme() {
         return Theme.DARK;
     }
 
     /**
      * The font this screen's text is measured and drawn with. The vanilla map font unless overridden.
      *
-     * <p>Override with an {@link de.flog99.mapgui.ui.AwtFont} to use a TrueType file your plugin ships, at
-     * whatever size the design wants. Load it once and hand back the same instance - it caches a rasterized
-     * glyph per character, so a font built per call would rasterize the alphabet again every frame:
+     * <p>Override {@link #defaultFont()} with a face your plugin ships to change it. Load it once and hand back
+     * the same instance - a font caches a rasterized glyph per character, so one built per call would rasterize
+     * the alphabet again every frame, which is what {@link de.flog99.mapgui.ui.Fonts} is for:
      *
      * <pre>{@code
-     * private static final TextFont TITLE = AwtFont.load(MyPlugin.font(), 16f, true);
+     * private static final TextFont TITLE = Fonts.trueType("font/title.ttf", 16f);
      *
      * @Override
-     * public TextFont font() {
+     * public TextFont defaultFont() {
      *     return TITLE;
      * }
      * }</pre>
@@ -114,12 +137,24 @@ public abstract class Screen {
      * {@link AbstractNode#font(TextFont)}, which is what a heading in a different face wants - both passes carry
      * it, so what sized the words is always what drew them.
      */
-    public TextFont font() {
+    public final TextFont font() {
+        TextFont asked = presentation().font();
+        return asked != null ? asked : defaultFont();
+    }
+
+    /** This screen's own font, for when nobody who opened it said otherwise. Override to change the face. */
+    public TextFont defaultFont() {
         return MapTextFont.INSTANCE;
     }
 
-    /** Fill color used when {@link #terrain()} is false. */
-    public Color background() {
+    /** Fill color used when {@link #terrain()} is false. Final for the same reason {@link #theme()} is. */
+    public final Color background() {
+        Color asked = presentation().background();
+        return asked != null ? asked : defaultBackground();
+    }
+
+    /** This screen's own canvas color. The theme's unless a screen wants one of its own. */
+    public Color defaultBackground() {
         return theme().background();
     }
 
@@ -223,7 +258,13 @@ public abstract class Screen {
      * <p>The server's own setting is a ceiling, so asking for more than it allows gets you its number
      * instead. Asking for less always works.
      */
-    public int fps() {
+    public final int fps() {
+        int asked = presentation().fps();
+        return asked > OpenOptions.SERVER_FPS ? asked : defaultFps();
+    }
+
+    /** This screen's own ceiling, for when nobody who opened it stated one. 0 for the server's setting. */
+    public int defaultFps() {
         return 0;
     }
 

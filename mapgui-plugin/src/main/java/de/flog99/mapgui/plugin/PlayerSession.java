@@ -3,6 +3,7 @@ package de.flog99.mapgui.plugin;
 import de.flog99.mapgui.Click;
 import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.MapColors;
+import de.flog99.mapgui.OpenOptions;
 import de.flog99.mapgui.PacketInput;
 import de.flog99.mapgui.MapSurface;
 import de.flog99.mapgui.Marker;
@@ -40,6 +41,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 /**
  * Drives one player's menu.
@@ -73,6 +75,9 @@ final class PlayerSession implements Session {
     private final MapSurface canvas;
     private final Painter painter;
     private final HandOptions hand;
+
+    /** What the caller asked for, and what {@link Session#presentation} changes. Never null. */
+    private OpenOptions presentation;
 
     private final Deque<Screen> screens = new ArrayDeque<>();
 
@@ -184,11 +189,13 @@ final class PlayerSession implements Session {
     private int terrainScale = -1;
     private int ticksSinceTerrain;
 
-    PlayerSession(MapGuiPlugin plugin, Player player, HeldMapDisplay display, Screen screen, HandOptions hand) {
+    PlayerSession(MapGuiPlugin plugin, Player player, HeldMapDisplay display, Screen screen, OpenOptions options) {
         this.plugin = plugin;
         this.player = player;
         this.display = display;
-        this.hand = hand;
+        // Resolved by the manager before it got here, so the session and the screen agree about where the map is.
+        this.hand = options.hand();
+        this.presentation = options;
         this.surface = new MapSurface(width(), height());
         this.canvas = new MapSurface(width(), height());
         this.painter = canvas.painter();
@@ -353,6 +360,18 @@ final class PlayerSession implements Session {
     @Override
     public HandOptions hand() {
         return hand;
+    }
+
+    @Override
+    public OpenOptions presentation() {
+        return presentation;
+    }
+
+    /** Invalidating is the whole of it: a screen resolves its theme and font from here every time it builds. */
+    @Override
+    public void presentation(UnaryOperator<OpenOptions> change) {
+        presentation = change.apply(presentation);
+        invalidate();
     }
 
     /**

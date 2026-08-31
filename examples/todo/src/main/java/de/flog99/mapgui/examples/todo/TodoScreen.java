@@ -82,7 +82,7 @@ public final class TodoScreen extends Screen {
     }
 
     @Override
-    public Color background() {
+    public Color defaultBackground() {
         return BG;
     }
 

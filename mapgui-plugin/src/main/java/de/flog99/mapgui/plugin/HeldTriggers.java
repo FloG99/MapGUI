@@ -2,6 +2,7 @@ package de.flog99.mapgui.plugin;
 
 import de.flog99.mapgui.HandOptions;
 import de.flog99.mapgui.HeldTrigger;
+import de.flog99.mapgui.OpenOptions;
 import de.flog99.mapgui.Screen;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -116,7 +117,7 @@ final class HeldTriggers {
 
         // Recorded after the open, since opening closes whatever was up first and that close is what would have
         // thrown this away again.
-        plugin.sessions().open(player, screen, trigger.hand());
+        plugin.sessions().open(player, screen, OpenOptions.of(trigger.hand()));
         showing.put(player.getUniqueId(), trigger);
     }
 
