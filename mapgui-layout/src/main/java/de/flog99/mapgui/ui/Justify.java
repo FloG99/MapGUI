@@ -15,7 +15,7 @@ public enum Justify {
     /**
      * Where the first child starts, given the leftover space and how many children share it.
      *
-     * <p>Lives here rather than in each container so that a wrapping line and a {@link Panel} row cannot
+     * <p>Lives here rather than in each container so that a {@link Flow} line and a {@link Panel} row cannot
      * drift apart on what a constant means. {@code count} is at least one.
      */
     int offset(int free, int count) {

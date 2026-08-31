@@ -1,6 +1,6 @@
 # Widgets and styling
 
-`Row` `Column` `Overlay` `Scroll` · `Text` `Button` `Toggle` `Field` · `Spacer` `Divider` `Box` `Spinner` · `Draw`
+`Row` `Column` `Overlay` `Scroll` `Flow` · `Text` `Button` `Toggle` `Field` · `Spacer` `Divider` `Box` `Spinner` · `Draw`
 
 All of them come from one static import:
 
@@ -29,6 +29,15 @@ mode works out, an exact size included - `width(200).maxWidth(120)` is 120. Two 
   `justify(Justify.CENTER)` on the row around it, that is a centered column of any width you like.
 - `maxHeight` on a `Scroll` is a list that grows until it does not fit and only then scrolls, rather than a height
   that has to be decided before anyone knows how many rows there are.
+
+`Flow(...)` is a row that wraps onto a new line when it runs out of width, and `columns(n)` turns it into a grid:
+a line is then exactly *n* children and the width splits into equal columns, so things line up downwards as well
+as across. Children align within the height of their own line, not the tallest line's, and `gap(between,
+betweenLines)` sets the two gaps apart when they should differ.
+
+```java
+Flow(each(icons, this::icon)).columns(4).gap(2).fillWidth()
+```
 
 `Gap(width, height)` is empty space of a fixed size, for holding a slot open when what goes in it is not there -
 a control a server has turned off, an icon that has not loaded. `hidden(true)` takes the space with it, so a row
