@@ -103,6 +103,11 @@ public enum Dither {
      * has one color and a position, which is all an ordered mode wants.
      */
     public boolean diffuses() {
-        return ordinal() >= FLOYD_STEINBERG.ordinal();
+        // Named rather than compared by ordinal, and with no default arm: a mode added anywhere in this enum
+        // then fails to compile until it has said which family it is in, instead of silently joining one.
+        return switch (this) {
+            case NONE, ORDERED, ORDERED_FINE, BLUE_NOISE -> false;
+            case FLOYD_STEINBERG, ATKINSON, SIERRA_LITE -> true;
+        };
     }
 }
