@@ -59,6 +59,18 @@ static Node bar(Node left, Node middle, Node right) {
 `Image(bufferedImage)` puts a picture from a file in a layout, drawn a pixel for a pixel. A null image draws
 nothing, so the node's own background is what shows when an asset is missing.
 
+`Image("icons/pickaxe.png")` is the same thing from your own plugin's resources, and is what almost every
+picture on a screen actually is:
+
+```java
+Row(Image("icons/pickaxe.png"), Text("Mining")).gap(3)
+```
+
+No stream, no `IOException`, and no cache of your own - the path is read from the calling plugin's jar, decoded
+once, and kept under `(classloader, path)`. A path that is not there draws nothing and says so in the log once
+rather than on every frame. `Image(name, () -> art)` fills the same cache from a supplier instead, for a picture
+that is computed rather than shipped.
+
 ## Draw
 
 The escape hatch: raw pixel access inside an auto-laid-out box, for graphs, icons, or anything the widget

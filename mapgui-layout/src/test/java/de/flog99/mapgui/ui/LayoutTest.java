@@ -420,7 +420,7 @@ class LayoutTest {
     /** A missing image still takes its box, which is what lets the node's background stand in for the artwork. */
     @Test
     void anImagelessBitmapStillFills() {
-        Bitmap missing = Ui.Image(null).fill();
+        Bitmap missing = Ui.Image((java.awt.image.BufferedImage) null).fill();
         layout(Ui.Overlay(missing));
 
         assertEquals(128, missing.bounds().width());

@@ -113,6 +113,21 @@ public final class Ui {
         return new Bitmap(image);
     }
 
+    /**
+     * The same, read from your own plugin's resources and decoded once - see {@link Images}.
+     *
+     * <p>Which is what almost every picture on a screen is, so the path is the whole of it: no stream, no
+     * {@code IOException}, and no cache of your own. A path that is not there draws nothing.
+     */
+    public static Bitmap Image(String path) {
+        return new Bitmap(Images.of(path));
+    }
+
+    /** Art computed rather than shipped, kept in the same cache under a name of your own. */
+    public static Bitmap Image(String name, Supplier<java.awt.image.BufferedImage> art) {
+        return new Bitmap(Images.of(name, art));
+    }
+
     /** A ring of dots that turns, for waiting on something that cannot say how far along it is. */
     public static Spinner Spinner() {
         return new Spinner();
