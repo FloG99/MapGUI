@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * A grid of maps hung on blocks, showing one picture - a video, or a menu you can use.
@@ -49,6 +50,9 @@ public final class WallDisplay {
      * is short enough to be worth sending once rather than streaming.
      */
     public static final int MAX_PRERENDER_STEPS = WallLoop.MAX_STEPS;
+
+    /** How far a viewer can stand and still point at a wall, unless {@link Builder#reach} says otherwise. */
+    public static final double DEFAULT_REACH = 64;
 
     private final WallServices services;
     private final World world;
@@ -77,6 +81,10 @@ public final class WallDisplay {
      * be answered before the packet is passed on, which happens on the network thread.
      */
     private final Map<UUID, Click> taking = new ConcurrentHashMap<>();
+
+    /** Who is shown the wall at all, and who may work it - see {@link Builder#visibleTo} and {@link Builder#controlledBy}. */
+    private final Predicate<Player> visibleTo;
+    private final Predicate<Player> controlledBy;
 
     /** Painted over whatever the wall shows, for every viewer. Null unless one was asked for. */
     @Nullable
@@ -123,9 +131,11 @@ public final class WallDisplay {
         this.rangeSquared = builder.range * builder.range;
         this.interactive = builder.sharedScreen != null || builder.screenPerPlayer != null;
         this.overlay = builder.overlay;
+        this.visibleTo = builder.visibleTo;
+        this.controlledBy = builder.controlledBy;
 
-        this.tiles = new WallTiles(services.transport(), world, layout);
-        this.cursors = new WallCursors(layout, tiles, builder.showOthers, builder.aimMargin);
+        this.tiles = new WallTiles(services.transport(), world, layout, builder.frames);
+        this.cursors = new WallCursors(layout, tiles, builder.showOthers, builder.aimMargin, builder.reach);
         this.center = new Location(world, layout.centerX(), layout.centerY(), layout.centerZ());
 
         this.shared = screenPerPlayer != null ? null
@@ -378,7 +388,7 @@ public final class WallDisplay {
      */
     public boolean click(Player player, Click with) {
         WallLayout.Aim aim = cursors.aimOf(player);
-        if (aim == null || closed) return false;
+        if (aim == null || closed || !controlledBy.test(player)) return false;
 
         WallSession session = viewOf(player).session();
         if (session == null) return false;
@@ -436,7 +446,7 @@ public final class WallDisplay {
      */
     @ApiStatus.Internal
     public double measureAim(Player player) {
-        return closed ? -1 : cursors.measure(player);
+        return closed || !controlledBy.test(player) ? -1 : cursors.measure(player);
     }
 
     /**
@@ -518,6 +528,10 @@ public final class WallDisplay {
 
         for (Player player : world.getPlayers()) {
             if (player.getLocation().distanceSquared(center) > rangeSquared) continue;
+            // Not a viewer at all, rather than a viewer sent nothing. A frame with no pixels behind it is a
+            // grey square, so withholding only the picture would leave the wall visibly there for somebody it
+            // was never meant for - and losing visibility then takes it away exactly as walking off does.
+            if (!visibleTo.test(player)) continue;
 
             present.add(player.getUniqueId());
             watching.add(player);
@@ -608,6 +622,10 @@ public final class WallDisplay {
         private int aimMargin;
         private boolean showOthers;
         private boolean cullOffScreen = true;
+        private FrameStyle frames = FrameStyle.DEFAULT;
+        private double reach = DEFAULT_REACH;
+        private Predicate<Player> visibleTo = player -> true;
+        private Predicate<Player> controlledBy = player -> true;
 
         private int minCols = 1;
         private int minRows = 1;
@@ -916,6 +934,98 @@ public final class WallDisplay {
          */
         public Builder cullOffScreen(boolean value) {
             this.cullOffScreen = value;
+            return this;
+        }
+
+        /**
+         * Whether the picture is lit by the block behind it or drawn at full brightness. Glowing by default,
+         * which is what keeps a wall readable at night.
+         *
+         * <p>Turn it off for something that should belong to the room it hangs in - a painting, a mural, a
+         * window - since a glowing frame is a rectangle of daylight in a dark hall, and the outline of it
+         * gives the grid away. The cost is that an unlit wall is as unreadable as anything else unlit.
+         *
+         * <p>Free either way: the frames are packets rather than entities, so this is one bit in the metadata
+         * that already goes out when a viewer arrives.
+         */
+        public Builder glowing(boolean value) {
+            this.frames = new FrameStyle(value, frames.invisible(), frames.itemRotation());
+            return this;
+        }
+
+        /**
+         * Whether the frame's own model is hidden, leaving only the picture. Hidden by default, and the
+         * reason a grid of maps reads as one image rather than nine framed ones.
+         *
+         * <p>Worth knowing it is a choice: an invisible frame makes a wall look painted straight onto the
+         * blocks, with no edge and no border eating the outside of the picture. Show them again for something
+         * that is meant to look like framed pictures on a wall.
+         */
+        public Builder invisible(boolean value) {
+            this.frames = new FrameStyle(frames.glowing(), value, frames.itemRotation());
+            return this;
+        }
+
+        /**
+         * How far the map is turned inside its frame, in eighths of a full turn. None by default.
+         *
+         * <p>Turns the <i>picture</i> and nothing else. Where the wall is, which way it faces and where a
+         * click lands are all untouched, so unlike a rotated frame this cannot put the cursor anywhere the
+         * player is not pointing - but it also means a quarter turn on a wall that is not square shows the
+         * picture across the short side.
+         *
+         * @throws IllegalArgumentException if the rotation is outside 0..{@link FrameStyle#ROTATIONS} - 1
+         */
+        public Builder itemRotation(int eighths) {
+            this.frames = new FrameStyle(frames.glowing(), frames.invisible(), eighths);
+            return this;
+        }
+
+        /**
+         * How far a viewer can stand and still point at this wall, in blocks.
+         * {@value #DEFAULT_REACH} by default.
+         *
+         * <p>Only about pointing. Who is a viewer at all is {@link #range}, and this should stay inside it -
+         * a reach beyond the range only lets somebody aim at a wall they are being sent no pixels for.
+         *
+         * <p>Shorten it for something meant to be used from arm's length, so a player across the room aiming
+         * past it does not take the clicks of whoever is standing at it. Lengthen it for a scoreboard on the
+         * far wall of a stadium.
+         */
+        public Builder reach(double blocks) {
+            this.reach = blocks;
+            return this;
+        }
+
+        /**
+         * Who is shown the wall at all. Everybody by default.
+         *
+         * <p>Failing the test is the same as standing too far away: no frames, no pixels, no cursor, and
+         * nothing in their client to give the wall away. Somebody who stops passing it has the wall taken
+         * away exactly as walking out of range does, and a per-player screen of theirs closes with it.
+         *
+         * <p>A predicate rather than a flag, so a permission is the whole of it:
+         * {@code visibleTo(player -> player.hasPermission("shop.vip"))}. It is asked once a tick for every
+         * player in range, so keep it to a permission or a lookup and not a database.
+         */
+        public Builder visibleTo(Predicate<Player> test) {
+            this.visibleTo = test;
+            return this;
+        }
+
+        /**
+         * Who may actually work the menu on it. Everybody by default.
+         *
+         * <p>The other half of {@link #visibleTo}, and the pair is what makes "everyone reads it, staff
+         * operate it" sayable at all. Without it a wall either carries a screen and answers to everybody in
+         * front of it, or carries none and answers to nobody.
+         *
+         * <p>Somebody who fails it gets no cursor and their clicks are not taken, which also means their
+         * right-click reaches the world as usual rather than being swallowed by a menu they cannot use.
+         * Pointless without a screen: a wall showing a video has nothing to work.
+         */
+        public Builder controlledBy(Predicate<Player> test) {
+            this.controlledBy = test;
             return this;
         }
 

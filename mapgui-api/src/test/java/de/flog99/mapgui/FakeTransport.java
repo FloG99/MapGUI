@@ -37,6 +37,9 @@ final class FakeTransport implements MapTransport {
     /** Set when this transport pretends its mount cannot be repointed, the way a plain one would be. */
     private boolean repoints = true;
 
+    /** What the last mount was asked to look like, so a test can check the wall passed its cosmetics down. */
+    private FrameStyle style = FrameStyle.DEFAULT;
+
     /** Ids the maps are currently pointed at, per player, which is what a prerendered wall changes. */
     private final List<int[]> pointedAt = new ArrayList<>();
 
@@ -115,8 +118,14 @@ final class FakeTransport implements MapTransport {
     }
 
     @Override
-    public MapMount framedMaps(World world, List<FramedMap> maps) {
+    public MapMount framedMaps(World world, List<FramedMap> maps, FrameStyle style) {
+        this.style = style;
         return new FakeMount(maps.size());
+    }
+
+    /** What the wall asked its frames to look like, for a test that cares. */
+    FrameStyle style() {
+        return style;
     }
 
     @Override
