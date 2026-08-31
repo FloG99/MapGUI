@@ -9,6 +9,7 @@ dependencies {
     // runtimeOnly, and one line per supported version: the plugin finds its backend by name at startup, and
     // importing one would put a single version's server classes on the compile classpath for everything.
     runtimeOnly(project(":mapgui-nms-26_2"))
+    runtimeOnly(project(":mapgui-nms-26_1"))
     compileOnly(libs.paper.api)
     // Never shipped: VideoLibraryLoader downloads these at runtime, and only when video.ffmpeg is on.
     compileOnly(libs.javacv)
@@ -35,6 +36,7 @@ tasks {
             include(project(":mapgui-api"))
             include(project(":mapgui-camera"))
             include(project(":mapgui-nms-26_2"))
+            include(project(":mapgui-nms-26_1"))
         }
     }
 
