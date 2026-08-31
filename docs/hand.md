@@ -8,7 +8,8 @@ It is the wrong answer for a bingo card, a phone, a quest log or a television re
 in one slot, along the player's own things, put away and taken out again. So how a screen is carried is a setting.
 
 ```java
-MapGui.get().open(player, new BingoCard(player), HandOptions.pinned(8).allowOffhand(true));
+MapGui.get().open(player, new BingoCard(player),
+        OpenOptions.of(HandOptions.pinned(8).allowOffhand(true)));
 ```
 
 Two questions, kept apart because they answer to different things.
@@ -148,7 +149,7 @@ Two different questions, and they have to be:
 Closing the screen yourself while the item is still held leaves it closed, so a "done" button works. Put the item
 away and take it out again to turn it back on.
 
-`open(player, screen, HandOptions.item())` also works: it puts a real item straight into the player's hand, for that
+`open(player, screen, OpenOptions.of(HandOptions.item()))` also works: it puts a real item straight into the player's hand, for that
 player and that screen. With no registered name behind it, though, so when the item leaves their inventory the
 screen ends and the item goes with it - MapGUI handed it over, so MapGUI takes it back. An item somebody found for
 themselves is never confiscated that way.

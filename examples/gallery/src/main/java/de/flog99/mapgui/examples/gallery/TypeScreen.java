@@ -47,13 +47,13 @@ public final class TypeScreen extends Screen {
     }
 
     @Override
-    public Theme theme() {
+    public Theme defaultTheme() {
         return THEME;
     }
 
     /** The one override that changes how everything on this screen is measured and drawn. */
     @Override
-    public TextFont font() {
+    public TextFont defaultFont() {
         return FACE;
     }
 

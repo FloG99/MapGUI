@@ -3,10 +3,12 @@ package de.flog99.mapgui;
 import de.flog99.mapgui.prompt.TextPrompt;
 import de.flog99.mapgui.ui.TextField;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 /** One player's open menu: the screen stack, the cursor, and the display it renders to. */
 public interface Session {
@@ -76,6 +78,36 @@ public interface Session {
      */
     @Nullable
     HandOptions hand();
+
+    /**
+     * How this session is presented right now: what its caller asked for, unstated fields and all.
+     *
+     * <p>{@link Screen#theme()}, {@link Screen#font()}, {@link Screen#background()} and {@link Screen#fps()}
+     * resolve against this, so it is the answer to "who decided", not a copy of the answer.
+     */
+    @ApiStatus.Experimental
+    default OpenOptions presentation() {
+        return OpenOptions.of();
+    }
+
+    /**
+     * Restyles this session while its screen is open, and invalidates so the change is drawn.
+     *
+     * <pre>{@code
+     * session.presentation(shown -> shown.theme(Theme.LIGHT));
+     * }</pre>
+     *
+     * <p>A wither rather than a setter, so a caller changing the theme does not have to restate the font. What
+     * comes back is what the next {@link Screen#build()} resolves against, which is why this is live at all.
+     *
+     * <p>{@link OpenOptions#hand()} is the one field a rebuild cannot act on - the map is already where the
+     * client was told it is - so changing it here does nothing. Close and open again for that.
+     *
+     * <p>Does nothing on a session that has no presentation to change, such as one driving the headless preview.
+     */
+    @ApiStatus.Experimental
+    default void presentation(UnaryOperator<OpenOptions> change) {
+    }
 
     /**
      * Ask the player for text. The callback always runs on the main thread with the session

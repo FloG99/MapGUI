@@ -87,7 +87,7 @@ public final class SketchScreen extends Screen {
     }
 
     @Override
-    public Color background() {
+    public Color defaultBackground() {
         return PALETTE[0];
     }
 
