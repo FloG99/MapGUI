@@ -161,12 +161,12 @@ of its own.
 **No face is bundled with MapGUI**, deliberately: a font is somebody's licensed work and a library has no
 business deciding whose.
 
-`Fonts` is always anti-aliased, since a plugin reaching for its own face is doing it for the look.
-`AwtFont.load(InputStream, size, antiAliased)` is the way past that - and it throws `IOException`, so it wants
-a method rather than a field initializer. Anti-aliasing is what its last argument decides: glyphs are rendered
-to coverage rather than on-or-off pixels, so part-covered edges are blended with what is behind them. Worth
-having at large sizes and mostly noise at small ones, which is why it is a choice, and which is what a pixel
-font at eight pixels wants turned off.
+Anti-aliasing is the last argument, and it defaults to on: `Fonts.trueType("font/title.ttf", 9f, false)` renders
+each pixel on or off instead. Glyphs are otherwise rendered to coverage, so part-covered edges are blended with
+what is behind them - worth having at a size with curves to smooth, and mostly noise below about twelve pixels,
+where a stroke is one pixel wide and there is nothing left to be accurate about. The map's own font is on-or-off
+at eight pixels, which is what most text on a 128 pixel canvas is sitting next to, so a small face beside it
+usually wants `false` or it reads as blur.
 
 Load a font once and hand back the same instance - a font caches a rasterized glyph per character, so building
 one per call rasterizes the alphabet again every frame.

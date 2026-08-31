@@ -52,4 +52,32 @@ class FontsTest {
         assertSame(first, second);
         assertNotSame(first, Fonts.trueType(new ByteArrayInputStream("something else".getBytes(StandardCharsets.UTF_8)), 11f));
     }
+
+    /**
+     * The two are separate faces, not one with a flag read at paint time.
+     *
+     * <p>Which matters because a font caches a rasterized glyph per character: sharing one cache between the
+     * aliased and the anti-aliased form would hand back whichever was asked for first.
+     */
+    @Test
+    void aliasedAndAntiAliasedAreCachedApart() {
+        TextFont smooth = Fonts.trueType("font/nothing.ttf", 9f, true);
+        TextFont crisp = Fonts.trueType("font/nothing.ttf", 9f, false);
+
+        assertNotSame(smooth, crisp);
+        assertSame(smooth, Fonts.trueType("font/nothing.ttf", 9f, true), "and each is still cached");
+        assertSame(crisp, Fonts.trueType("font/nothing.ttf", 9f, false));
+        assertSame(smooth, Fonts.trueType("font/nothing.ttf", 9f), "anti-aliased stays the default");
+    }
+
+    @Test
+    void aStreamCanSayItTooAndIsCachedApartTheSameWay() {
+        byte[] content = "the same not-a-font twice".getBytes(StandardCharsets.UTF_8);
+
+        TextFont smooth = Fonts.trueType(new ByteArrayInputStream(content), 9f, true);
+        TextFont crisp = Fonts.trueType(new ByteArrayInputStream(content), 9f, false);
+
+        assertNotSame(smooth, crisp);
+        assertSame(smooth, Fonts.trueType(new ByteArrayInputStream(content), 9f));
+    }
 }
