@@ -56,6 +56,23 @@ to each other, one streamed and one prerendered, measured about 3 Mbit/s against
 - **Frames between steps of a loop limit.** The clock is quantized rather than the paints skipped, so a
   looping value is *identical* between steps - identical pixels, no dirty rectangle, nothing sent.
 
+## Several walls, one picture
+
+`WallDisplay.Builder#channel("lobby-tv")` puts several walls behind one picture. A client keeps a picture per map
+id and a map id is not tied to a place, so the walls hang the same ids: one of them paints and sends, the rest
+hang frames and do neither. Six televisions playing one clip cost what one costs, in bytes and in decoding, and a
+wall joining a channel that is already running costs a mount packet and nothing per frame after it.
+
+The drawing wall sends to every viewer of every wall on the channel, because somebody standing at the far
+television needs those ids in their client and no other wall is going to put them there. Everything else stays
+each wall's own: where it is, who may see it, how far it reaches, and whether a given viewer is close enough to
+be streamed to at all.
+
+Every wall on a channel shows the same thing at the same moment, which is the point rather than a limitation -
+two walls of one clip a second apart look like a fault. It also means a channel is for content and not for a
+menu: a screen answers clicks and reads who is looking, so `channel` refuses one. All the walls must be the same
+size, and one of another size is refused rather than quietly given a picture of its own.
+
 ## Which colour a colour becomes
 
 `colors.matching` picks the formula, and neither answer is wrong - the palette is a couple of hundred entries

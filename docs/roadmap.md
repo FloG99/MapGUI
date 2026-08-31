@@ -82,11 +82,6 @@ Seven modes shipped; these are the places that cannot yet ask for one, or that w
 
 ## Video
 
-- **Shared content channels.** `WallLoop` already paints one clip and flips several maps at it *within* one wall.
-  Across walls it is a registry keyed on content identity and tile size: the first wall's map ids become the
-  channel's, and every later wall costs a mount packet and no pixels. Six televisions playing one clip go from
-  six times the egress to one. Per-viewer content cannot share a channel, the way `prerender` already cannot,
-  and cursors keep working either way because a marker is a decoration rather than a pixel.
 - **Seeking, and a position a plugin can set.** A `LiveSource` plays from where it opened. A film on a wall
   wants a scrub bar, which means asking the decoder for a timestamp rather than for the next frame.
 
