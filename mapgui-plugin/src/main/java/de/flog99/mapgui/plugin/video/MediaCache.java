@@ -148,6 +148,10 @@ public final class MediaCache {
     /**
      * Whether a download of this size is allowed, and if not, why.
      *
+     * <p>Only the per-file cap is asked here, because it is the smaller of the two by construction: the total is
+     * raised to meet it, so a file inside the per-file cap can always be held. Whether it will <i>fit</i> beside
+     * what is already there is {@link #makeRoom}'s question, and has a different answer and a different message.
+     *
      * @param size in bytes, or negative when the far side did not say - which is not a refusal on its own
      * @return the reason to refuse, or null to go ahead
      */
@@ -156,9 +160,6 @@ public final class MediaCache {
         if (size > maxFileBytes) {
             return "it is over " + (maxFileBytes / 1024 / 1024) + " MB, which is what media.download.max-file-mb"
                     + " allows. Raise it, or play the url as a stream instead of downloading it";
-        }
-        if (size > maxTotalBytes) {
-            return "it is bigger than the whole cache is allowed to be (media.download.max-total-mb)";
         }
         return null;
     }
@@ -183,11 +184,26 @@ public final class MediaCache {
             if (total + room <= maxTotalBytes) return true;
 
             long size = sizeOf(oldest);
-            if (Files.deleteIfExists(oldest)) {
+            if (delete(oldest)) {
                 total -= size;
             }
         }
         return total + room <= maxTotalBytes;
+    }
+
+    /**
+     * Deletes one clip, or says it could not be.
+     *
+     * <p>Windows refuses to delete a file something has open, and the clip being played is exactly the one a
+     * least-recently-used sweep reaches last - so a locked file is skipped rather than thrown, or a wall playing
+     * something would make every download fail with an AccessDeniedException instead of a reason.
+     */
+    private static boolean delete(Path file) {
+        try {
+            return Files.deleteIfExists(file);
+        } catch (IOException inUse) {
+            return false;
+        }
     }
 
     /** Everything in the cache, least recently used first. {@code .part} files belong to a download in flight. */
