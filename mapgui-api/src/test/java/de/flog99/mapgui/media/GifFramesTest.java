@@ -1,6 +1,7 @@
 package de.flog99.mapgui.media;
 
 import de.flog99.mapgui.ui.Palette;
+import de.flog99.mapgui.ui.Quantizer;
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.IIOImage;
@@ -122,7 +123,7 @@ class GifFramesTest {
      */
     @Test
     void disposalBelongsToTheFrameThatAsksForIt() throws IOException {
-        GifFrames frames = GifFrames.read(new ByteArrayInputStream(twoFrames("restoreToBackgroundColor", "none")), PALETTE);
+        GifFrames frames = GifFrames.read(new ByteArrayInputStream(twoFrames("restoreToBackgroundColor", "none")), Quantizer.of(PALETTE));
 
         assertEquals(2, frames.count());
         assertEquals(10, frames.pixels(0)[0], "the first frame is red");
@@ -134,7 +135,7 @@ class GifFramesTest {
     /** The opposite rule: without disposal a GIF stores only what moved, so the old pixel must survive. */
     @Test
     void keepingTheCanvasLeavesTheEarlierPixelInPlace() throws IOException {
-        GifFrames frames = GifFrames.read(new ByteArrayInputStream(twoFrames("none", "none")), PALETTE);
+        GifFrames frames = GifFrames.read(new ByteArrayInputStream(twoFrames("none", "none")), Quantizer.of(PALETTE));
 
         assertEquals(10, frames.pixels(0)[0]);
         assertEquals(10, frames.pixels(1)[0], "nothing was disposed, so it still shows");
@@ -143,7 +144,7 @@ class GifFramesTest {
     /** Undoing a frame has to restore what was under it, not clear to nothing. */
     @Test
     void restoringToPreviousPutsBackWhatWasThere() throws IOException {
-        GifFrames frames = GifFrames.read(new ByteArrayInputStream(twoFrames("none", "restoreToPrevious")), PALETTE);
+        GifFrames frames = GifFrames.read(new ByteArrayInputStream(twoFrames("none", "restoreToPrevious")), Quantizer.of(PALETTE));
 
         assertEquals(10, frames.pixels(0)[0]);
         assertEquals(10, frames.pixels(1)[0], "frame two is transparent, so frame one still shows");
@@ -155,7 +156,7 @@ class GifFramesTest {
      */
     @Test
     void aTransparentPixelStaysTransparent() throws IOException {
-        GifFrames frames = GifFrames.read(new ByteArrayInputStream(gifWithATransparentPixel()), PALETTE);
+        GifFrames frames = GifFrames.read(new ByteArrayInputStream(gifWithATransparentPixel()), Quantizer.of(PALETTE));
         byte[] pixels = frames.pixels(0);
 
         assertEquals(2, frames.width());

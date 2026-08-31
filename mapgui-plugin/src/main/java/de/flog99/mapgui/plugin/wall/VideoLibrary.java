@@ -8,6 +8,7 @@ import de.flog99.mapgui.media.LiveSource;
 import de.flog99.mapgui.media.VideoPlayer;
 import de.flog99.mapgui.plugin.video.FfmpegSource;
 import de.flog99.mapgui.plugin.video.VideoNatives;
+import de.flog99.mapgui.ui.Quantizer;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
 
@@ -159,7 +160,7 @@ final class VideoLibrary {
         if (cached != null) return WallContent.video(cached);
 
         try (InputStream source = Files.newInputStream(file.toPath())) {
-            VideoPlayer video = new VideoPlayer(GifFrames.read(source, MapColors.INSTANCE, size));
+            VideoPlayer video = new VideoPlayer(GifFrames.read(source, Quantizer.of(MapColors.INSTANCE), size));
             decoded.put(name, video);
             return WallContent.video(video);
         } catch (IOException e) {

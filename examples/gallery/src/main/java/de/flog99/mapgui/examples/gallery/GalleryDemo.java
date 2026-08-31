@@ -4,6 +4,8 @@ import de.flog99.mapgui.MapColors;
 import de.flog99.mapgui.MapGui;
 import de.flog99.mapgui.media.GifFrames;
 import de.flog99.mapgui.media.VideoPlayer;
+import de.flog99.mapgui.ui.Dither;
+import de.flog99.mapgui.ui.Quantizer;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
@@ -44,11 +46,16 @@ public final class GalleryDemo {
         MapGui.get().guis().unregister(TYPE);
     }
 
-    /** Straight out of the jar, so the demo needs no file installing and nothing downloading. */
+    /**
+     * Straight out of the jar, so the demo needs no file installing and nothing downloading.
+     *
+     * <p>Dithered at decode rather than while painting, which is the only place an animation can be: by paint
+     * time its pixels are palette indices. Atkinson because the clip is photographic - see {@link Dither}.
+     */
     private VideoPlayer loadVideo(JavaPlugin plugin) {
         try (InputStream source = plugin.getResource("bunny_sample_squared.gif")) {
             if (source == null) return null;
-            return new VideoPlayer(GifFrames.read(source, MapColors.INSTANCE));
+            return new VideoPlayer(GifFrames.read(source, Quantizer.of(MapColors.INSTANCE, Dither.ATKINSON)));
         } catch (IOException e) {
             plugin.getSLF4JLogger().warn("Could not read the sample video", e);
             return null;

@@ -1,6 +1,7 @@
 package de.flog99.mapgui.media;
 
-import de.flog99.mapgui.ui.Palette;
+import de.flog99.mapgui.ui.Dither;
+import de.flog99.mapgui.ui.Quantizer;
 import org.w3c.dom.Node;
 
 import javax.imageio.ImageIO;
@@ -8,7 +9,6 @@ import javax.imageio.ImageReader;
 import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.stream.ImageInputStream;
 import java.awt.AlphaComposite;
-import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -52,22 +52,34 @@ public final class GifFrames implements Frames {
         this.durationMs = endsAt[endsAt.length - 1];
     }
 
-    /** Kept no larger than {@link #MAP_SIZE}, which is all a map can show anyway. */
-    public static GifFrames read(InputStream source, Palette palette) throws IOException {
-        return read(source, palette, MAP_SIZE);
+    /**
+     * Kept no larger than {@link #MAP_SIZE}, which is all a map can show anyway.
+     *
+     * <p>The {@link Quantizer} is where dithering an animation is configured, and it is the only place it can
+     * be. Frames are palette indices from here on - see {@link Frames} for why - so a dither mode set on the
+     * node that draws this would be a no-op: the pixels stopped being colors at decode. Which is the better
+     * deal anyway, since it is applied once per frame rather than once per frame per viewer per repaint.
+     *
+     * <p>Choose an error diffusion mode if any: {@link Dither#ATKINSON} for a photographic
+     * clip, {@link Dither#NONE} for flat artwork that the palette can nearly say already.
+     * An <i>ordered</i> mode is available but rarely what you want here, because a player scales frames after
+     * this point and resampling a periodic tile beats against itself as moire.
+     */
+    public static GifFrames read(InputStream source, Quantizer quantizer) throws IOException {
+        return read(source, quantizer, MAP_SIZE);
     }
 
-    public static GifFrames read(InputStream source, Palette palette, int maxSize) throws IOException {
+    public static GifFrames read(InputStream source, Quantizer quantizer, int maxSize) throws IOException {
         ImageReader reader = ImageIO.getImageReadersByFormatName("gif").next();
         try (ImageInputStream stream = ImageIO.createImageInputStream(source)) {
             reader.setInput(stream);
-            return read(reader, palette, maxSize);
+            return read(reader, quantizer, maxSize);
         } finally {
             reader.dispose();
         }
     }
 
-    private static GifFrames read(ImageReader reader, Palette palette, int maxSize) throws IOException {
+    private static GifFrames read(ImageReader reader, Quantizer quantizer, int maxSize) throws IOException {
         int count = reader.getNumImages(true);
         if (count == 0) throw new IOException("The GIF has no frames in it.");
 
@@ -107,7 +119,9 @@ public final class GifFrames implements Frames {
 
             shrinking.drawImage(canvas, 0, 0, width, height, null);
             kept.getRGB(0, 0, width, height, scratch, 0, width);
-            frames.add(quantize(scratch, palette));
+            byte[] indices = new byte[scratch.length];
+            quantizer.quantize(scratch, width, height, indices);
+            frames.add(indices);
             elapsed += control.delayMs;
             endsAt[i] = elapsed;
 
@@ -120,32 +134,6 @@ public final class GifFrames implements Frames {
         shrinking.dispose();
 
         return new GifFrames(width, height, frames, endsAt);
-    }
-
-    /**
-     * Anything this faint counts as see-through. Scaling blends alpha at the edges of a transparent
-     * shape, and half a pixel of translucency cannot be shown in a palette with no alpha - so the edge
-     * is decided one way or the other.
-     */
-    private static final int OPAQUE_ENOUGH = 128;
-
-    /**
-     * Palette matching, done once here instead of per frame while painting.
-     *
-     * <p>No pixel position is passed, deliberately. A dithering palette chooses between entries by
-     * where the pixel lands, and the player scales frames *after* this - which would resample the
-     * dither pattern into moire. Video snaps to the nearest color instead.
-     */
-    private static byte[] quantize(int[] argb, Palette palette) {
-        byte[] indices = new byte[argb.length];
-        for (int i = 0; i < argb.length; i++) {
-            // Index 0 is the palette's transparent entry, and nothing opaque ever matches to it, so it
-            // doubles as "leave this pixel alone".
-            indices[i] = (argb[i] >>> 24) < OPAQUE_ENOUGH
-                    ? TRANSPARENT
-                    : palette.index(new Color(argb[i]));
-        }
-        return indices;
     }
 
     /** What the canvas should look like once this frame has had its turn. */

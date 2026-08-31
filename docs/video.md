@@ -4,7 +4,7 @@ Animated GIF plays with no dependencies at all. The JDK decodes it, `VideoPlayer
 the layout gave it and matches it to the map palette:
 
 ```java
-VideoPlayer video = new VideoPlayer(GifFrames.read(stream, MapColors.INSTANCE));
+VideoPlayer video = new VideoPlayer(GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE)));
 
 Draw(ctx -> video.paint(ctx.painter(), ctx.bounds(), millis)).size(64, 64)
 ```
@@ -18,6 +18,27 @@ For a whole wall there is a shortcut that handles the looping for you:
 ```java
 MapGui.get().wall().at(block, face).size(2, 2).content(WallContent.video(video)).open();
 ```
+
+## Dithering
+
+The `Quantizer` is where an animation's dithering is set, and it is the only place it can be set: frames are
+palette indices from the moment they are decoded, so a dither mode on the node drawing them would have nothing
+left to work on. That is the better arrangement anyway - it is applied once per frame rather than once per
+frame per viewer per repaint.
+
+```java
+GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE, Dither.ATKINSON))
+```
+
+`Dither.NONE` is the default and is right for flat artwork the palette can nearly say already. For anything
+photographic, an error diffusion mode is worth it, and `ATKINSON` is the one to try first: it throws a quarter
+of the error away, which stops the palette's gaps smearing across the picture as worms. The javadoc on `Dither`
+has the whole of the reasoning.
+
+Prefer error diffusion to an *ordered* mode here. A player scales frames after they are decoded, and resampling
+a periodic tile beats against itself as moire. It also costs bandwidth: see
+[performance.md](performance.md) - a dither pattern is poor material for the map packet's own compression, and
+video is the content that sends the most bytes.
 
 ## Memory
 
