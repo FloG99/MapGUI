@@ -43,6 +43,16 @@ public final class ResolvingSource implements LiveSource {
     /** How soon to try again when a refresh could not resolve. The old connection is still playing meanwhile. */
     private static final Duration RETRY = Duration.ofMinutes(1);
 
+    /**
+     * The soonest a connection is ever replaced, whatever its url claims.
+     *
+     * <p>A floor rather than a nicety. An expiry is read off the url and compared against this machine's clock,
+     * so a clock running ahead makes every lease look nearly spent - and without a floor that is a yt-dlp process
+     * and a fresh connection every few seconds, per wall, for as long as the wall is up. Reconnecting a minute
+     * after connecting is already pathological; doing it faster is a fault, not a deadline.
+     */
+    private static final Duration SOONEST = Duration.ofMinutes(1);
+
     /** How many times to open something that has never produced a frame before giving up on it. */
     private static final int ATTEMPTS = 5;
 
@@ -239,8 +249,15 @@ public final class ResolvingSource implements LiveSource {
 
         // Waited for here rather than swapped straight in: a connection with no frame yet would put a hole in
         // the wall for however long the new stream takes to buffer.
-        for (int waited = 0; waited < 100 && next.playing().frame() == null && next.playing().running(); waited++) {
-            Thread.sleep(POLL_MS);
+        try {
+            for (int waited = 0; waited < 100 && next.playing().frame() == null && next.playing().running(); waited++) {
+                Thread.sleep(POLL_MS);
+            }
+        } catch (InterruptedException closing) {
+            // Closed while waiting on it, which the supervisor's own finally cannot do: current is still the old
+            // connection, so without this the new one's grabber and its thread are simply dropped.
+            next.playing().close();
+            throw closing;
         }
         byte[] first = next.playing().frame();
         if (first == null) {
@@ -288,7 +305,8 @@ public final class ResolvingSource implements LiveSource {
     }
 
     /**
-     * When to reconnect: {@link #MARGIN} before the url lapses, or a tenth of the lease if that is sooner.
+     * When to reconnect: {@link #MARGIN} before the url lapses, or a tenth of the lease if that is sooner, and
+     * never inside {@link #SOONEST}.
      *
      * <p>A url with no expiry is left alone entirely - a file, an rtsp camera or an HLS playlist has no deadline
      * to beat, and reconnecting one for no reason would drop frames on purpose.
@@ -298,9 +316,12 @@ public final class ResolvingSource implements LiveSource {
 
         Instant now = Instant.now();
         Duration lease = Duration.between(now, expires);
-        if (lease.isNegative() || lease.isZero()) return now;
+        Instant floor = now.plus(SOONEST);
+        if (lease.isNegative() || lease.isZero()) return floor;
 
         Duration margin = lease.dividedBy(10).compareTo(MARGIN) < 0 ? lease.dividedBy(10) : MARGIN;
-        return expires.minus(margin);
+        Instant wanted = expires.minus(margin);
+        // A lease this machine's clock thinks is nearly spent is a clock to distrust, not a deadline to chase.
+        return wanted.isBefore(floor) ? floor : wanted;
     }
 }
