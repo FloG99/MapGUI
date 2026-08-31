@@ -114,6 +114,16 @@ public final class Toolchain {
     private String ytdlp;
     private boolean ytdlpResolved;
 
+    /**
+     * Whether resolving has been tried and come back with nothing.
+     *
+     * <p>Volatile and read without the lock on purpose: {@link #ytdlp()} holds the monitor for as long as a
+     * download takes, and {@link StreamResolver#available()} is answered on the main thread. False until a
+     * resolve has actually failed, so it is optimistic before startup has warmed anything - which is the right
+     * way round for a question whose caller is deciding whether to explain a limitation to a player.
+     */
+    private volatile boolean ytdlpMissing;
+
     @Nullable
     private Path qjs;
     private boolean qjsResolved;
@@ -140,8 +150,14 @@ public final class Toolchain {
         if (!ytdlpResolved) {
             ytdlpResolved = true;
             ytdlp = resolveYtdlp();
+            ytdlpMissing = ytdlp == null;
         }
         return ytdlp;
+    }
+
+    /** Whether a resolve is known to be impossible. Never blocks, so it is safe on the main thread. */
+    public boolean ytdlpMissing() {
+        return ytdlpMissing;
     }
 
     /**
