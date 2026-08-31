@@ -145,6 +145,10 @@ public abstract class Screen {
     /**
      * Which mouse button presses things on this screen. Right-click alone by default, since it is the
      * one that does not jog the map - see {@link Click}.
+     *
+     * <p>{@link Click#NONE} is the way to want none at all, and it is read every tick rather than once, so a screen
+     * that is a menu now and a picture in a moment can say so. Everything else swallows a click aimed at it, whichever
+     * button it was; {@code NONE} lets it reach the world instead.
      */
     public Click activateOn() {
         return Click.RIGHT;

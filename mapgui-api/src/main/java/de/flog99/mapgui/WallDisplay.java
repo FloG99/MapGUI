@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -64,6 +65,14 @@ public final class WallDisplay {
     private final Set<UUID> viewers = new HashSet<>();
     private final Location center;
     private final boolean interactive;
+
+    /**
+     * What each viewer's screen last said it would take, for {@link #wouldTake}.
+     *
+     * <p>Concurrent for the same reason {@link WallCursors}' own map is: whether a click belongs to this wall has to
+     * be answered before the packet is passed on, which happens on the network thread.
+     */
+    private final Map<UUID, Click> taking = new ConcurrentHashMap<>();
 
     /** Painted over whatever the wall shows, for every viewer. Null unless one was asked for. */
     @Nullable
@@ -221,6 +230,7 @@ public final class WallDisplay {
         for (WallView view : views()) view.stop();
         viewers.clear();
         cursors.clear();
+        taking.clear();
         owned.clear();
         behind.clear();
         if (sight != null) {
@@ -304,6 +314,22 @@ public final class WallDisplay {
      */
     public boolean isAiming(Player player) {
         return cursors.isAiming(player);
+    }
+
+    /**
+     * Whether this viewer's screen would take a click at all, answered from the <b>network thread</b>.
+     *
+     * <p>Everything but {@link Click#NONE} says yes, so a screen that has never heard of this behaves exactly as it
+     * always did: an interactive wall swallows what is aimed at it. A screen answering {@code NONE} lets the click
+     * past to the world.
+     *
+     * <p>Read off a snapshot taken on the tick rather than by asking the screen, since the screen is not the network
+     * thread's to touch. A tick out of date is fine - the worst case is one click going where the screen wanted it a
+     * tick ago.
+     */
+    @ApiStatus.Internal
+    public boolean wouldTake(Player player) {
+        return taking.get(player.getUniqueId()) != Click.NONE;
     }
 
     // ---- input ----
@@ -399,6 +425,10 @@ public final class WallDisplay {
         WallSession session = viewOf(player).session();
         if (session == null) return;
 
+        // Snapshotted here because this runs on the tick, once per viewer of an interactive wall, and already has
+        // the screen in hand. See wouldTake.
+        taking.put(player.getUniqueId(), session.screen().activateOn());
+
         WallLayout.Aim aim = cursors.aimOf(player);
         session.cursorAt(aim == null ? -1 : aim.x(), aim == null ? -1 : aim.y());
     }
@@ -484,6 +514,7 @@ public final class WallDisplay {
                 tiles.hide(player);
             }
             cursors.forget(id);
+            taking.remove(id);
             behind.remove(id);
             if (sight != null) {
                 sight.forget(id);

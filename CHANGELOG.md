@@ -3,6 +3,17 @@
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
 surface is `mapgui-api`, which carries the layout engine inside it.
 
+## Unreleased
+
+**A screen can decline a click.** `activateOn()` accepts `Click.NONE`, and then the press is not taken off the
+player at all - it reaches the world as though no map were up, so a viewer can shoot through a wall, hit what is
+behind it, and place against it. Everything else swallows a click aimed at the screen exactly as before, so a
+screen that has never heard of this is unaffected.
+
+Read every tick rather than once, which is the point: a screen that is a menu now and a picture in a moment can
+say so. It works the same in the hand and on a wall - the wall answers from a snapshot taken on the tick, since
+whether a click belongs to it has to be decided on the network thread where the screen is not ours to touch.
+
 ## 2.0.0
 
 A camera can now be put anywhere in the world rather than only in a player's hand, which is what a mirror needs.

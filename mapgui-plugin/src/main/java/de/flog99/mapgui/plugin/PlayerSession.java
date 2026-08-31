@@ -99,6 +99,16 @@ final class PlayerSession implements Session {
      */
     private boolean focused;
 
+    /**
+     * What the screen last said it would take, for the gesture handler to read off the network thread.
+     *
+     * <p>Snapshotted on the tick rather than asked for there, because the screen stack is not the network thread's
+     * to touch - the same bargain {@link de.flog99.mapgui.WallDisplay#wouldTake} makes on a wall, and a tick out of
+     * date for the same reason. It starts as the {@link Screen#activateOn} default so a click arriving before the
+     * first tick is swallowed exactly as it always was.
+     */
+    private volatile Click taking = Click.RIGHT;
+
     /** Whether the cursor is on screen, which is {@link #focused} and the screen wanting one. It moves only then. */
     private boolean aiming;
 
@@ -202,6 +212,7 @@ final class PlayerSession implements Session {
         animator.loopFps(loopFps());
 
         screen.attach(this);
+        snapshotTaking();
     }
 
     // ---- Session ----
@@ -255,6 +266,7 @@ final class PlayerSession implements Session {
         // The same as push: the screen being taken away is the one that was being held.
         holdEnded();
         screens.pop().detach();
+        snapshotTaking();
         screen().invalidate();
         display.refresh(this);
         needsPaint = true;
@@ -501,15 +513,20 @@ final class PlayerSession implements Session {
             case RIGHT -> "Right-click to select";
             case LEFT -> "Left-click to select";
             case BOTH -> "Click to select";
+            // A screen taking no click has nothing to say about one - see Click.NONE.
+            case NONE -> "";
         };
 
-        return hint + switch (hand.carry()) {
+        String rest = switch (hand.carry()) {
             case POPUP -> ", Q to close";
             case ITEM -> ", scroll away to put it down";
             // Q reaches a pinned map in the main hand, where it is the thing being held.
             case PINNED -> hand.reachesMainHand() ? focusHint() + ", Q to close" : focusHint();
             case OFFHAND -> focusHint();
         };
+
+        // Everything after the hint is written to follow one, so with no hint the line starts on a comma.
+        return hint.isEmpty() && rest.startsWith(", ") ? rest.substring(2) : hint + rest;
     }
 
     /** The other half of a toggle, for the map the player is carrying but has not raised. */
@@ -563,9 +580,13 @@ final class PlayerSession implements Session {
             return true;
         }
 
+        /**
+         * Declined outright for a screen taking nothing, so the click reaches the world rather than being eaten and
+         * then ignored. The wall path answers the same question with {@code WallDisplay#wouldTake}.
+         */
         @Override
         public boolean rightClick() {
-            if (!focused) return false;
+            if (!focused || !takesClicks()) return false;
 
             onMainThread(PlayerSession.this::rightClick);
             return true;
@@ -590,7 +611,7 @@ final class PlayerSession implements Session {
 
         @Override
         public boolean leftClick() {
-            if (!focused) return false;
+            if (!focused || !takesClicks()) return false;
 
             onMainThread(PlayerSession.this::leftClick);
             return true;
@@ -632,6 +653,16 @@ final class PlayerSession implements Session {
 
     // ---- input ----
 
+    /** Whether the screen wants a click at all, safe to ask from the network thread - see {@link #taking}. */
+    boolean takesClicks() {
+        return taking != Click.NONE;
+    }
+
+    /** Kept fresh on the tick and whenever the stack changes, since either can change the answer. */
+    private void snapshotTaking() {
+        taking = screen().activateOn();
+    }
+
     private void tick() {
         if (!player.isOnline()) {
             plugin.sessions().close(player, false);
@@ -648,6 +679,7 @@ final class PlayerSession implements Session {
         refocus();
         // Every tick, since a screen may start and stop wanting a cursor without focus changing at all.
         reaim();
+        snapshotTaking();
         trackSneak();
 
         if (aiming) {

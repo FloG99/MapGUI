@@ -49,6 +49,10 @@ A popup is always focused. Everything else is focused **in the main hand**, and 
 `right-click` toggles in both directions, so the right button is spoken for: pair it with a screen whose
 `activateOn()` is `Click.LEFT`.
 
+A screen answering `Click.NONE` takes no click at all, and the press is not taken off the player either - it
+reaches the world as though no map were up. For a screen that is a display rather than a menu at this moment;
+see [letting a click through](walls.md#letting-a-click-through), which works the same way in the hand.
+
 `Session#focused()` reports it, and `Session#focus(boolean)` takes or gives back the mouse from your own code - a
 "done" button that hands control back. The player's own gesture always overrules that.
 
