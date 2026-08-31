@@ -27,10 +27,6 @@ see [design notes](design-notes.md) for the reasoning behind the closed ones.
   almost entirely ink, so the two centre differently in the same container and a TrueType label sits visibly low
   next to map text. Typographically the line box is right, which is why this is a question rather than a bug -
   centring on the ink would fix the optics and break the baseline alignment of two labels at different sizes.
-- **`Bitmap` could scale rather than only crop.** A column with no room left takes it out of whatever will give,
-  and an image gives by losing its bottom rows silently. Cropping is the right default for pixel art at map
-  resolution, but a node that has been squeezed has no way to say "shrink me instead" - and a caller-supplied
-  font is enough to squeeze one. Related to nine-slice, which wants the same arithmetic.
 - **Focus.** There is no keyboard, so focus barely exists - but a "selected row" concept would help
   keyboard-free navigation with the scroll wheel.
 - **Golden-image tests.** The layout module has no Bukkit dependency, so screens can be rendered to PNG in tests
@@ -38,29 +34,12 @@ see [design notes](design-notes.md) for the reasoning behind the closed ones.
 
 ## Dithering
 
-Seven modes shipped; these are the places that cannot yet ask for one, or that would pick a better default.
+Seven modes shipped, and everything that decodes can ask for one. What is left is the one place that cannot.
 
 - **Error diffusion on a vector fill.** A `Surface` holds palette bytes and the painter matches each pixel as it
   draws it, so a mode that hands its error to pixels not yet drawn has nowhere to put it. Asked for on a fill it
   stands in `ORDERED_FINE` and says so through `Quantizer#diffuses()`. An honest version needs a scratch `int[]`
   per node rect, which is real memory for a case nobody has asked for yet.
-- **A camera capture through a `Quantizer`.** Every other decode path takes one now; `mapgui-camera` still
-  matches with `MapColors` directly. A capture is a photograph, which is exactly the content error diffusion is
-  worth having on - and it is one place, off the paint path, applied once per shot. Undithered stays the default.
-- **`ORDERED_FINE` as a gradient's own default.** `Fill.gradient` answers `ORDERED`, the 4x4 tile it has always
-  used. The 8x8 is a finer texture across the large smooth areas a gradient tends to be. Measure before changing
-  it: a finer pattern compresses worse, and the map packet's own compression is the budget.
-- **A perceptual metric in the matcher - done, as a choice rather than a default.** `colors.matching: perceptual`
-  matches in Oklab, and is closer than vanilla on both halves: 3.9% on saturated colour with its worst case a
-  fifth better, and 13% at the tail on greys. Scored in CIELAB, which neither contender uses.
-
-  It is only better on greys because it is told to be. On its own it invented a tan for a warm grey - the same
-  complaint the dark end had, arriving at mid brightness - so a colour with no hue worth keeping pays for a
-  candidate's colourfulness, exactly as the dark table already made it. Without that rule greys were 2% worse
-  rather than 2% better, which is the whole distance between the two versions of this entry.
-
-  Not the default, because turning it on moves every pixel of every map that already exists. That is the only
-  argument left against it.
 
 ## Rendering
 
