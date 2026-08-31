@@ -59,8 +59,20 @@ to each other, one streamed and one prerendered, measured about 3 Mbit/s against
 ## What is not
 
 - `phase(...)` and `Text.scroll()` never settle. They send for as long as they are on screen.
-- Dithered gradients and video are close to the raw figures, because the 4x4 pattern is poor material for the
+- Dithered gradients and video are close to the raw figures, because a dither pattern is poor material for the
   packet's own compression. Flat UI colors compress well.
+
+  Measured on one map of a ramp the palette has no hues for, as deflated payload against the 16,384 raw bytes
+  it always is: `NONE` 58 B, `ORDERED` 225 B, `ORDERED_FINE` 263 B, `BLUE_NOISE` 688 B, `ATKINSON` 2,575 B,
+  `FLOYD_STEINBERG` 3,233 B. So **an error diffusion mode costs roughly eleven times an ordered one on the
+  wire.** On a still that is nothing, because a still is sent once. On a 4x4 wall at 10 fps with ten people
+  watching it is the difference between about 3 Mbit/s and about 33 Mbit/s, which is the cliff at the top of
+  this page.
+
+  Compute is the smaller half but not nothing: about 0.7 ms per map's worth of pixels for a diffusing mode
+  against about 0.2 ms for an ordered one. For a GIF that is paid **once, at decode**, since frames are palette
+  indices from then on. For a live source it is once per frame - though once per frame in total, not per
+  viewer, and off the main thread.
 - `screenPerPlayer` multiplies the *drawing* - a surface pair, a paint pass and a terrain scan per viewer. It
   does not multiply the bandwidth, because a wall is sent to each client separately in either mode. It suits
   something walked up to rather than something a crowd gathers round.
