@@ -27,26 +27,27 @@ public final class MapColors implements Palette {
     /**
      * Which formula decides the nearest entry to a colour.
      *
-     * <p>Measured rather than argued: {@code PerceptualMatcherAbTest} scores both in CIELAB, which neither uses.
-     * Perceptual wins on both halves and is the default. Vanilla is kept for a server that would rather its maps
-     * kept looking exactly as they did, since switching does move every pixel of every one that already exists.
+     * <p><b>Neither is better, and the measurements that said otherwise were measuring themselves.</b> Scored in
+     * CIELAB - a perceptual space, like Oklab - the perceptual matcher wins by 4%. Scored in vanilla's own
+     * weighting it loses by 39%. Each wins under its own family of metric, which is what a referee chosen from
+     * one side of an argument gets you. On the one measure neither has a term for - whether a ramp that only
+     * moves one way is drawn only moving one way - they tie on how often it goes backwards, and vanilla is
+     * ahead on how far. See {@code PerceptualMatcherAbTest}.
+     *
+     * <p>So this is a choice between two roundings and not an upgrade, vanilla stays the default, and anybody
+     * picking between them should look at {@code docs/images/colour-matching.png} rather than at a number.
      */
     public enum Matching {
 
-        /**
-         * Vanilla's own weighting: green counted four times, blue let off lightly.
-         *
-         * <p>Measurably worse on both halves, and here for one reason: it is what maps drawn before this looked
-         * like. A server that would rather nothing moved can ask for it.
-         */
+        /** Vanilla's own weighting: green counted four times, blue let off lightly. The default. */
         VANILLA,
 
         /**
          * Nearest in a perceptual space - see {@link PerceptualPalette}, which is where the rule lives.
          *
-         * <p>Measured against vanilla over the bright range, scored in CIELAB so the referee is neither: 3.9%
-         * closer on saturated colour with its worst case a fifth better, and 13% closer at the tail on greys.
-         * Most worth having on a server whose maps are photographs - camera captures, video walls, terrain.
+         * <p>A different rounding rather than a better one - see the note on {@link Matching} for why the
+         * numbers that said better were not measuring what they looked like they were. Worth trying and looking
+         * at; it does draw some ramps differently.
          *
          * <p>The dark range is unaffected either way: below 64 a finer table with its own rule already applies,
          * for a reason that is about crowding rather than about metrics. See {@code PaletteLut}.
@@ -54,7 +55,7 @@ public final class MapColors implements Palette {
         PERCEPTUAL
     }
 
-    private static volatile Matching matching = Matching.PERCEPTUAL;
+    private static volatile Matching matching = Matching.VANILLA;
 
     /**
      * Whether the table has been filled, held out here rather than inside the holder.

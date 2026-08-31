@@ -75,29 +75,28 @@ size, and one of another size is refused rather than quietly given a picture of 
 
 ## Which colour a colour becomes
 
-`colors.matching` picks the formula, and neither answer is wrong - the palette is a couple of hundred entries
-and everything rounds to one of them, so this only decides which way it rounds.
+`colors.matching` picks the formula. It changes no bandwidth at all - same pixels, same bytes - and only decides
+which palette entry a colour rounds to.
 
-Measured over 20,000 colours above the dark range, scored in CIELAB, which neither formula uses:
+**Neither answer is better, and the measurements that said otherwise were measuring themselves.** Over 20,000
+colours above the dark range:
 
-| | mean dE | on greys | greys, p95 | on saturated colour | worst case |
-|---|---|---|---|---|---|
-| `vanilla` | 17.98 | 2.49 | 5.58 | 18.78 | 69.4 |
-| `perceptual` | **17.32** | **2.44** | **4.85** | **18.04** | **63.3** |
+| scored in | vanilla | perceptual |
+|---|---|---|
+| CIELAB, a perceptual space | 18.08 | **17.34** |
+| vanilla's own weighting | **4,419** | 6,123 |
 
-Perceptual is closer on both halves: about 4% on saturated colour with its worst case a fifth better, and 13% at
-the tail on greys. `docs/images/colour-matching.png` draws the two over the same ramps - the saturated ones are
-visibly smoother, where vanilla puts stray magenta through a purple ramp and goes olive through red-to-yellow.
+Each wins under its own family of metric, which is what picking a referee from one side of an argument gets you.
+CIELAB is not neutral here: it and Oklab are both perceptually uniform opponent spaces built for the same job, so
+they agree with each other far more than either agrees with weighted RGB.
 
-It only wins on greys because it is told to. Left to itself a perceptual space keeps a faint hue faithfully,
-which is right for a colour and wrong for something nearly grey: a warm grey at rgb(129,123,118) reached past
-the neutral rgb(117,117,117) for a tan rgb(147,124,113), because the tan's hue matched and Oklab will pay in
-lightness to keep a hue. On a ramp that is a band of skin tone through the middle of a grey. So a colour with no
-hue worth keeping pays for a candidate's colourfulness, which is the rule the dark end of the palette already
-had for the same reason. Without it, greys came out 2% worse instead of 2% better.
+The one measure neither has a term for is whether a ramp that only moves one way is drawn only moving one way. A
+step backwards along it is a stripe however you score colours. There they tie on how often - 0, 0, 1, 3, 3, 4
+across six ramps, identically - and vanilla is ahead on how far, most clearly on a blue ramp where its worst step
+back is 4.6 against 38.2.
 
-Perceptual is the default. It does move every pixel of every map drawn before it, which is why it is in the
-release notes rather than left to be noticed - `vanilla` is there for a server that would rather nothing moved.
+So it is a choice between two roundings. `docs/images/colour-matching.png` draws both over the same ramps, which
+is a better basis for picking than any of the above.
 
 ## Video holds still when nothing is happening
 

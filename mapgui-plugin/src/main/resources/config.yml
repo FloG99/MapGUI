@@ -8,15 +8,21 @@ colors:
   # palette has a couple of hundred entries and everything is rounded to one of them, so this only decides
   # which way it rounds.
   #
-  #   perceptual  Nearest in Oklab, a space built so that equal distances look equally different. Measurably
-  #               closer on both halves - about 4% on saturated colour and 13% at the tail on greys - and
-  #               visibly smoother on a colour ramp. The default.
-  #   vanilla     What Minecraft itself uses, and what maps drawn before this looked like. Here for a server
-  #               that would rather nothing moved, since switching does move every pixel of every map.
+  #   vanilla     What Minecraft itself uses: green counted four times, blue let off lightly. The default, and
+  #               what every map you already have looks like.
+  #   perceptual  Nearest in Oklab, a space built so that equal distances look equally different.
+  #
+  # Neither is better, and anything claiming otherwise was probably measuring itself. Scored in CIELAB - which is
+  # a perceptual space, like Oklab - perceptual wins by 4%; scored in vanilla's own weighting it loses by 39%.
+  # Each wins under its own family of metric. On the one measure neither has a term for, whether a ramp that only
+  # moves one way is drawn only moving one way, they tie on how often it goes backwards and vanilla is ahead on
+  # how far.
+  #
+  # So it is two roundings, not an upgrade. Look at docs/images/colour-matching.png and pick the one you prefer.
   #
   # See docs/images/colour-matching.png for the two side by side, and docs/performance.md for the numbers.
   # Read once at startup, so changing it needs a restart rather than a reload.
-  matching: perceptual
+  matching: vanilla
 
 prompts:
   # How text input is asked for. "dialog" is a native Minecraft dialog and needs no

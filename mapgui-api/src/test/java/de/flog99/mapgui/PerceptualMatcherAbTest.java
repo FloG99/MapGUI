@@ -17,15 +17,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * rule, extended upward; and one that searches in {@link Oklab} directly - and all three are scored by
  * <b>CIELAB</b>, which none of them uses.
  *
- * <p>The referee has to be a fourth thing. Scoring an Oklab matcher in Oklab would prove only that minimising a
- * quantity minimises it, and every one of these could be made to win by picking the yardstick afterwards. CIELAB
- * is the older perceptual space and disagrees with Oklab in the places perceptual spaces disagree, which is what
- * makes it worth asking.
+ * <p><b>And the referee turned out not to be neutral, which is the finding.</b> CIELAB and Oklab are both
+ * perceptually uniform opponent spaces built for the same job, so they agree with each other far more than
+ * either agrees with weighted RGB - scoring an Oklab matcher in CIELAB is close to scoring it in itself.
+ * {@link #whichRefereeWasPicked} shows what that is worth: perceptual wins by 4% in CIELAB and loses by 39% in
+ * vanilla's own weighting. Each wins under its own family, and picking the yardstick picks the winner.
  *
- * <p><b>It is a test rather than a change because of what it found.</b> Oklab is better on saturated colour and
- * slightly worse on grey, and grey is what a screen is mostly made of. The numbers are in
- * {@link #whereOklabWinsAndByHowMuch}, and the reason to keep this around is that they can be re-run: if the
- * palette ever changes, or if the mix of what people draw does, the answer might not be the same one.
+ * <p>What is left is {@link #backwardsStepsAlongARamp}, which neither formula has a term for: a ramp that only
+ * moves one way should be drawn only moving one way, and a step backwards is a stripe however colours are
+ * scored. They tie on how often and vanilla is ahead on how far. So neither matcher is better, vanilla stays the
+ * default, and the choice belongs to whoever looks at the ramps.
  */
 @SuppressWarnings("removal")
 class PerceptualMatcherAbTest {
@@ -83,6 +84,9 @@ class PerceptualMatcherAbTest {
 
     /**
      * Averaged over the bright range, no matcher is far enough ahead to be worth moving every pixel for.
+     *
+     * <p>Kept for the number, not for the verdict: see {@link #whichRefereeWasPicked} for why this metric cannot
+     * settle it on its own.
      *
      * <p>Under one dE between them, on an error whose mean is eighteen. That is the shape of the whole problem:
      * the palette is sparse enough that the choice is usually between two entries which are both a long way from
@@ -226,5 +230,106 @@ class PerceptualMatcherAbTest {
         double total = 0;
         for (double value : values) total += value;
         return total / values.length;
+    }
+
+    /**
+     * Does the referee decide the winner? It does, and that is why nothing above settles anything.
+     *
+     * <p>The same three matchers under two metrics. Perceptual is 4% ahead scored in CIELAB and 39% behind
+     * scored in vanilla's own weighting, because a matcher minimising a quantity is being graded on a quantity
+     * that agrees with it. Printed rather than asserted: the point is the pair of rows, not a threshold.
+     */
+    @Test
+    void whichRefereeWasPicked() {
+        Random random = new Random(31);
+        double[] lab = new double[3];
+        double[] weighted = new double[3];
+        int samples = 20000;
+
+        for (int i = 0; i < samples; i++) {
+            Color wanted = new Color(DARK + random.nextInt(256 - DARK), DARK + random.nextInt(256 - DARK),
+                    DARK + random.nextInt(256 - DARK));
+            Color[] picks = {vanilla(wanted), plainRgb(wanted), oklab(wanted)};
+            for (int m = 0; m < 3; m++) {
+                lab[m] += cielab(wanted, picks[m]);
+                weighted[m] += vanillaMetric(wanted, picks[m]);
+            }
+        }
+        System.out.printf("scored in CIELAB          : vanilla %8.3f  rgb %8.3f  oklab %8.3f%n",
+                lab[0] / samples, lab[1] / samples, lab[2] / samples);
+        System.out.printf("scored in vanilla's metric: vanilla %8.1f  rgb %8.1f  oklab %8.1f%n",
+                weighted[0] / samples, weighted[1] / samples, weighted[2] / samples);
+    }
+
+    /** Vanilla's own arithmetic: green counted four times, blue let off lightly. */
+    private static double vanillaMetric(Color from, Color to) {
+        double dr = from.getRed() - to.getRed();
+        double dg = from.getGreen() - to.getGreen();
+        double db = from.getBlue() - to.getBlue();
+        return 2 * dr * dr + 4 * dg * dg + 3 * db * db;
+    }
+
+    /**
+     * A defect measure neither matcher optimises for, and so the only one here worth believing.
+     *
+     * <p>Along a ramp that only ever moves from A towards B, the entries picked should only ever move from A
+     * towards B as well. A step that goes backwards is a stripe - the eye reads it as a band that does not
+     * belong, whatever any colour space thinks of it - and neither formula has any term for it.
+     */
+    @Test
+    void backwardsStepsAlongARamp() {
+        Color[][] ramps = {
+                {new Color(20, 20, 20), new Color(235, 235, 235)},
+                {new Color(30, 26, 24), new Color(230, 222, 214)},
+                {new Color(20, 60, 25), new Color(150, 230, 120)},
+                {new Color(18, 30, 80), new Color(140, 190, 245)},
+                {new Color(140, 20, 20), new Color(245, 220, 60)},
+                {new Color(40, 12, 70), new Color(215, 150, 245)},
+        };
+        String[] names = {"grey", "warm grey", "green", "blue", "red to yellow", "purple"};
+
+        for (int r = 0; r < ramps.length; r++) {
+            System.out.printf("%-14s vanilla %2d steps (worst %5.1f), oklab %2d steps (worst %5.1f)%n", names[r],
+                    backwards(ramps[r][0], ramps[r][1], false), worstBackwards(ramps[r][0], ramps[r][1], false),
+                    backwards(ramps[r][0], ramps[r][1], true), worstBackwards(ramps[r][0], ramps[r][1], true));
+        }
+    }
+
+    /** How many times the drawn colour moves away from the far end while the wanted colour moves towards it. */
+    private static int backwards(Color from, Color to, boolean perceptual) {
+        double dr = to.getRed() - from.getRed();
+        double dg = to.getGreen() - from.getGreen();
+        double db = to.getBlue() - from.getBlue();
+        double length = Math.sqrt(dr * dr + dg * dg + db * db);
+
+        int steps = 0;
+        double last = Double.NEGATIVE_INFINITY;
+        for (int x = 0; x < 220; x++) {
+            double t = x / 219.0;
+            Color wanted = new Color(
+                    (int) Math.round(from.getRed() + dr * t),
+                    (int) Math.round(from.getGreen() + dg * t),
+                    (int) Math.round(from.getBlue() + db * t));
+            Color drawn = perceptual ? oklab(wanted) : vanilla(wanted);
+
+            // Where the drawn colour sits along the line from one end to the other.
+            double along = ((drawn.getRed() - from.getRed()) * dr
+                    + (drawn.getGreen() - from.getGreen()) * dg
+                    + (drawn.getBlue() - from.getBlue()) * db) / length;
+            if (last != Double.NEGATIVE_INFINITY && along < last - 0.5) {
+                steps++;
+                worst = Math.max(worst, last - along);
+            }
+            last = along;
+        }
+        return steps;
+    }
+
+    private static double worst;
+
+    private static double worstBackwards(Color from, Color to, boolean perceptual) {
+        worst = 0;
+        backwards(from, to, perceptual);
+        return worst;
     }
 }
