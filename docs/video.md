@@ -21,17 +21,17 @@ MapGui.get().wall().at(block, face).size(2, 2).content(WallContent.video(video))
 
 ## Dithering
 
-The `Quantizer` is where an animation's dithering is set, and it is the only place it can be set: frames are
-palette indices from the moment they are decoded, so a dither mode on the node drawing them would have nothing
-left to work on. That is the better arrangement anyway - it is applied once per frame rather than once per
-frame per viewer per repaint.
+The `Quantizer` is where the dithering of anything decoded is set - an animation, a video, a still - and it is
+the only place it can be set: frames are palette indices from the moment they are decoded, so a dither mode on
+the node drawing them would have nothing left to work on. That is the better arrangement anyway - it is applied
+once per frame rather than once per frame per viewer per repaint.
 
 ```java
 GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE, Dither.FLOYD_STEINBERG))
 ```
 
 `Dither.NONE` is the default and is right for flat artwork the palette can nearly say already. For anything
-photographic, an error diffusion mode is worth it, and `FLOYD_STEINBERG` is the one to try first: it is the most
+photographic - which is most of what arrives as a JPEG or a WebP - an error diffusion mode is worth it, and `FLOYD_STEINBERG` is the one to try first: it is the most
 faithful of the three, and measurably so - `DitherModesAbTest` has it at less than half Atkinson's error on a
 color ramp. Reach for `ATKINSON` if Floyd-Steinberg worms, which it can where the palette has nothing nearby to
 absorb the error. The javadoc on `Dither` has the whole of the reasoning.
@@ -186,9 +186,12 @@ So: **live means stream; a clip you will show more than once means download.** A
 downloading - no expiry, no re-resolution and no dependency on YouTube being reachable at the moment somebody
 walks past. Something watched once wants streaming.
 
-A download is cached by the hash of its url, so the second call writes nothing and every wall showing it shares
-one file. `media.download.max-file-mb`, `max-total-mb` and `max-frames` are what stop that from being a way to
-fill a disk or the heap; past any of them the future completes with a message naming the cap.
+A download is cached by the hash of the url you asked for, so the second call writes nothing and every wall
+showing it shares one file. The url *asked for* rather than the one downloaded from, which matters for a page
+url: it resolves to a differently signed url every time, so keying on that would make every call a fresh
+download of a video already on disk. `media.download.max-file-mb`, `max-total-mb` and `max-frames` are what stop
+that from being a way to fill a disk or the heap; past any of them the future completes with a message naming
+the cap.
 
 ## YouTube and Twitch
 
