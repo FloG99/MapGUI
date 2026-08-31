@@ -261,7 +261,7 @@ A gradient asks for that itself, which is why the line above needs no mode: `Fil
 |---|---|
 | a flat fill, a button, a panel | `NONE`, which is what it already does |
 | a gradient | `ORDERED`, its own default, or `ORDERED_FINE` for a finer texture |
-| a picture or a camera capture, sent once | `ATKINSON` first, then `FLOYD_STEINBERG` |
+| a picture or a camera capture, sent once | `FLOYD_STEINBERG` first, then `ATKINSON` if it worms |
 | video, or anything that repaints | `NONE` or an ordered mode - see [performance](performance.md) |
 
 The two families differ in what they are allowed to know. An ordered mode is a function of the color and the pixel's position, so it blends between the **two** entries nearest what you asked for and nothing else. Error diffusion carries the leftover error into pixels it has not reached yet, so it can recruit entries further away - which is the whole difference on a ramp the palette has no hues for. Green to yellow is the worst such case and the figure shows it: the ordered modes seam, and only diffusion reads as continuous.
