@@ -85,7 +85,8 @@ therefore mechanical, and nothing above the interfaces has to know it happened:
 5. Add the family and the backend's class name to the table in `Backends`.
 
 Versions are matched by family, so `26.2.1` runs on the module built for `26.2`. A server MapGUI has no
-backend for fails to enable and says which versions it knows, rather than half-working.
+backend for fails to enable and says which versions it knows, rather than half-working. A server it does have
+one for names the module that won in `/mapgui status`, since a successful load is otherwise silent about that.
 
 `api-version` in `paper-plugin.yml` is templated from `libs.versions.minecraftMin`, the **oldest** module's
 version rather than the newest. Paper refuses to load a plugin on a server older than that line says, so
