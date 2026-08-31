@@ -83,6 +83,12 @@ public final class MediaSources implements MediaService {
         if (!VideoNatives.available()) {
             return failed("FFmpeg is not loaded - set media.ffmpeg: true in config.yml and restart");
         }
+        if (StreamResolver.isPageUrl(source) && !resolver.available()) {
+            // The same refusal open() gives, for the same reason: downloaded without resolving, this is an HTML
+            // page handed to a video decoder, and "invalid data found when processing input" explains nothing.
+            return failed("that looks like a page url, and this server does not resolve them -"
+                    + " media.resolve-page-urls is off in config.yml. A direct media url plays without it.");
+        }
 
         return CompletableFuture.supplyAsync(() -> fetchAndDecode(source, progress), async);
     }
@@ -97,6 +103,10 @@ public final class MediaSources implements MediaService {
      *
      * <p>Progress is reported against the transfer up to 90 and the decode after it, the same split
      * {@code AssetCache} uses - at 100 with work still to do, the last stretch reads as stuck.
+     *
+     * <p>A page url is resolved every time even on a cache hit, which is one short process to find out that
+     * nothing has to be downloaded. Worth it: the alternative is remembering that a page url maps to a file,
+     * which is a second cache to keep true.
      */
     private Frames fetchAndDecode(String source, IntConsumer progress) {
         try {
@@ -105,7 +115,9 @@ public final class MediaSources implements MediaService {
                 url = resolver.resolve(source).url();
             }
 
-            Path file = cache.fetch(url, percent -> progress.accept(percent * 90 / 100));
+            // Keyed on the page url, downloaded from what it resolved to: a resolved url carries a signature and
+            // an expiry, so keying on it would make every call a fresh download of a video already on disk.
+            Path file = cache.fetch(source, url, percent -> progress.accept(percent * 90 / 100));
             progress.accept(90);
             Frames frames = FfmpegFrames.clip(file, size, fps, maxFrames, percent -> progress.accept(90 + percent / 10));
             progress.accept(100);

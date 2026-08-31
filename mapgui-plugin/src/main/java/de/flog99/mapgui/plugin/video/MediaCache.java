@@ -65,12 +65,14 @@ public final class MediaCache {
      * <p>A cache hit costs one timestamp write: the file's modification time is when it was last <i>used</i>, so
      * pruning takes the clip nobody has shown for longest rather than the one downloaded longest ago.
      *
-     * @param progress 0 to 100 as the bytes arrive, on this thread
+     * @param key      what identifies this media to the caller, which for a page url is the page url itself
+     * @param url       what to actually download, which for a page url is what it resolved to
+     * @param progress  0 to 100 as the bytes arrive, on this thread
      * @return the file, ready to decode
      * @throws IOException if it could not be fetched, or if either cap says no. The message says which
      */
-    public Path fetch(String url, IntConsumer progress) throws IOException {
-        Path target = directory.resolve(nameFor(url));
+    public Path fetch(String key, String url, IntConsumer progress) throws IOException {
+        Path target = directory.resolve(nameFor(key, url));
         if (Files.isRegularFile(target)) {
             touch(target);
             progress.accept(100);
@@ -196,14 +198,14 @@ public final class MediaCache {
     }
 
     /**
-     * What one url is stored as: the SHA-256 of the url, plus whatever extension it had.
+     * What one piece of media is stored as: the SHA-256 of the <i>key</i>, plus whatever extension the url had.
      *
      * <p>The extension is cosmetic - FFmpeg reads the content, not the name - and kept only so that somebody
-     * looking in the folder can tell an mp4 from a webm. The hash is the whole key, so two urls that differ by a
-     * signature parameter are two files, and the same url twice is one.
+     * looking in the folder can tell an mp4 from a webm. It comes from the url because that is the one that names
+     * a format; the hash comes from the key because that is the one that is the same twice.
      */
-    static String nameFor(String url) {
-        return sha256(url) + extensionOf(url);
+    static String nameFor(String key, String url) {
+        return sha256(key) + extensionOf(url);
     }
 
     private static String extensionOf(String url) {

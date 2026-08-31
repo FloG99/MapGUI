@@ -34,17 +34,33 @@ class MediaCacheTest {
     void oneUrlIsAlwaysTheSameFile() {
         String url = "https://example.com/trailer.mp4";
 
-        assertEquals(MediaCache.nameFor(url), MediaCache.nameFor(url), "the name is the cache key");
-        assertNotEquals(MediaCache.nameFor(url), MediaCache.nameFor(url + "?v=2"));
+        assertEquals(MediaCache.nameFor(url, url), MediaCache.nameFor(url, url), "the name is the cache key");
+        assertNotEquals(MediaCache.nameFor(url, url), MediaCache.nameFor(url + "?v=2", url + "?v=2"));
+    }
+
+    /**
+     * The one that matters for a page url: it resolves to a differently signed url every time, so keying on what
+     * was downloaded from would make every call a fresh download of a video already on disk.
+     */
+    @Test
+    void aResolvedUrlThatChangesIsStillOneFile() {
+        String page = "https://www.youtube.com/watch?v=abc";
+        String first = "https://rr1.googlevideo.com/videoplayback?expire=1000&sig=aaa";
+        String second = "https://rr4.googlevideo.com/videoplayback?expire=9999&sig=zzz";
+
+        assertEquals(MediaCache.nameFor(page, first), MediaCache.nameFor(page, second),
+                "the page url is the key, so re-resolving it must not make a second file");
+        assertNotEquals(MediaCache.nameFor(first, first), MediaCache.nameFor(second, second),
+                "keyed on the resolved url, which is what this must not do, they would be two files");
     }
 
     @Test
     void keepsTheExtensionForSomebodyLookingInTheFolder() {
-        assertTrue(MediaCache.nameFor("https://example.com/trailer.mp4").endsWith(".mp4"));
-        assertTrue(MediaCache.nameFor("https://example.com/clip.webm?token=abc").endsWith(".webm"),
+        assertTrue(MediaCache.nameFor("a", "https://example.com/trailer.mp4").endsWith(".mp4"));
+        assertTrue(MediaCache.nameFor("a", "https://example.com/clip.webm?token=abc").endsWith(".webm"),
                 "the query is not part of the path");
-        assertTrue(MediaCache.nameFor("https://example.com/videoplayback").endsWith(".media"));
-        assertTrue(MediaCache.nameFor("https://example.com/a.b.c/videoplayback").endsWith(".media"),
+        assertTrue(MediaCache.nameFor("a", "https://example.com/videoplayback").endsWith(".media"));
+        assertTrue(MediaCache.nameFor("a", "https://example.com/a.b.c/videoplayback").endsWith(".media"),
                 "a dot in a directory name is not an extension");
     }
 
