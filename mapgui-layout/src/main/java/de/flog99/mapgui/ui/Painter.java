@@ -65,6 +65,27 @@ public final class Painter {
         this.font = value;
     }
 
+    /**
+     * Draws with {@code value} until {@link #popFont} puts the old one back, the way a clip is pushed and popped.
+     *
+     * <p>What a node's own font is built on: a subtree is drawn between the two calls, so a heading in another
+     * face costs nothing to anything around it. Null changes nothing and still hands back the current font, so a
+     * caller does not have to know whether there was one to push.
+     */
+    @org.jetbrains.annotations.ApiStatus.Experimental
+    public TextFont pushFont(TextFont value) {
+        TextFont previous = font;
+        if (value != null) {
+            this.font = value;
+        }
+        return previous;
+    }
+
+    @org.jetbrains.annotations.ApiStatus.Experimental
+    public void popFont(TextFont previous) {
+        this.font = previous;
+    }
+
     public Rect clip() {
         return clip;
     }

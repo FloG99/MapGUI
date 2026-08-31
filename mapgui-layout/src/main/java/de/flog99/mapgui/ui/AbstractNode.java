@@ -23,6 +23,7 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
     private Border border = Border.none();
     private Corner corner = Corner.ROUND;
     private int borderRadius;
+    private TextFont font;
     private boolean hidden;
     private String key;
     private String cursorIcon;
@@ -222,6 +223,25 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
     public S corner(Corner value, int radius) {
         this.corner = value;
         this.borderRadius = radius;
+        return self();
+    }
+
+    /**
+     * The font this node and everything under it is measured and drawn with, instead of the screen's.
+     *
+     * <p>For a heading in another face, or a caption a size down. It reaches the whole subtree because both
+     * passes carry it: measuring gets a context with the font in it, painting gets it pushed and popped around
+     * the subtree, so what sized the words is always what drew them.
+     *
+     * <p>Load the face once and hand back the same instance - {@link Fonts#trueType(String, float)} does that
+     * for you. A font built per {@code build()} rasterizes its alphabet again on every state change.
+     *
+     * <p>Null, the default, means whatever the enclosing subtree is using, and at the top of the tree that is
+     * the screen's own {@code font()}.
+     */
+    @org.jetbrains.annotations.ApiStatus.Experimental
+    public S font(TextFont value) {
+        this.font = value;
         return self();
     }
 
@@ -523,7 +543,7 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
 
         int contentWidth = Math.max(0, limitWidth - padding.horizontal());
         int contentHeight = Math.max(0, limitHeight - padding.vertical());
-        Measured content = measureContent(context, contentWidth, contentHeight);
+        Measured content = measureContent(context.withFont(font), contentWidth, contentHeight);
 
         return new Measured(
                 resolve(width, content.width() + padding.horizontal(), availableWidth),
@@ -548,7 +568,7 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
     public final void arrange(LayoutContext context, Rect rect) {
         this.animator = context.animator();
         this.bounds = rect;
-        arrangeContent(context, rect.shrink(padding));
+        arrangeContent(context.withFont(font), rect.shrink(padding));
     }
 
     @Override
@@ -560,7 +580,9 @@ public abstract class AbstractNode<S extends AbstractNode<S>> implements Node {
         if (painted != null || outline.visible()) {
             painter.box(bounds, painted, outline, corner, borderRadius);
         }
+        TextFont previous = painter.pushFont(font);
         paintContent(painter);
+        painter.popFont(previous);
     }
 
     /** Size of everything inside the padding box. */

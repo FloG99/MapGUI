@@ -110,9 +110,9 @@ public abstract class Screen {
      * }
      * }</pre>
      *
-     * <p>One font per screen rather than per label, because measuring and painting have to agree about what
-     * text is: a layout sized with one font and drawn with another puts the words in the wrong place. For a
-     * heading in a different face, draw it with {@link ComponentText} inside a {@code Draw} node.
+     * <p>This is the font the tree starts in. A node can take another for itself and everything under it with
+     * {@link AbstractNode#font(TextFont)}, which is what a heading in a different face wants - both passes carry
+     * it, so what sized the words is always what drew them.
      */
     public TextFont font() {
         return MapTextFont.INSTANCE;
