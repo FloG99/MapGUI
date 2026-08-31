@@ -201,13 +201,13 @@ public record MapGuiConfig(
      * reason a bad dither mode does: a typo in one setting should not stop a server starting.
      */
     private static MapColors.Matching matching(FileConfiguration config) {
-        String name = config.getString("colors.matching", "perceptual");
+        String name = config.getString("colors.matching", "vanilla");
         try {
             return MapColors.Matching.valueOf(name.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException | NullPointerException e) {
             Bukkit.getLogger().warning("colors.matching is set to \"" + name + "\", which is not one of "
-                    + Arrays.toString(MapColors.Matching.values()) + ". Using PERCEPTUAL.");
-            return MapColors.Matching.PERCEPTUAL;
+                    + Arrays.toString(MapColors.Matching.values()) + ". Using VANILLA.");
+            return MapColors.Matching.VANILLA;
         }
     }
 
