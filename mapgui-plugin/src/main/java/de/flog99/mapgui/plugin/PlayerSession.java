@@ -10,6 +10,9 @@ import de.flog99.mapgui.Marker;
 import de.flog99.mapgui.Screen;
 import de.flog99.mapgui.Session;
 import de.flog99.mapgui.TerrainRenderer;
+import de.flog99.mapgui.event.MapGuiClickEvent;
+import de.flog99.mapgui.event.MapGuiScreenCloseEvent;
+import de.flog99.mapgui.event.MapGuiScreenOpenEvent;
 import de.flog99.mapgui.prompt.PromptProvider;
 import de.flog99.mapgui.prompt.TextPrompt;
 import de.flog99.mapgui.ui.Animator;
@@ -215,6 +218,13 @@ final class PlayerSession implements Session {
         snapshotTaking();
     }
 
+    /** The other end of {@link #adopt}: the screen comes off, and anything watching hears that it closed. */
+    private void dropTop() {
+        Screen going = screens.pop();
+        going.detach();
+        MapGuiScreenCloseEvent.fire(player, going);
+    }
+
     // ---- Session ----
 
     @Override
@@ -251,6 +261,9 @@ final class PlayerSession implements Session {
         // Before the new screen is on top, so the end of a hold reaches the screen that was being held rather
         // than the one its click opened - which never heard the press and would never hear the end.
         holdEnded();
+        // Raised before anything is adopted, so a veto leaves the screen underneath exactly as it was.
+        if (!MapGuiScreenOpenEvent.allows(player, screen, true)) return;
+
         adopt(screen);
         display.refresh(this);
         needsPaint = true;
@@ -265,7 +278,7 @@ final class PlayerSession implements Session {
 
         // The same as push: the screen being taken away is the one that was being held.
         holdEnded();
-        screens.pop().detach();
+        dropTop();
         snapshotTaking();
         screen().invalidate();
         display.refresh(this);
@@ -642,7 +655,7 @@ final class PlayerSession implements Session {
         if (activePrompt != null) {
             activePrompt.cancel(player);
         }
-        while (!screens.isEmpty()) screens.pop().detach();
+        while (!screens.isEmpty()) dropTop();
 
         if (restore) {
             display.close(this);
@@ -1006,7 +1019,13 @@ final class PlayerSession implements Session {
         // A cursorless screen still hears the click, but only through Screen#clickedAnywhere: -1 means there is
         // no position, so nothing is hit-tested.
         boolean pointed = clicked.cursor();
-        if (!clicked.click(pointed ? cursorX() : -1, pointed ? cursorY() : -1, with)) return;
+        int x = pointed ? cursorX() : -1;
+        int y = pointed ? cursorY() : -1;
+
+        // Here rather than in the packet handler that read the button: that runs on the network thread and
+        // hops to get here, and the main thread is the only one a Bukkit listener may be handed.
+        if (!MapGuiClickEvent.allows(player, clicked, null, x, y, with)) return;
+        if (!clicked.click(x, y, with)) return;
 
         Sound sound = clicked.clickSound();
         if (sound != null) {

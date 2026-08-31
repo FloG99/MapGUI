@@ -28,7 +28,14 @@ public interface MapGui {
         return provider.getProvider();
     }
 
-    /** Opens a screen, replacing whatever the player had open. */
+    /**
+     * Opens a screen, replacing whatever the player had open.
+     *
+     * @return the session, or null if a listener cancelled
+     *         {@link de.flog99.mapgui.event.MapGuiScreenOpenEvent} - in which case nothing was opened and
+     *         whatever the player already had is untouched
+     */
+    @Nullable
     Session open(Player player, Screen screen);
 
     /**
@@ -37,6 +44,7 @@ public interface MapGui {
      * <p>Read {@link HandOptions} before reaching for this: the choice decides whether the player can move about
      * and click on the world while the screen is up, not only where the map appears.
      */
+    @Nullable
     Session open(Player player, Screen screen, HandOptions hand);
 
     /**

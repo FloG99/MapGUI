@@ -1,5 +1,9 @@
 package de.flog99.mapgui;
 
+import de.flog99.mapgui.event.MapGuiClickEvent;
+import de.flog99.mapgui.event.MapGuiViewerChangeEvent;
+import de.flog99.mapgui.event.MapGuiWallPlaceEvent;
+import de.flog99.mapgui.event.MapGuiWallRemoveEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -153,6 +157,10 @@ public final class WallDisplay {
         if (previewOnly || closed) return;
 
         Audience audience = admitAndEvict(now);
+        // A listener told who has just arrived is free to close the wall, and a closed one has nothing left to
+        // paint or send.
+        if (closed) return;
+
         List<Player> watching = audience.watching();
         if (watching.isEmpty()) return;
         if (loop != null) {
@@ -221,8 +229,26 @@ public final class WallDisplay {
      *
      * <p>Call this when whatever the wall belongs to goes away. Safe to call twice, and forgetting leaves
      * nothing behind: the frames were never in the world and vanish with the client's next chunk unload.
+     *
+     * <p>A listener can refuse it - see {@link de.flog99.mapgui.event.MapGuiWallRemoveEvent} - in which case
+     * the wall stays up and this does nothing.
      */
     public void close() {
+        if (closed) return;
+        // Nothing for a listener to protect in a preview: one frame, one client, nothing registered behind it.
+        if (!previewOnly && !MapGuiWallRemoveEvent.allows(this)) return;
+
+        closeAnyway();
+    }
+
+    /**
+     * Takes it down without asking anybody, for a shutdown or a plugin unloading.
+     *
+     * <p>Neither can honor a veto: there would be nothing left to tick the wall a listener insisted on
+     * keeping, so it would sit in every viewer's client with nobody drawing it.
+     */
+    @ApiStatus.Internal
+    public void closeAnyway() {
         if (closed) return;
 
         closed = true;
@@ -391,6 +417,9 @@ public final class WallDisplay {
 
     private void deliver(Player player, WallSession session, WallLayout.Aim aim, Click with) {
         Screen screen = session.screen();
+        // Raised here rather than where the packet was read: that is the network thread, and this is a tick
+        // later on the main one, which is the only thread a Bukkit listener may be handed.
+        if (!MapGuiClickEvent.allows(player, screen, this, aim.x(), aim.y(), with)) return;
         if (!screen.click(aim.x(), aim.y(), with)) return;
 
         Sound sound = screen.clickSound();
@@ -505,6 +534,7 @@ public final class WallDisplay {
             }
         }
 
+        List<UUID> left = new ArrayList<>();
         viewers.removeIf(id -> {
             if (present.contains(id)) return false;
 
@@ -528,8 +558,11 @@ public final class WallDisplay {
             if (view != null) {
                 view.stop();
             }
+            left.add(id);
             return true;
         });
+
+        MapGuiViewerChangeEvent.fire(this, arrived, left);
         return new Audience(watching, arrived);
     }
 
@@ -886,9 +919,18 @@ public final class WallDisplay {
             return this;
         }
 
-        /** Puts the wall up for everyone in range, and keeps it there until {@link WallDisplay#close}. */
+        /**
+         * Puts the wall up for everyone in range, and keeps it there until {@link WallDisplay#close}.
+         *
+         * @return the wall, or null if a listener cancelled
+         *         {@link de.flog99.mapgui.event.MapGuiWallPlaceEvent} - in which case nothing was put up and
+         *         there is nothing to close
+         */
+        @Nullable
         public WallDisplay open() {
             WallDisplay wall = build();
+            if (!MapGuiWallPlaceEvent.allows(wall)) return null;
+
             onOpen.accept(wall);
             return wall;
         }

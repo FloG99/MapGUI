@@ -49,6 +49,15 @@ public final class WallManager {
     private int range;
 
     private final Map<String, WallDisplay> live = new HashMap<>();
+
+    /**
+     * Names whose placement a listener refused, so it is asked once rather than every tick.
+     *
+     * <p>{@link #tick} retries every wall that is not up yet, which is what lets a plugin register its GUIs
+     * whenever it likes - but an event per tick per refused wall is not a cost to hand a listener. Cleared
+     * when the wall is removed or the server restarts, both of which are a deliberate second chance.
+     */
+    private final Set<String> vetoed = new HashSet<>();
     private final Map<UUID, WallPlacement> placing = new HashMap<>();
 
     /** Kept so the same instance can be handed back to release the claim. */
@@ -73,7 +82,8 @@ public final class WallManager {
     }
 
     public void close() {
-        for (WallDisplay wall : List.copyOf(live.values())) wall.close();
+        // Not close(), which is vetoable: nothing is left to tick a wall a listener kept past a shutdown.
+        for (WallDisplay wall : List.copyOf(live.values())) wall.closeAnyway();
         live.clear();
         contents.close();
         for (UUID id : List.copyOf(placing.keySet())) {
@@ -92,7 +102,7 @@ public final class WallManager {
         long now = System.currentTimeMillis();
 
         for (Map.Entry<String, WallStore.Placed> entry : store.all().entrySet()) {
-            if (live.containsKey(entry.getKey())) continue;
+            if (live.containsKey(entry.getKey()) || vetoed.contains(entry.getKey())) continue;
 
             Consumer<WallDisplay.Builder> content = contents.find(entry.getValue().content());
             if (content == null) continue;
@@ -100,6 +110,10 @@ public final class WallManager {
             WallDisplay wall = build(entry.getValue(), content);
             if (wall != null) {
                 live.put(entry.getKey(), wall);
+            } else if (Bukkit.getWorld(entry.getValue().world()) != null) {
+                // A world that is not loaded yet is worth retrying; a refusal is not, and those are the only
+                // two reasons build() comes back empty.
+                vetoed.add(entry.getKey());
             }
         }
 
@@ -340,7 +354,9 @@ public final class WallManager {
 
             WallDisplay showing = live.remove(name);
             if (showing != null) {
-                showing.close();
+                // Not vetoable either: the classes that paint this wall are on their way out with the plugin
+                // unregistering it, so keeping it up would only leave something nothing can draw.
+                showing.closeAnyway();
             }
         });
     }
@@ -348,9 +364,12 @@ public final class WallManager {
     public boolean remove(String name) {
         if (!store.remove(name)) return false;
 
+        vetoed.remove(name);
         WallDisplay wall = live.remove(name);
         if (wall != null) {
-            wall.close();
+            // Not vetoable: the record in walls.yml has already gone, so a wall kept up here would be one
+            // nothing owns, nothing saves and nothing can take down. Gate the command instead.
+            wall.closeAnyway();
         }
         dropUnusedVideos();
         return true;
