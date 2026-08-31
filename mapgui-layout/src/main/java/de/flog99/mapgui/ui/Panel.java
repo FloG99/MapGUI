@@ -7,11 +7,15 @@ import java.util.List;
  *
  * <p>Children sized {@link Sizing#fill} split whatever main-axis space the fixed and
  * shrink-wrapped children leave over, by weight. The last of them absorbs the integer
- * remainder so a row always adds up to the exact pixel width.
+ * remainder so a row always adds up to the exact pixel width, and one held to a maximum takes
+ * only that much and hands the surplus back to the others.
  */
 public final class Panel extends AbstractContainer<Panel> {
 
     public enum Axis { ROW, COLUMN }
+
+    /** Marks a child whose main-axis size the fill split has yet to decide. */
+    private static final int UNSIZED = -1;
 
     private final Axis axis;
     private int gap;
@@ -103,8 +107,76 @@ public final class Panel extends AbstractContainer<Panel> {
     }
 
     private static boolean isHug(Node kid, boolean vertical) {
-        Sizing sizing = vertical ? kid.heightSizing() : kid.widthSizing();
-        return sizing.mode() == Sizing.Mode.HUG;
+        return mainSizing(kid, vertical).mode() == Sizing.Mode.HUG;
+    }
+
+    private static Sizing mainSizing(Node kid, boolean vertical) {
+        return vertical ? kid.heightSizing() : kid.widthSizing();
+    }
+
+    /**
+     * Splits the leftover main-axis space between the fill children, holding each to its own bounds.
+     *
+     * <p>A child that hits a bound takes that size, drops out of the split, and its surplus goes back into the
+     * pool for whoever is left - so {@code fill().maxWidth(80)} hands the difference to its siblings instead of
+     * losing it off the end of the row. Every pass settles at least one child, so this runs at most once per
+     * fill child, and the last unsettled one absorbs the integer remainder so the row still adds up to the
+     * exact pixel width.
+     */
+    private static void distributeFill(List<Node> kids, int[] mains, boolean vertical, int space) {
+        int count = 0;
+        for (int main : mains) {
+            if (main == UNSIZED) count++;
+        }
+
+        int[] fills = new int[count];
+        int found = 0;
+        for (int i = 0; i < mains.length; i++) {
+            if (mains[i] == UNSIZED) {
+                fills[found++] = i;
+            }
+        }
+
+        boolean[] settled = new boolean[count];
+        int open = count;
+        int pool = space;
+
+        while (open > 0) {
+            int weight = 0;
+            for (int f = 0; f < count; f++) {
+                if (!settled[f]) {
+                    weight += mainSizing(kids.get(fills[f]), vertical).value();
+                }
+            }
+
+            int handedOut = 0;
+            int seen = 0;
+            boolean capped = false;
+            for (int f = 0; f < count; f++) {
+                if (settled[f]) continue;
+
+                Sizing sizing = mainSizing(kids.get(fills[f]), vertical);
+                seen++;
+                int share = seen == open ? pool - handedOut : (int) ((long) pool * sizing.value() / weight);
+                handedOut += share;
+                mains[fills[f]] = sizing.clamp(share);
+                if (mains[fills[f]] != share) {
+                    settled[f] = true;
+                    capped = true;
+                }
+            }
+            if (!capped) return;
+
+            pool = space;
+            open = count;
+            for (int f = 0; f < count; f++) {
+                if (!settled[f]) continue;
+
+                pool -= mains[fills[f]];
+                open--;
+            }
+            pool = Math.max(0, pool);
+        }
     }
 
     @Override
@@ -122,18 +194,16 @@ public final class Panel extends AbstractContainer<Panel> {
         int[] crosses = new int[count];
         int usedMain = 0;
         int totalWeight = 0;
-        int fillCount = 0;
 
         for (int i = 0; i < count; i++) {
             Node kid = kids.get(i);
-            Sizing mainSizing = vertical ? kid.heightSizing() : kid.widthSizing();
+            Sizing mainSizing = mainSizing(kid, vertical);
             Measured measured = kid.measure(context, content.width(), vertical ? Node.UNBOUNDED : content.height());
             crosses[i] = vertical ? measured.width() : measured.height();
 
             if (mainSizing.isFill()) {
-                mains[i] = -1;
+                mains[i] = UNSIZED;
                 totalWeight += mainSizing.value();
-                fillCount++;
             } else {
                 mains[i] = vertical ? measured.height() : measured.width();
                 usedMain += mains[i];
@@ -141,25 +211,13 @@ public final class Panel extends AbstractContainer<Panel> {
         }
 
         if (totalWeight > 0) {
-            int remaining = Math.max(0, contentMain - usedMain - gaps);
-            int handedOut = 0;
-            int seen = 0;
-            for (int i = 0; i < count; i++) {
-                if (mains[i] != -1) continue;
-
-                Sizing sizing = vertical ? kids.get(i).heightSizing() : kids.get(i).widthSizing();
-                seen++;
-                mains[i] = seen == fillCount
-                        ? remaining - handedOut
-                        : remaining * sizing.value() / totalWeight;
-                handedOut += mains[i];
-            }
+            distributeFill(kids, mains, vertical, Math.max(0, contentMain - usedMain - gaps));
 
             // Now that a fill child's real width is known, ask it again - wrapped text only
             // knows how tall it is once it knows how wide it is.
             for (int i = 0; i < count; i++) {
                 Node kid = kids.get(i);
-                Sizing mainSizing = vertical ? kid.heightSizing() : kid.widthSizing();
+                Sizing mainSizing = mainSizing(kid, vertical);
                 if (!mainSizing.isFill()) continue;
 
                 Measured remeasured = vertical
@@ -191,7 +249,7 @@ public final class Panel extends AbstractContainer<Panel> {
             Node kid = kids.get(i);
             Sizing crossSizing = vertical ? kid.widthSizing() : kid.heightSizing();
             int cross = crossSizing.isFill() || align == Align.STRETCH
-                    ? contentCross
+                    ? crossSizing.clamp(contentCross)
                     : Math.min(crosses[i], contentCross);
             int crossOffset = switch (align) {
                 case START, STRETCH -> 0;

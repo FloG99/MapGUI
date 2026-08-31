@@ -109,7 +109,7 @@ public final class Scroll extends AbstractContainer<Scroll> {
         int y = content.y() - (int) Math.round(shownOffset);
         for (Node kid : kids) {
             Measured measured = kid.measure(context, width, Node.UNBOUNDED);
-            int kidWidth = kid.widthSizing().isFill() ? width : Math.min(measured.width(), width);
+            int kidWidth = kid.widthSizing().isFill() ? kid.widthSizing().clamp(width) : Math.min(measured.width(), width);
             kid.arrange(context, new Rect(content.x(), y, kidWidth, measured.height()));
             y += measured.height() + gap;
         }
