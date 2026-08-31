@@ -232,7 +232,9 @@ final class WallRegistry implements Listener, LiveWalls {
 
         private boolean offer(Click with) {
             for (WallDisplay wall : open) {
-                if (!wall.interactive() || !wall.isAiming(player)) continue;
+                // wouldTake is what lets a screen decline: everything but Click.NONE says yes, so a wall that has
+                // never heard of it swallows what is aimed at it exactly as before.
+                if (!wall.interactive() || !wall.isAiming(player) || !wall.wouldTake(player)) continue;
 
                 plugin.getServer().getScheduler().runTask(plugin, () -> wall.click(player, with));
                 return true;

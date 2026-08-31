@@ -137,6 +137,23 @@ it, and it never swallows a click meant for whatever is in front of it.
 Where two menus line up, only the nearest one takes the click. The one behind gets no cursor, no hover and
 no scroll either - not merely a click that goes elsewhere.
 
+### Letting a click through
+
+Every value of `activateOn()` but one swallows a click aimed at the wall, whichever button it was, because a menu
+must not also mine the block it hangs on. `Click.NONE` is the way to say the screen wants nothing right now, and
+the click reaches the world instead - a viewer can shoot through it, hit what is behind it, and place against it.
+
+It is read every tick rather than once, so a screen that is a menu now and a picture in a moment can say so:
+
+```java
+@Override
+public Click activateOn() {
+    return editing ? Click.RIGHT : Click.NONE;
+}
+```
+
+A screen that has never heard of it behaves exactly as it always did.
+
 ### Reaching the edges
 
 The last row of pixels on a map is a strip a fraction of a block wide, which is genuinely hard to hold a ray

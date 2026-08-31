@@ -97,6 +97,8 @@ final class InputListeners implements Listener {
 
         Action action = event.getAction();
         if (action != Action.LEFT_CLICK_AIR && action != Action.LEFT_CLICK_BLOCK) return;
+        // A screen taking nothing leaves the event alone, so the punch lands on the world - see Click.NONE.
+        if (!session.takesClicks()) return;
 
         event.setCancelled(true);
         session.leftClick();
