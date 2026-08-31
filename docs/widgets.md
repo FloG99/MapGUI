@@ -145,26 +145,31 @@ public TextFont font() {
 }
 ```
 
-`load(InputStream, size, antiAliased)` is the other way in, for a face you ship inside your own jar. It reads
-a stream rather than a file, and it throws `IOException`, so it wants a method rather than a field
-initializer:
+For a face you ship inside your own jar, `Fonts` is the whole of it:
 
 ```java
-private static final TextFont TITLE = title();
-
-private static TextFont title() {
-    try (InputStream in = MyPlugin.class.getResourceAsStream("/font/title.ttf")) {
-        return AwtFont.load(in, 16f, true);
-    } catch (IOException e) {
-        return AwtFont.named("SansSerif", Font.PLAIN, 16, true);
-    }
-}
+private static final TextFont TITLE = Fonts.trueType("font/title.ttf", 16f);
 ```
 
-Load it once and hand back the same instance - a font caches a rasterized glyph per character, so building one
-per call rasterizes the alphabet again every frame. One font per screen rather than per label, because
+That reads the file out of the calling plugin's resources, parses it once and caches it under
+`(classloader, path, size)`, so two screens naming the same file share one glyph cache. A file that is missing
+or unreadable gives the JVM's sans-serif at the same size and says so in the log, rather than throwing while a
+screen is being built. `Fonts.trueType(stream, size)` is the same for a face that did not come out of a jar -
+one in the server's own folder, one downloaded - keyed on what the stream held, since a stream has no identity
+of its own.
+
+**No face is bundled with MapGUI**, deliberately: a font is somebody's licensed work and a library has no
+business deciding whose.
+
+`Fonts` is always anti-aliased, since a plugin reaching for its own face is doing it for the look.
+`AwtFont.load(InputStream, size, antiAliased)` is the way past that, which is what a pixel font at eight
+pixels wants - and it throws `IOException`, so it wants a method rather than a field initializer.
+
+Load a font once and hand back the same instance - a font caches a rasterized glyph per character, so building
+one per call rasterizes the alphabet again every frame. One font per screen rather than per label, because
 measuring and painting have to agree: a layout sized with one font and drawn with another puts the words in
-the wrong place. For a heading in a different face, draw it with `ComponentText` inside a `Draw` node.
+the wrong place. For a heading in a different face, `font()` on the node is the way - see
+[per-node fonts](#per-node-fonts).
 
 The last argument is anti-aliasing. Glyphs are rendered to coverage rather than on-or-off pixels, so
 part-covered edges are blended with what is behind them. Worth having at large sizes and mostly noise at small

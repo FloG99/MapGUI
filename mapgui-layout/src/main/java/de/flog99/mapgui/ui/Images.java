@@ -101,7 +101,7 @@ public final class Images {
     }
 
     /** A classloader wants a path from the root of the jar; a class wants one relative to itself. Take either. */
-    private static String normalized(String path) {
+    static String normalized(String path) {
         int at = 0;
         while (at < path.length() && path.charAt(at) == '/') at++;
 
@@ -114,8 +114,10 @@ public final class Images {
      * <p>Told apart by the classloader rather than by the package, since that is the thing being looked for anyway -
      * every class of MapGUI's shares MapGUI's loader, and a plugin has its own. Which also means a caller inside
      * MapGUI, or a unit test sharing one loader with everything, correctly ends up with that loader.
+     *
+     * <p>Shared with {@link Fonts}, which asks the same question of the same stack.
      */
-    private static ClassLoader callerLoader() {
+    static ClassLoader callerLoader() {
         ClassLoader own = Images.class.getClassLoader();
         return WALKER.walk(frames -> frames
                 .limit(FRAMES)
