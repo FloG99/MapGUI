@@ -94,6 +94,15 @@ public final class WallDisplay {
     @Nullable
     private final WallLoop loop;
 
+    /**
+     * Set when this wall shares its picture with others - see {@link Builder#channel}.
+     *
+     * <p>One member of a channel paints and sends; the rest hang their frames on the same map ids and do
+     * neither. So a second wall showing the same clip costs a mount packet and nothing per frame.
+     */
+    @Nullable
+    private final WallChannel channel;
+
     /** Set unless this wall streams to everyone in range regardless - see {@link Builder#cullOffScreen}. */
     @Nullable
     private final WallSight sight;
@@ -134,7 +143,8 @@ public final class WallDisplay {
         this.visibleTo = builder.visibleTo;
         this.controlledBy = builder.controlledBy;
 
-        this.tiles = new WallTiles(services.transport(), world, layout, builder.frames);
+        this.channel = builder.channel == null ? null : WallChannel.join(builder.channel, layout, this);
+        this.tiles = new WallTiles(services.transport(), world, layout, builder.frames, channel);
         this.cursors = new WallCursors(layout, tiles, builder.showOthers, builder.aimMargin, builder.reach);
         this.center = new Location(world, layout.centerX(), layout.centerY(), layout.centerZ());
 
@@ -171,7 +181,16 @@ public final class WallDisplay {
         // paint or send.
         if (closed) return;
 
-        List<Player> watching = audience.watching();
+        List<Player> nearby = audience.watching();
+        if (channel != null) {
+            // Reported even when nobody is here, so a member with no viewers of its own does not look like a
+            // member that has gone - and so the drawing wall knows the whole audience rather than its share.
+            channel.reportViewers(now, nearby.stream().map(Player::getUniqueId).toList());
+            if (!channel.isDrawing(this)) return;
+        }
+        // Everyone any wall in the channel wants, since a viewer at the far wall needs these ids too and has no
+        // other way to be sent them. Its own audience when there is no channel.
+        List<Player> watching = channel == null ? nearby : online(channel.viewers());
         if (watching.isEmpty()) return;
         if (loop != null) {
             playLoop(audience, now);
@@ -262,6 +281,7 @@ public final class WallDisplay {
         if (closed) return;
 
         closed = true;
+        if (channel != null) channel.leave(this);
         for (Player player : online(viewers)) tiles.hide(player);
         for (WallView view : views()) view.stop();
         viewers.clear();
@@ -580,6 +600,17 @@ public final class WallDisplay {
         return new Audience(watching, arrived);
     }
 
+    /**
+     * Marks every viewer as owed the whole picture rather than the next changed part of it.
+     *
+     * <p>Used when a channel's drawing wall closes and another takes over: the ids still hold the old wall's
+     * last frame, and the new one has never painted, so what changed since is not a question it can answer.
+     */
+    void resendEverything() {
+        behind.addAll(viewers);
+        if (channel != null) behind.addAll(channel.viewers());
+    }
+
     /** Viewers as players, for {@link #close} - which has only the set to work from and no world walk to hand. */
     private List<Player> online(Set<UUID> ids) {
         List<Player> found = new ArrayList<>(ids.size());
@@ -622,6 +653,10 @@ public final class WallDisplay {
         private int aimMargin;
         private boolean showOthers;
         private boolean cullOffScreen = true;
+
+        /** The channel this wall shares its picture with, or null when it keeps it to itself. */
+        @Nullable
+        private String channel;
         private FrameStyle frames = FrameStyle.DEFAULT;
         private double reach = DEFAULT_REACH;
         private Predicate<Player> visibleTo = player -> true;
@@ -1065,10 +1100,45 @@ public final class WallDisplay {
             return wall;
         }
 
+        /**
+         * Shares this wall's picture with every other wall on the same channel, so the pixels cross the wire
+         * once rather than once per wall.
+         *
+         * <pre>{@code
+         * MapGui.get().wall().at(block, facing).size(4, 3)
+         *         .content(WallContent.live(source))
+         *         .channel("lobby-tv")
+         *         .open();
+         * }</pre>
+         *
+         * <p>Six televisions playing one clip cost what one costs. A client keeps a picture per map id and a map
+         * id is not tied to a place, so the walls hang the same ids: one of them paints and sends, and joining a
+         * channel that is already running costs a mount packet and nothing per frame after it. The decode and the
+         * paint are shared too, since the other walls never do either.
+         *
+         * <p><b>Every wall on a channel shows exactly the same thing</b>, including how far through a clip it is.
+         * That is the point rather than a limitation - two walls of one clip a second apart look like a fault -
+         * but it does mean a channel is for content, not for a menu: a screen answers clicks and reads who is
+         * looking, so it cannot be shared and this refuses one.
+         *
+         * <p>All the walls on a channel must be the same size, since one picture is one size. Everything else
+         * stays each wall's own: where it is, who can see it, how far it reaches, and whether a given viewer is
+         * close enough to be streamed to.
+         *
+         * @param name what to call it. Any string; walls naming the same one share a picture
+         */
+        public Builder channel(String name) {
+            this.channel = name == null || name.isBlank() ? null : name;
+            return this;
+        }
+
         private WallDisplay build() {
             if (world == null || layout == null) throw new IllegalStateException("A wall needs at(..)");
             if (prerenderSteps > 0 && (sharedScreen != null || screenPerPlayer != null)) {
                 throw new IllegalStateException("A menu cannot be prerendered - it has to answer clicks. Use content(..) for a wall that only plays something.");
+            }
+            if (channel != null && (sharedScreen != null || screenPerPlayer != null)) {
+                throw new IllegalStateException("A menu cannot share a channel - it answers clicks and reads who is looking, so its picture is its own. Use content(..) for a wall that only plays something.");
             }
 
             this.layout = allowed(layout);

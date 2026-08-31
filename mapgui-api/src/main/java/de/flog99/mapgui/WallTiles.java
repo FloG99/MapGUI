@@ -28,9 +28,24 @@ final class WallTiles {
     private final MapMount mount;
     private final Bandwidth cost = new Bandwidth();
 
+    /** Set when the ids belong to a channel rather than to this wall. */
+    @org.jetbrains.annotations.Nullable
+    private final WallChannel channel;
+
+    /** A wall whose maps are its own, which is every wall that did not ask for a channel. */
     WallTiles(MapTransport transport, World world, WallLayout layout, FrameStyle style) {
+        this(transport, world, layout, style, null);
+    }
+
+    /**
+     * @param channel when these maps share their ids with other walls, so the pixels are sent once for all of
+     *                them. Null for an ordinary wall, which mints its own
+     */
+    WallTiles(MapTransport transport, World world, WallLayout layout, FrameStyle style,
+              @org.jetbrains.annotations.Nullable WallChannel channel) {
         this.transport = transport;
         this.layout = layout;
+        this.channel = channel;
 
         int[] mapIds = ids(0);
         List<FramedMap> maps = new ArrayList<>(mapIds.length);
@@ -43,8 +58,10 @@ final class WallTiles {
         this.mount = transport.framedMaps(world, maps, style);
     }
 
-    /** Ids for one layer, minted the first time that layer is asked for. */
+    /** Ids for one layer, minted the first time that layer is asked for - or the channel's, when shared. */
     private int[] ids(int layer) {
+        if (channel != null) return channel.ids(layer, layout.count());
+
         while (layers.size() <= layer) {
             int[] ids = new int[layout.count()];
             for (int i = 0; i < ids.length; i++) ids[i] = MapIds.next();
