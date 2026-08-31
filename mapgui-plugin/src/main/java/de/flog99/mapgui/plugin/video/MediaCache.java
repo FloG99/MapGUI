@@ -85,6 +85,9 @@ public final class MediaCache {
             HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(TIMEOUT).GET().build();
             HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() >= 400) {
+                // Closed rather than dropped: an unread streamed body leaves the exchange unfinished, and
+                // closing the client waits for every exchange - so this would hang instead of reporting.
+                Toolchain.discard(response.body());
                 throw new IOException("HTTP " + response.statusCode() + " downloading it");
             }
 

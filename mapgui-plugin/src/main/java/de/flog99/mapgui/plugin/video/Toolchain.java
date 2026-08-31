@@ -407,17 +407,38 @@ public final class Toolchain {
         }
     }
 
+    /**
+     * Sends one request, treating an error status as a failure.
+     *
+     * <p><b>The body of a refusal is closed rather than dropped.</b> A streamed body that is never read leaves the
+     * exchange unfinished, and {@link HttpClient#close()} waits for every exchange - so throwing without closing
+     * hangs the closing thread indefinitely rather than reporting the status. Which means a 404 on an asset name
+     * would not be the clear failure it looks like here; it would be a thread that never comes back, and the
+     * warning below it would never be logged.
+     */
     private static <T> HttpResponse<T> send(HttpClient http, HttpRequest request,
                                             HttpResponse.BodyHandler<T> handler) throws IOException {
         try {
             HttpResponse<T> response = http.send(request, handler);
             if (response.statusCode() >= 400) {
+                discard(response.body());
                 throw new IOException(request.uri() + " answered " + response.statusCode());
             }
             return response;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted");
+        }
+    }
+
+    /** Finishes with a body nothing is going to read, so the exchange it belongs to can complete. */
+    static void discard(@Nullable Object body) {
+        if (!(body instanceof InputStream stream)) return;
+
+        try (InputStream closing = stream) {
+            closing.transferTo(OutputStream.nullOutputStream());
+        } catch (IOException ignored) {
+            // Already broken, which is as finished as it needs to be.
         }
     }
 
