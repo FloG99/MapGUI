@@ -267,10 +267,28 @@ A fill rather than a color, and dithered when painted:
 Box(null).gradient(theme().accent(), theme().danger(), Fill.Direction.HORIZONTAL)
 ```
 
-The palette is a few dozen base colors times four brightnesses, so snapping a ramp to the nearest entry
-gives about four visible steps between two arbitrary hues - stripes, not a gradient. Mixing the two nearest
-entries in a 4x4 pattern turns those four into roughly twenty apparent shades. Flat colors are never
-dithered, since that would only add noise to a solid button.
+The palette is a few dozen base colors times four brightnesses, so snapping a ramp to the nearest entry gives about four visible steps between two arbitrary hues - stripes, not a gradient. Mixing the two nearest entries in a 4x4 pattern turns those four into roughly twenty apparent shades.
+
+A gradient asks for that itself, which is why the line above needs no mode: `Fill.gradient(...)` answers `Dither.ORDERED`, and a flat fill answers nothing at all, since dithering a solid button only adds noise to it. Both are the fill's own opinion rather than a rule the painter applies, so either can be overruled - `Fill.gradient(from, to, VERTICAL).dither(Dither.NONE)` is banded on purpose and stays banded wherever it is drawn.
+
+### Choosing a mode
+
+![Every dither mode over a flat fill, a gradient and a photograph](images/dither-modes.png)
+
+| What you are drawing | Mode |
+|---|---|
+| a flat fill, a button, a panel | `NONE`, which is what it already does |
+| a gradient | `ORDERED`, its own default, or `ORDERED_FINE` for a finer texture |
+| a picture or a camera capture, sent once | `ATKINSON` first, then `FLOYD_STEINBERG` |
+| video, or anything that repaints | `NONE` or an ordered mode - see [performance](performance.md) |
+
+The two families differ in what they are allowed to know. An ordered mode is a function of the color and the pixel's position, so it blends between the **two** entries nearest what you asked for and nothing else. Error diffusion carries the leftover error into pixels it has not reached yet, so it can recruit entries further away - which is the whole difference on a ramp the palette has no hues for. Green to yellow is the worst such case and the figure shows it: the ordered modes seam, and only diffusion reads as continuous.
+
+That freedom has a price and it is paid on the wire rather than in the frame, so read [performance](performance.md) before putting a diffusing mode on anything that moves. It is free on a still, which is sent once.
+
+Error diffusion needs every color up front, so it only runs where a whole rect is known: an image, and decoding. Asked for on a fill it stands in as `ORDERED_FINE` and says so through `Quantizer#diffuses()`.
+
+`Painter#pushDither(Dither)` sets a mode for everything drawn until `popDither(previous)`, the same idiom as `pushClip`. It reaches fills and images; a line, a glyph and a flat `fill(rect, color)` still snap, because dithering an anti-aliased glyph only speckles its edge.
 
 For a fill with no endpoints at all - a rainbow, a sweep - use `fill(Fill)` with `phase(millis)`:
 
