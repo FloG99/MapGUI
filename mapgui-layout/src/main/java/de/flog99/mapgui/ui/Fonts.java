@@ -34,8 +34,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>A file that is missing or unreadable gives the JVM's own sans-serif at the same size rather than throwing,
  * because a screen with the wrong typeface still reads and a screen that threw while building does not.
  *
- * <p>Always anti-aliased, since a plugin reaching for its own face is doing it for the look. Reach past this to
- * {@link AwtFont#load} for the on-or-off version, which is what a pixel font at eight pixels wants.
+ * <p>Anti-aliased unless you say otherwise. Worth having at a size with curves to smooth, and mostly noise below
+ * about twelve pixels - where a glyph is a handful of pixels across and a blended edge reads as blur rather than
+ * as shape. The map's own font is on-or-off at eight, which is the look most text on a 128 pixel canvas is
+ * sitting next to, so a small face usually wants {@code false}.
  */
 @ApiStatus.Experimental
 public final class Fonts {
@@ -55,25 +57,38 @@ public final class Fonts {
     /** Faces that came from a stream, keyed by what was in it. Nothing here points at a plugin's classes. */
     private static final Map<Face, TextFont> BY_CONTENT = new ConcurrentHashMap<>();
 
-    private record Resource(String path, float size) {
+    private record Resource(String path, float size, boolean antiAliased) {
     }
 
-    private record Face(String digest, float size) {
+    private record Face(String digest, float size, boolean antiAliased) {
     }
 
     private Fonts() {
     }
 
     /**
-     * A face from the calling plugin's own resources, at the size you want it.
+     * A face from the calling plugin's own resources, at the size you want it, anti-aliased.
      *
      * @param path where it sits in the jar, such as {@code "font/title.ttf"}. A leading slash is allowed and ignored
      * @param size in points, which on a map is very nearly pixels of line height
      * @return the face, or the JVM's sans-serif at the same size if it could not be read
      */
     public static TextFont trueType(String path, float size) {
+        return trueType(path, size, true);
+    }
+
+    /**
+     * The same, saying whether to anti-alias it.
+     *
+     * <p>{@code false} renders each pixel on or off, the way the map's own eight pixel font does. That is what a
+     * small face wants: anti-aliasing spends its accuracy on part-covered edges, and at a size where a stroke is
+     * one pixel wide there is nothing left to be accurate about, so it reads as blur next to crisp text.
+     *
+     * <p>The two are cached separately, so asking for both costs two glyph caches and neither disturbs the other.
+     */
+    public static TextFont trueType(String path, float size, boolean antiAliased) {
         ClassLoader loader = Images.callerLoader();
-        Resource key = new Resource(Images.normalized(path), size);
+        Resource key = new Resource(Images.normalized(path), size, antiAliased);
 
         return BY_RESOURCE.computeIfAbsent(loader, ignored -> new ConcurrentHashMap<>())
                 .computeIfAbsent(key, wanted -> fromResource(loader, wanted));
@@ -89,42 +104,48 @@ public final class Fonts {
      * <p>The stream is closed either way.
      */
     public static TextFont trueType(InputStream stream, float size) {
+        return trueType(stream, size, true);
+    }
+
+    /** The same, saying whether to anti-alias it. See {@link #trueType(String, float, boolean)}. */
+    public static TextFont trueType(InputStream stream, float size, boolean antiAliased) {
         byte[] bytes;
         try (stream) {
             bytes = stream.readAllBytes();
         } catch (IOException e) {
             LOG.log(Logger.Level.WARNING, "Could not read a font stream", e);
-            return fallback(size);
+            return fallback(size, antiAliased);
         }
 
-        return BY_CONTENT.computeIfAbsent(new Face(digestOf(bytes), size), wanted -> parse(bytes, size, "a stream"));
+        return BY_CONTENT.computeIfAbsent(new Face(digestOf(bytes), size, antiAliased),
+                wanted -> parse(bytes, size, antiAliased, "a stream"));
     }
 
     private static TextFont fromResource(ClassLoader loader, Resource wanted) {
         try (InputStream stream = loader.getResourceAsStream(wanted.path())) {
             if (stream == null) {
                 LOG.log(Logger.Level.WARNING, "No font at {0} in the calling plugin''s resources", wanted.path());
-                return fallback(wanted.size());
+                return fallback(wanted.size(), wanted.antiAliased());
             }
-            return parse(stream.readAllBytes(), wanted.size(), wanted.path());
+            return parse(stream.readAllBytes(), wanted.size(), wanted.antiAliased(), wanted.path());
         } catch (IOException e) {
             LOG.log(Logger.Level.WARNING, "Could not read the font at " + wanted.path(), e);
-            return fallback(wanted.size());
+            return fallback(wanted.size(), wanted.antiAliased());
         }
     }
 
-    private static TextFont parse(byte[] bytes, float size, String what) {
+    private static TextFont parse(byte[] bytes, float size, boolean antiAliased, String what) {
         try {
-            return AwtFont.load(new ByteArrayInputStream(bytes), size, true);
+            return AwtFont.load(new ByteArrayInputStream(bytes), size, antiAliased);
         } catch (IOException e) {
             LOG.log(Logger.Level.WARNING, "Not a font this JVM can read: " + what, e);
-            return fallback(size);
+            return fallback(size, antiAliased);
         }
     }
 
     /** Rounded, because a family the JVM already has is asked for in whole points. */
-    private static TextFont fallback(float size) {
-        return AwtFont.named(FALLBACK_FAMILY, Font.PLAIN, Math.max(1, Math.round(size)), true);
+    private static TextFont fallback(float size, boolean antiAliased) {
+        return AwtFont.named(FALLBACK_FAMILY, Font.PLAIN, Math.max(1, Math.round(size)), antiAliased);
     }
 
     /**
