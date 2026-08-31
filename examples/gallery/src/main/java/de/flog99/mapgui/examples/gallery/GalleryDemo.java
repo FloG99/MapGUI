@@ -55,7 +55,7 @@ public final class GalleryDemo {
     private VideoPlayer loadVideo(JavaPlugin plugin) {
         try (InputStream source = plugin.getResource("bunny_sample_squared.gif")) {
             if (source == null) return null;
-            return new VideoPlayer(GifFrames.read(source, Quantizer.of(MapColors.INSTANCE, Dither.ATKINSON)));
+            return new VideoPlayer(GifFrames.read(source, Quantizer.of(MapColors.INSTANCE, Dither.FLOYD_STEINBERG)));
         } catch (IOException e) {
             plugin.getSLF4JLogger().warn("Could not read the sample video", e);
             return null;

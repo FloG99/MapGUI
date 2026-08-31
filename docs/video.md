@@ -31,9 +31,10 @@ GifFrames.read(stream, Quantizer.of(MapColors.INSTANCE, Dither.ATKINSON))
 ```
 
 `Dither.NONE` is the default and is right for flat artwork the palette can nearly say already. For anything
-photographic, an error diffusion mode is worth it, and `ATKINSON` is the one to try first: it throws a quarter
-of the error away, which stops the palette's gaps smearing across the picture as worms. The javadoc on `Dither`
-has the whole of the reasoning.
+photographic, an error diffusion mode is worth it, and `FLOYD_STEINBERG` is the one to try first: it is the most
+faithful of the three, and measurably so - `DitherModesAbTest` has it at less than half Atkinson's error on a
+color ramp. Reach for `ATKINSON` if Floyd-Steinberg worms, which it can where the palette has nothing nearby to
+absorb the error. The javadoc on `Dither` has the whole of the reasoning.
 
 Prefer error diffusion to an *ordered* mode here. A player scales frames after they are decoded, and resampling
 a periodic tile beats against itself as moire. It also costs bandwidth: see

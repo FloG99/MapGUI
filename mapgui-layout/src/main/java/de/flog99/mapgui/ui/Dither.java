@@ -83,8 +83,13 @@ public enum Dither {
      * <p>Throwing a quarter away is a defect on a rich palette and a virtue on a sparse one, which is what the
      * map palette is. When no nearby entry can absorb the error, diffusing all of it smears it across the
      * picture as visible worms; discarding some lets the error die out instead, at the cost of a little
-     * contrast. Expect it to beat {@link #FLOYD_STEINBERG} on camera captures and photographs - but measure it
-     * on the content in question rather than assuming.
+     * contrast.
+     *
+     * <p>That argument reads better than it measures, which is why it is worth writing down that it lost.
+     * {@code DitherModesAbTest} puts this behind {@link #FLOYD_STEINBERG} on both ramps where diffusion helps at
+     * all - 7.2 against 5.0 on a gray ramp, and 19.4 against 8.5 on red to blue - and ahead only on green to
+     * yellow, where every diffusing mode loses to snapping anyway. So try Floyd-Steinberg first and come here if
+     * it worms on the content in question.
      */
     ATKINSON,
 
