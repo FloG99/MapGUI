@@ -4,24 +4,15 @@
 config-version: 1
 
 colors:
-  # Which formula decides the nearest map colour to a colour you asked for. Neither is right or wrong: the
-  # palette has a couple of hundred entries and everything is rounded to one of them, so this only decides
-  # which way it rounds.
+  # Which formula picks the nearest map colour to a colour you asked for.
   #
-  #   vanilla     What Minecraft itself uses: green counted four times, blue let off lightly. The default, and
-  #               what every map you already have looks like.
+  #   vanilla     What Minecraft itself uses, and what every map you already have looks like.
   #   perceptual  Nearest in Oklab, a space built so that equal distances look equally different.
   #
-  # Neither is better, and anything claiming otherwise was probably measuring itself. Scored in CIELAB - which is
-  # a perceptual space, like Oklab - perceptual wins by 4%; scored in vanilla's own weighting it loses by 39%.
-  # Each wins under its own family of metric. On the one measure neither has a term for, whether a ramp that only
-  # moves one way is drawn only moving one way, they tie on how often it goes backwards and vanilla is ahead on
-  # how far.
+  # Two roundings rather than an upgrade - neither measures better than the other, they just disagree about some
+  # colours. docs/images/colour-matching.png draws both over the same ramps, which is the way to pick.
   #
-  # So it is two roundings, not an upgrade. Look at docs/images/colour-matching.png and pick the one you prefer.
-  #
-  # See docs/images/colour-matching.png for the two side by side, and docs/performance.md for the numbers.
-  # Read once at startup, so changing it needs a restart rather than a reload.
+  # Read once at startup, so changing it needs a restart.
   matching: vanilla
 
 prompts:

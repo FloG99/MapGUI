@@ -27,15 +27,9 @@ public final class MapColors implements Palette {
     /**
      * Which formula decides the nearest entry to a colour.
      *
-     * <p><b>Neither is better, and the measurements that said otherwise were measuring themselves.</b> Scored in
-     * CIELAB - a perceptual space, like Oklab - the perceptual matcher wins by 4%. Scored in vanilla's own
-     * weighting it loses by 39%. Each wins under its own family of metric, which is what a referee chosen from
-     * one side of an argument gets you. On the one measure neither has a term for - whether a ramp that only
-     * moves one way is drawn only moving one way - they tie on how often it goes backwards, and vanilla is
-     * ahead on how far. See {@code PerceptualMatcherAbTest}.
-     *
-     * <p>So this is a choice between two roundings and not an upgrade, vanilla stays the default, and anybody
-     * picking between them should look at {@code docs/images/colour-matching.png} rather than at a number.
+     * <p>Two roundings rather than an upgrade: neither measures better than the other, and each wins under
+     * whichever metric is chosen to judge it. {@code PerceptualMatcherAbTest} has the numbers and why they do
+     * not settle it; {@code docs/images/colour-matching.png} is what to pick from.
      */
     public enum Matching {
 
@@ -45,9 +39,7 @@ public final class MapColors implements Palette {
         /**
          * Nearest in a perceptual space - see {@link PerceptualPalette}, which is where the rule lives.
          *
-         * <p>A different rounding rather than a better one - see the note on {@link Matching} for why the
-         * numbers that said better were not measuring what they looked like they were. Worth trying and looking
-         * at; it does draw some ramps differently.
+         * <p>A different rounding rather than a better one. Worth looking at: it draws some ramps differently.
          *
          * <p>The dark range is unaffected either way: below 64 a finer table with its own rule already applies,
          * for a reason that is about crowding rather than about metrics. See {@code PaletteLut}.

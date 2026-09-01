@@ -73,31 +73,6 @@ two walls of one clip a second apart look like a fault. It also means a channel 
 menu: a screen answers clicks and reads who is looking, so `channel` refuses one. All the walls must be the same
 size, and one of another size is refused rather than quietly given a picture of its own.
 
-## Which colour a colour becomes
-
-`colors.matching` picks the formula. It changes no bandwidth at all - same pixels, same bytes - and only decides
-which palette entry a colour rounds to.
-
-**Neither answer is better, and the measurements that said otherwise were measuring themselves.** Over 20,000
-colours above the dark range:
-
-| scored in | vanilla | perceptual |
-|---|---|---|
-| CIELAB, a perceptual space | 18.08 | **17.34** |
-| vanilla's own weighting | **4,419** | 6,123 |
-
-Each wins under its own family of metric, which is what picking a referee from one side of an argument gets you.
-CIELAB is not neutral here: it and Oklab are both perceptually uniform opponent spaces built for the same job, so
-they agree with each other far more than either agrees with weighted RGB.
-
-The one measure neither has a term for is whether a ramp that only moves one way is drawn only moving one way. A
-step backwards along it is a stripe however you score colours. There they tie on how often - 0, 0, 1, 3, 3, 4
-across six ramps, identically - and vanilla is ahead on how far, most clearly on a blue ramp where its worst step
-back is 4.6 against 38.2.
-
-So it is a choice between two roundings. `docs/images/colour-matching.png` draws both over the same ramps, which
-is a better basis for picking than any of the above.
-
 ## Video holds still when nothing is happening
 
 `media.steady` is on by default, and it is why a video of a static shot settles instead of shimmering. Real

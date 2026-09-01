@@ -373,6 +373,11 @@ That freedom has a price and it is paid on the wire rather than in the frame, so
 
 Error diffusion needs every color up front, so it only runs where a whole rect is known: an image, and decoding. Asked for on a fill it stands in as `ORDERED_FINE` and says so through `Quantizer#diffuses()`.
 
+`colors.matching` in config.yml picks how a colour finds its nearest palette entry: `vanilla`, Minecraft's own
+weighting, or `perceptual`, nearest in Oklab. Neither is better - they disagree about some colours and agree
+about most - so [colour-matching.png](images/colour-matching.png) draws both over the same ramps and that is the
+way to choose. It is read once at startup and changes nothing about bandwidth.
+
 `Painter#pushDither(Dither)` sets a mode for everything drawn until `popDither(previous)`, the same idiom as `pushClip` - and pop it in a `finally`, because a painter outlives the frame and a mode left pushed is not overwritten by anything the way a clip is. It reaches fills and images; a line, a glyph and a flat `fill(rect, color)` still snap, because dithering an anti-aliased glyph only speckles its edge.
 
 For a fill with no endpoints at all - a rainbow, a sweep - use `fill(Fill)` with `phase(millis)`:
