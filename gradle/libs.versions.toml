@@ -16,7 +16,7 @@ ffmpeg = "8.1.2-1.5.14"
 annotations = "26.1.0"
 # Matched to what the oldest supported Paper puts on the runtime classpath, since the server supplies this and
 # a method added in a later gson would be a NoSuchMethodError there.
-gson = "2.13.2"
+gson = "2.14.0"
 paperweight = "2.0.0-beta.21"
 runpaper = "3.1.0"
 shadow = "9.6.1"
