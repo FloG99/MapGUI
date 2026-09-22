@@ -3,7 +3,7 @@
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
 surface is `mapgui-api`, which carries the layout engine inside it.
 
-## Unreleased
+## 3.0.0
 
 Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it never did before, so another plugin can watch a click or refuse a wall without cooperation from whoever put it there. Dithering became a choice rather than one fixed rule, and the choice belongs to whatever knows the answer - a fill, a decoder, a plugin, or the server owner. A plugin can play a url it was handed - a file, a stream, a YouTube or Twitch page - rather than only one an admin named in `config.yml`. And a screen can decline a click, so a wall can be a picture one moment and a menu the next. Video holds still through the noise that used to make it shimmer, several walls can share one picture and one send, and which palette entry a colour becomes is a choice.
 

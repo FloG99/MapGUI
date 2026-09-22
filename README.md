@@ -126,7 +126,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.github.flog99:mapgui-api:2.0.0")
+    compileOnly("io.github.flog99:mapgui-api:3.0.0")
 }
 ```
 
