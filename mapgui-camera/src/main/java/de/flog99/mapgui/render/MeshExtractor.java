@@ -4,7 +4,10 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
@@ -467,7 +470,7 @@ final class MeshExtractor {
             if (setup == null) return false;
 
             setup.setAccessible(true);
-            Object state = standingStill(setup.getParameterTypes()[0]);
+            Object state = standingStill(stateOf(model, setup));
             stated(state, layer.state());
             setup.invoke(instance, state);
             return true;
@@ -534,6 +537,41 @@ final class MeshExtractor {
             }
         }
         return best;
+    }
+
+    /**
+     * The render state the model reads, which can be narrower than the {@code setupAnim} it inherits takes: a 26.3
+     * zombie overrides only {@code setupAttackAnimation}, whose bridge casts that state to the zombie's own.
+     */
+    private static Class<?> stateOf(Class<?> model, Method setup) {
+        List<Class<?>> below = new ArrayList<>();
+        for (Class<?> at = model; at != null && at != setup.getDeclaringClass(); at = at.getSuperclass()) {
+            below.addFirst(at);
+        }
+
+        Type type = setup.getGenericParameterTypes()[0];
+        Class<?> owner = setup.getDeclaringClass();
+        for (Class<?> at : below) {
+            if (!(type instanceof TypeVariable<?> variable) || !(at.getGenericSuperclass() instanceof ParameterizedType parent)) break;
+
+            int index = List.of(owner.getTypeParameters()).indexOf(variable);
+            if (index < 0) break;
+            type = parent.getActualTypeArguments()[index];
+            owner = at;
+        }
+
+        Class<?> declared = setup.getParameterTypes()[0];
+        Class<?> resolved = erasure(type);
+        return resolved != null && declared.isAssignableFrom(resolved) ? resolved : declared;
+    }
+
+    private static Class<?> erasure(Type type) {
+        return switch (type) {
+            case Class<?> plain -> plain;
+            case ParameterizedType parameterized -> erasure(parameterized.getRawType());
+            case TypeVariable<?> variable -> erasure(variable.getBounds()[0]);
+            default -> null;
+        };
     }
 
     /**
