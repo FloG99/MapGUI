@@ -3,7 +3,7 @@
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
 surface is `mapgui-api`, which carries the layout engine inside it.
 
-## Unreleased
+## 3.1.0
 
 Paper 26.3 is supported alongside 26.1 and 26.2.
 
