@@ -26,6 +26,7 @@ final class Backends {
     private static final Map<String, String> BY_FAMILY = new LinkedHashMap<>();
 
     static {
+        BY_FAMILY.put("26.3", "de.flog99.mapgui.nms.v26_3.Backend");
         BY_FAMILY.put("26.2", "de.flog99.mapgui.nms.v26_2.Backend");
         BY_FAMILY.put("26.1", "de.flog99.mapgui.nms.v26_1.Backend");
     }

@@ -10,7 +10,8 @@ include(
     "mapgui-api",
     "mapgui-camera",
     // One per Minecraft version, newest first. Adding a version adds a line here; see
-    // mapgui-nms-26_2/build.gradle.kts.
+    // mapgui-nms-26_3/build.gradle.kts.
+    "mapgui-nms-26_3",
     "mapgui-nms-26_2",
     "mapgui-nms-26_1",
     "mapgui-plugin",

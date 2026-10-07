@@ -29,12 +29,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * draws.
  *
  * <p><b>Skipped unless there is a Minecraft installation on this machine</b> - it needs
- * {@code %APPDATA%/.minecraft/versions/26.2/26.2.jar} and the libraries that version declares beside it. CI has
+ * {@code %APPDATA%/.minecraft/versions/26.3/26.3.jar} and the libraries that version declares beside it. CI has
  * neither, and nothing Mojang-derived may be committed here.
  */
 class MeshExtractorTest {
 
-    private static final String VERSION = "26.2";
+    private static final String VERSION = "26.3";
 
     private static Path minecraft() {
         String appData = System.getenv("APPDATA");

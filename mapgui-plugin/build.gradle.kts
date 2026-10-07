@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":mapgui-camera"))
     // runtimeOnly, and one line per supported version: the plugin finds its backend by name at startup, and
     // importing one would put a single version's server classes on the compile classpath for everything.
+    runtimeOnly(project(":mapgui-nms-26_3"))
     runtimeOnly(project(":mapgui-nms-26_2"))
     runtimeOnly(project(":mapgui-nms-26_1"))
     compileOnly(libs.paper.api)
@@ -35,6 +36,7 @@ tasks {
         dependencies {
             include(project(":mapgui-api"))
             include(project(":mapgui-camera"))
+            include(project(":mapgui-nms-26_3"))
             include(project(":mapgui-nms-26_2"))
             include(project(":mapgui-nms-26_1"))
         }

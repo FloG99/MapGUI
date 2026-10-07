@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ItemPosesTest {
 
-    private static final String VERSION = "26.2";
+    private static final String VERSION = "26.3";
 
     /** Our sprite reads its texture rightward against local X, upward with Y, and faces local -Z. */
     private static final float[] TEXTURE_RIGHT = {-1, 0, 0};

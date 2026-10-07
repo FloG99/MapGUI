@@ -3,6 +3,13 @@
 Notable changes, newest first. This project follows [semantic versioning](https://semver.org/) - the public
 surface is `mapgui-api`, which carries the layout engine inside it.
 
+## Unreleased
+
+Paper 26.3 is supported alongside 26.1 and 26.2.
+
+- **Paper 26.3.** A backend module of its own, picked by family like the other two. It needed no source change beyond the package name, and `api-version` stays at 26.1.
+- **A zombie reaches forward on 26.3 too.** 26.3 moved its arm pose out of `setupAnim` into `setupAttackAnimation`, and the camera handed that the parent model's render state, so every zombie, drowned, zombie villager and zombified piglin stood with its arms down. The state now comes from the model's own type parameter. Every 26.2 mesh comes out exactly as before.
+
 ## 3.0.0
 
 Paper 26.1 is supported alongside 26.2. MapGUI raises Bukkit events, which it never did before, so another plugin can watch a click or refuse a wall without cooperation from whoever put it there. Dithering became a choice rather than one fixed rule, and the choice belongs to whatever knows the answer - a fill, a decoder, a plugin, or the server owner. A plugin can play a url it was handed - a file, a stream, a YouTube or Twitch page - rather than only one an admin named in `config.yml`. And a screen can decline a click, so a wall can be a picture one moment and a menu the next. Video holds still through the noise that used to make it shimmer, several walls can share one picture and one send, and which palette entry a colour becomes is a choice.

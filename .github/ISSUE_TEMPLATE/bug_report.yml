@@ -34,7 +34,7 @@ body:
     attributes:
       label: Server version
       description: The full line from /version.
-      placeholder: Paper 26.2-84
+      placeholder: Paper 26.3-159
     validations:
       required: true
 
